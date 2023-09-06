@@ -863,7 +863,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 }
 
 static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
-    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides,
+    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, unsigned num_samples,
     size_t input_hsize, size_t input_vsize, const unsigned max_audio_samples_per_line)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
@@ -968,6 +968,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         /* If more than a single audio packet must be put on a line
          * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
         for (int sample = 0; ; sample++) {
+            /* Don't write too many samples. Important to maintain the NTSC pattern */
+            if (upipe_sdi_enc->sample_pos == num_samples)
+                break;
+
             /* Don't write too many audio samples per line */
             if (sample == max_audio_samples_per_line)
                 break;
@@ -1129,7 +1133,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    unsigned samples = 0;
+    unsigned num_samples = 0;
 
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_sdi_enc->subs, uchain) {
@@ -1146,8 +1150,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
             size_t size = 0;
             uref_sound_size(uref_audio, &size, NULL);
-            if (size > samples)
-                samples = size;
+            if (size > num_samples)
+                num_samples = size;
 
             const int32_t *buf;
             uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
@@ -1355,12 +1359,12 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
         if (upipe_sdi_enc->p->sd) {
             upipe_sdi_enc_encode_line(upipe, h+1, dst_line,
-                                      planes, input_strides, samples,
+                                      planes, input_strides, num_samples,
                                       input_hsize, input_vsize, max_audio_samples_per_line);
         }
         else {
             upipe_hd_sdi_enc_encode_line(upipe, h+1, dst_line,
-                                         planes, input_strides,
+                                         planes, input_strides, num_samples,
                                          input_hsize, input_vsize, max_audio_samples_per_line);
             upipe_sdi_enc->eav_clock += f->width;
         }
