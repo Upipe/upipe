@@ -148,11 +148,7 @@ struct upipe_sdi_enc {
 
     /* Clocks */
     uint64_t eav_clock;
-    uint64_t total_audio_samples_put;
-
-    /* mpf bits which need to be set for each packet after a switching point
-     * on each packet until it syncs back up */
-    int mpf_packet_bits[4];
+    uint64_t audio_samples_written;
 
     /* data block number for each data group */
     uint8_t dbn[4];
@@ -166,9 +162,6 @@ struct upipe_sdi_enc {
 
     /* worst case audio buffer (~128kB) */
     int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
-
-    /* */
-    bool started;
 
     /* sample offset for dolby E to be on the right line */
     unsigned dolby_offset;
@@ -374,7 +367,7 @@ static int put_audio_control_packet(struct upipe_sdi_enc *upipe_sdi_enc,
     return 36;
 }
 
-static unsigned audio_packets_per_line(const struct sdi_offsets_fmt *f)
+static unsigned audio_samples_per_line(const struct sdi_offsets_fmt *f)
 {
     unsigned samples_per_frame = (48000 * f->fps.den  + f->fps.num - 1) / f->fps.num;
     unsigned active_lines = f->height - 2;
@@ -391,7 +384,7 @@ static int put_sd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         int32_t  i;
     } sample;
     int sample_pos = upipe_sdi_enc->sample_pos;
-    uint64_t total_samples = upipe_sdi_enc->total_audio_samples_put;
+    uint64_t total_samples = upipe_sdi_enc->audio_samples_written;
 
     /* ADF */
     dst[0] = S291_ADF1;
@@ -455,7 +448,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
         int32_t  i;
     } sample;
     int sample_pos = upipe_sdi_enc->sample_pos;
-    uint64_t total_samples = upipe_sdi_enc->total_audio_samples_put;
+    uint64_t total_samples = upipe_sdi_enc->audio_samples_written;
 
     /* Clock */
     uint8_t clock_1 = clk & 0xff, clock_2 = (clk & 0x1F00) >> 8;
@@ -747,7 +740,7 @@ static float get_pts(uint64_t pts)
 
 static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
     const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
-    size_t input_hsize, size_t input_vsize)
+    size_t input_hsize, size_t input_vsize, const unsigned max_audio_samples_per_line)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
@@ -756,6 +749,7 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     bool vbi = 0, f2 = 0, special_case = 0, ntsc;
     ntsc = p->active_height == 486;
 
+    /* Use the actual line number in audio calculations, before NTSC line 4 handling */
     unsigned line_num_audio = line_num;
 
     /* Use wraparound arithmetic to start at line 4 */
@@ -812,16 +806,19 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_SDI_EAV_LENGTH/2 - UPIPE_SDI_SAV_LENGTH/2);
     dst += hanc_start;
 
+    /* XXX: Should this match HD? Leave it for now as a packet contains N samples instead of one packet per sample
+            so the logic is a bit different */
+
     /* Ideal number of samples that should've been put */
     unsigned samples_put_target = samples * (line_num_audio) / f->height;
 
     /* All channel groups should have the same samples to put on a line */
     const int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
 
-    for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
-        dst += put_sd_audio_data_packet(upipe_sdi_enc, dst, ch_group, samples_to_put);
+    for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
+        dst += put_sd_audio_data_packet(upipe_sdi_enc, dst, group, samples_to_put);
     }
-    upipe_sdi_enc->total_audio_samples_put += samples_to_put;
+    upipe_sdi_enc->audio_samples_written += samples_to_put;
     upipe_sdi_enc->sample_pos += samples_to_put;
 
     /* SAV */
@@ -867,8 +864,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
 }
 
 static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_t *dst,
-    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, const unsigned int samples,
-    size_t input_hsize, size_t input_vsize, unsigned max_audio_packets_per_line)
+    const uint8_t *planes[2][UPIPE_SDI_MAX_PLANES], int *input_strides, unsigned num_samples,
+    size_t input_hsize, size_t input_vsize, const unsigned max_audio_samples_per_line)
 {
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
@@ -961,27 +958,9 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         }
     }
 
-    /* Ideal number of samples that should've been put */
-    unsigned samples_put_target = samples * (line_num) / f->height;
-
-    /* All channel groups should have the same samples to put on a line */
-    int samples_to_put = samples_put_target - upipe_sdi_enc->sample_pos;
-
-    /* Clip this to something reasonable */
-    if (samples_to_put > 2)
-        samples_to_put = 2;
-
-    /* Limit to max_audio_packets_per_line.  The removed check in the loop
-     * performed the same limiting but with a very verbose message. */
-    /* FIXME: check that there is enough space for all the audio. */
-    if (samples_to_put > max_audio_packets_per_line/UPIPE_SDI_CHANNELS_PER_GROUP)
-        samples_to_put = max_audio_packets_per_line/UPIPE_SDI_CHANNELS_PER_GROUP;
-
-    /* Chroma packets */
     /* Audio can go anywhere but the switching lines+1 */
     if (!(line_num == p->switching_line + 1) &&
         !(p->field_offset && line_num == p->switching_line + switching_line_offset + 1)) {
-        int packets_put = 0;
 
         /* Start counting the destination from the start of the
          * chroma horizontal blanking */
@@ -989,45 +968,49 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
         /* If more than a single audio packet must be put on a line
          * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
-        for (int sample = 0; sample < samples_to_put; sample++) {
-            /* Clock is the samples times the pixel clock divided by the audio
-             * clockrate */
-            uint16_t aud_clock = upipe_sdi_enc->total_audio_samples_put * f->width * f->height * f->fps.num / f->fps.den / 48000;
+        for (int sample = 0; ; sample++) {
+            /* Don't write too many samples. Important to maintain the NTSC pattern */
+            if (upipe_sdi_enc->sample_pos == num_samples)
+                break;
 
-            for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
-                /* Packet belongs to another line */
+            /* Don't write too many audio samples per line */
+            if (sample == max_audio_samples_per_line)
+                break;
+
+            /* FIXME: This is NOT technically correct, audio packets should be written into the NEXT HANC packet.
+                      We write into the current HANC packet to avoid complexity with putting audio into the next video frame
+                      We can live with the two sample error for now (~40us) */
+
+            /* Audio clock is the total number of samples written times the pixel clock divided by the audio clockrate */
+            uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num / f->fps.den / 48000;
+
+            /* Audio sample is from the future */
+            if (audio_clock > (upipe_sdi_enc->eav_clock + f->width))
+                break;
+
+            for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
                 uint8_t mpf_bit = 0;
 
-                /* mpf bit was set, which means that the packet was meant
-                 * to arrive on the previous line */
-                if (upipe_sdi_enc->mpf_packet_bits[ch_group]) {
+                /* Packet belongs to the previous line */
+                if (audio_clock < upipe_sdi_enc->eav_clock)
                     mpf_bit = 1;
-                    upipe_sdi_enc->mpf_packet_bits[ch_group]--;
-                }
 
                 /* If the mpf bit is set roll the clock back to the previous line and
                  * signal the bit in the packet to indicate it was meant to arrive on
                  * the previous line which happened to be a switching point */
                 uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
 
-                /* Phase offset is the difference between the audio clock and the
-                 * EAV pixel clock */
-                uint16_t sample_clock = aud_clock - eav_clock;
+                /* Sample clock is the difference between the actual audio clock [position] and the EAV pixel clock */
+                uint16_t sample_clock = audio_clock - eav_clock;
 
                 dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
-                                                    ch_group, mpf_bit, sample_clock);
-                packets_put++;
+                                                    group, mpf_bit, sample_clock);
             }
-            upipe_sdi_enc->total_audio_samples_put++;
+            upipe_sdi_enc->audio_samples_written++;
             upipe_sdi_enc->sample_pos++;
         }
     } else {
-        /* The current line is a switching line, so mark the next sample_diff
-         * amount of packets for each audio group to be belonging to a line before */
-        for (int ch_group = 0; ch_group < UPIPE_SDI_CHANNELS_PER_GROUP; ch_group++) {
-            /* Difference between current samples actually put and the target */
-            upipe_sdi_enc->mpf_packet_bits[ch_group] = samples - upipe_sdi_enc->sample_pos;
-        }
+        /* Audio packets are not permitted on the line following the switching point */
     }
 
     /* SAV */
@@ -1151,7 +1134,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    unsigned samples = 0;
+    unsigned num_samples = 0;
 
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_sdi_enc->subs, uchain) {
@@ -1168,8 +1151,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
             size_t size = 0;
             uref_sound_size(uref_audio, &size, NULL);
-            if (size > samples)
-                samples = size;
+            if (size > num_samples)
+                num_samples = size;
 
             const int32_t *buf;
             uref_sound_read_int32_t(uref_audio, 0, -1, &buf, 1);
@@ -1369,7 +1352,7 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
     /* Returns the total amount of samples per channel that can be put on
      * a line, so convert that to packets */
-    unsigned max_audio_packets_per_line = UPIPE_SDI_CHANNELS_PER_GROUP * audio_packets_per_line(f);
+    const unsigned max_audio_samples_per_line = audio_samples_per_line(f);
 
     for (int h = 0; h < f->height; h++) {
         /* Note conversion to 1-indexed line-number */
@@ -1377,13 +1360,13 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
         if (upipe_sdi_enc->p->sd) {
             upipe_sdi_enc_encode_line(upipe, h+1, dst_line,
-                                      planes, input_strides, samples,
-                                      input_hsize, input_vsize);
+                                      planes, input_strides, num_samples,
+                                      input_hsize, input_vsize, max_audio_samples_per_line);
         }
         else {
             upipe_hd_sdi_enc_encode_line(upipe, h+1, dst_line,
-                                         planes, input_strides, samples,
-                                         input_hsize, input_vsize, max_audio_packets_per_line);
+                                         planes, input_strides, num_samples,
+                                         input_hsize, input_vsize, max_audio_samples_per_line);
             upipe_sdi_enc->eav_clock += f->width;
         }
     }
@@ -1802,16 +1785,13 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     upipe_sdi_enc->eav_clock = 0;
     upipe_sdi_enc->sample_pos = 0;
-    upipe_sdi_enc->total_audio_samples_put = 0;
-    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
-        upipe_sdi_enc->mpf_packet_bits[i] = 0;
+    upipe_sdi_enc->audio_samples_written = 0;
     for (int i = 0; i < 4; i++)
         upipe_sdi_enc->dbn[i] = 1;
 
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
     upipe_sdi_enc->uref_audio = NULL;
-    upipe_sdi_enc->started = 0;
 
     upipe_throw_ready(upipe);
     return upipe;

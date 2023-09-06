@@ -40,6 +40,7 @@ static const uint16_t eav_fvh_cword[2][2] = {{0x274, 0x2d8}, {0x368, 0x3c4}};
 #define UPIPE_SDI_PSF_IDENT_SDI3G_LEVELB 4
 
 #define UPIPE_SDI_CHANNELS_PER_GROUP 4
+#define UPIPE_SDI_MAX_GROUPS 4
 
 static void sdi_crc_setup(uint32_t crc_lut[8][1024])
 {
