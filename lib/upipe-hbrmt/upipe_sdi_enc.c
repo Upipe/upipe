@@ -806,7 +806,8 @@ static void upipe_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint16_
     upipe_sdi_enc->blank(&dst[hanc_start], f->active_offset - UPIPE_SDI_EAV_LENGTH/2 - UPIPE_SDI_SAV_LENGTH/2);
     dst += hanc_start;
 
-    // FIXME match HD when it works
+    /* XXX: Should this match HD? Leave it for now as a packet contains N samples instead of one packet per sample
+            so the logic is a bit different */
 
     /* Ideal number of samples that should've been put */
     unsigned samples_put_target = samples * (line_num_audio) / f->height;
