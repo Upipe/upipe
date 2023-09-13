@@ -143,7 +143,7 @@ static void upipe_telxf_work(struct upipe *upipe, struct upump **upump_p)
     uint64_t octetrate =
         (upipe_telxf->next_uref_size * upipe_telxf->fps.num +
          upipe_telxf->fps.den - 1) / upipe_telxf->fps.den;
-    if (octetrate != upipe_telxf->octetrate) {
+    if (octetrate > upipe_telxf->octetrate) {
         upipe_telxf->octetrate = octetrate;
 
         struct uref *flow_def = upipe_telxf_alloc_flow_def_attr(upipe);
