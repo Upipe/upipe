@@ -3,6 +3,7 @@ SUBDIRS = \
 	  upipe-modules \
 	  upipe-filters \
 	  upipe-pciesdi \
+	  upipe-srt \
 	  upipe-dveo
 
 if HAVE_QTWEBKIT
