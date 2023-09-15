@@ -1279,7 +1279,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         uint64_t pes_min_duration = upipe_ts_mux->pes_min_duration;
         buffer_size = BS_ADTS_2;
 
-        if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.")) {
+        if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.") ||
+            !ubase_ncmp(def, "block.opus.")) {
             pes_alignment = true;
         } else if (!ubase_ncmp(def, "block.aac.") ||
                    !ubase_ncmp(def, "block.aac_latm.")) {

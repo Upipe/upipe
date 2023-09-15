@@ -11,7 +11,8 @@ libupipe_filters_la_SOURCES = \
 	upipe_zoneplate.c \
 	upipe_zoneplate_source.c \
 	zoneplate/videotestsrc.c \
-	zoneplate/videotestsrc.h
+	zoneplate/videotestsrc.h \
+	upipe_opus_encaps.c
 
 if HAVE_BITSTREAM
 libupipe_filters_la_SOURCES += upipe_filter_vanc.c \

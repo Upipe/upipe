@@ -362,8 +362,10 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
             }
         } else if (!ubase_ncmp(sub_def, ".dts."))
             *descriptors_size_p += DESC7B_HEADER_SIZE;
-        else if (!ubase_ncmp(sub_def, ".opus."))
+        else if (!ubase_ncmp(sub_def, ".opus.")) {
             *descriptors_size_p += DESC05_HEADER_SIZE;
+            *descriptors_size_p += DESC_HEADER_SIZE + 2;
+        }
         else if (!ubase_ncmp(sub_def, ".aac.") ||
                  !ubase_ncmp(sub_def, ".aac_latm."))
             switch (conformance) {
@@ -838,8 +840,25 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
         } else if (!ubase_ncmp(sub_def, ".opus.")) {
             desc = descs_get_desc(descs, k++);
             desc05_init(desc);
-            desc05_set_identifier(desc, (const uint8_t *)"opus");
+            desc05_set_identifier(desc, (const uint8_t *)"Opus");
+            desc = descs_get_desc(descs, k++);
+            desc_set_tag(desc, 0x7f);
+            desc_set_length(desc, 2);
+            desc[2] = 0x80;
 
+            uint8_t channels = 0;
+            uref_sound_flow_get_channels(flow->flow_def, &channels);
+            switch (channels) {
+                case 1: desc[3] = 0x01; break;
+                case 2: desc[3] = 0x02; break;
+                case 3: desc[3] = 0x03; break;
+                case 4: desc[3] = 0x04; break;
+                case 5: desc[3] = 0x05; break;
+                case 6: desc[3] = 0x06; break;
+                case 7: desc[3] = 0x07; break;
+                case 8: desc[3] = 0x08; break;
+                default: desc[3] = 0x02; break;
+            }
         } else if (!ubase_ncmp(sub_def, ".aac.") ||
                    !ubase_ncmp(sub_def, ".aac_latm.")) {
             switch (conformance) {

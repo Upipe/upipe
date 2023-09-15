@@ -45,6 +45,8 @@
 #include "upipe-x264/upipe_x264.h"
 #include "upipe-x265/upipe_x265.h"
 #include "upipe-av/upipe_avcodec_encode.h"
+#include "upipe-filters/uref_opus_flow.h"
+#include "upipe-filters/upipe_opus_encaps.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
@@ -175,50 +177,74 @@ static int upipe_fenc_alloc_inner(struct upipe *upipe)
 {
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     struct upipe_fenc_mgr *fenc_mgr = upipe_fenc_mgr_from_upipe_mgr(upipe->mgr);
-
-    bool use_avcenc =
-        ubase_check(uref_avcenc_get_codec_name(
-                        upipe_fenc->flow_def_input, NULL));
-
+    struct uref *input_flow_def = upipe_fenc->flow_def_input;
     struct upipe *enc = NULL;
+    struct upipe *encaps = NULL;
+    bool use_avcenc =
+        ubase_check(uref_avcenc_get_codec_name(input_flow_def, NULL));
+    const char *def = NULL;
+
+    uint8_t opus_encaps;
+    if (ubase_check(uref_opus_flow_get_encaps(input_flow_def, &opus_encaps))) {
+        struct upipe_mgr *encaps_mgr = upipe_opus_encaps_mgr_alloc();
+        encaps = upipe_flow_alloc(
+            encaps_mgr,
+            uprobe_pfx_alloc(
+                uprobe_use(&upipe_fenc->last_inner_probe),
+                UPROBE_LOG_VERBOSE, "encaps"),
+            input_flow_def);
+        upipe_mgr_release(encaps_mgr);
+        if (unlikely(encaps == NULL))
+            return UBASE_ERR_INVALID;
+    }
+
     if (use_avcenc) {
         if (fenc_mgr->avcenc_mgr)
             enc = upipe_flow_alloc(
                 fenc_mgr->avcenc_mgr,
                 uprobe_pfx_alloc(
-                    uprobe_use(&upipe_fenc->last_inner_probe),
+                    uprobe_use(encaps ?
+                               &upipe_fenc->first_inner_probe :
+                               &upipe_fenc->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "avcenc"),
                 upipe_fenc->flow_def_input);
     }
-    else {
-        const char *def = NULL;
-        uref_flow_get_def(upipe_fenc->flow_def_input, &def);
-        if (unlikely(def == NULL))
-            return UBASE_ERR_INVALID;
-
+    else if (likely(ubase_check(uref_flow_get_def(input_flow_def, &def)) &&
+                    def != NULL)) {
         if (fenc_mgr->x264_mgr && (!ubase_ncmp(def, "block.h264.") ||
                                    !ubase_ncmp(def, "block.mpeg2video.")))
             enc = upipe_void_alloc(
                     fenc_mgr->x264_mgr,
                     uprobe_pfx_alloc(
-                        uprobe_use(&upipe_fenc->last_inner_probe),
+                        uprobe_use(encaps ?
+                                   &upipe_fenc->first_inner_probe :
+                                   &upipe_fenc->last_inner_probe),
                         UPROBE_LOG_VERBOSE, "x264"));
 
         else if (fenc_mgr->x265_mgr && !ubase_ncmp(def, "block.hevc."))
             enc = upipe_void_alloc(
                     fenc_mgr->x265_mgr,
                     uprobe_pfx_alloc(
-                        uprobe_use(&upipe_fenc->last_inner_probe),
+                        uprobe_use(encaps ?
+                                   &upipe_fenc->first_inner_probe :
+                                   &upipe_fenc->last_inner_probe),
                         UPROBE_LOG_VERBOSE, "x265"));
 
         if (likely(enc) && !ubase_ncmp(def, "block.mpeg2video."))
             upipe_fenc->x262 = true;
     }
-    if (unlikely(enc == NULL))
-        return UBASE_ERR_INVALID;
 
-    upipe_fenc_store_bin_output(upipe, enc);
-    upipe_fenc_store_bin_input(upipe, upipe_use(enc));
+    if (unlikely(enc == NULL)) {
+        upipe_release(encaps);
+        return UBASE_ERR_INVALID;
+    }
+
+    if (encaps) {
+        upipe_set_output(enc, encaps);
+        upipe_fenc_store_bin_output(upipe, encaps);
+    } else
+        upipe_fenc_store_bin_output(upipe, upipe_use(enc));
+    upipe_fenc_store_bin_input(upipe, enc);
     return UBASE_ERR_NONE;
 }
 
