@@ -35,6 +35,7 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_flow.h"
 #include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_uref_mgr.h"
 #include "upipe/upipe_helper_inner.h"
 #include "upipe/upipe_helper_uprobe.h"
@@ -103,6 +104,8 @@ struct upipe_fenc {
     /** x262 */
     bool x262;
 
+    /** probe for the first inner pipe */
+    struct uprobe first_inner_probe;
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
 
@@ -121,21 +124,47 @@ struct upipe_fenc {
     struct upipe upipe;
 };
 
+/** @hidden */
+static int upipe_fenc_catch_first_inner(struct uprobe *uprobe,
+                                        struct upipe *upipe,
+                                        int event, va_list args);
+
 UPIPE_HELPER_UPIPE(upipe_fenc, upipe, UPIPE_FENC_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_fenc, "block.")
 UPIPE_HELPER_UREFCOUNT(upipe_fenc, urefcount, upipe_fenc_no_ref)
+UPIPE_HELPER_UREFCOUNT_REAL(upipe_fenc, urefcount_real, upipe_fenc_free);
 UPIPE_HELPER_UREF_MGR(upipe_fenc, uref_mgr, uref_mgr_request,
                       upipe_fenc_provide, upipe_throw_provide_request, NULL)
 UPIPE_HELPER_INNER(upipe_fenc, first_inner)
-UPIPE_HELPER_BIN_INPUT(upipe_fenc, first_inner, input_request_list)
 UPIPE_HELPER_INNER(upipe_fenc, last_inner)
+UPIPE_HELPER_UPROBE(upipe_fenc, urefcount_real, first_inner_probe,
+                   upipe_fenc_catch_first_inner);
 UPIPE_HELPER_UPROBE(upipe_fenc, urefcount_real, last_inner_probe, NULL)
+UPIPE_HELPER_BIN_INPUT(upipe_fenc, first_inner, input_request_list)
 UPIPE_HELPER_BIN_OUTPUT(upipe_fenc, last_inner, output, output_request_list)
 
-UBASE_FROM_TO(upipe_fenc, urefcount, urefcount_real, urefcount_real)
+/** @internal @This catches the first inner event.
+ *
+ * @param uprobe structure used to raise events
+ * @param upipe description structure of the pipe
+ * @param event event raised by the pipe
+ * @param args optional arguments of the event
+ * @return an error code
+ */
+static int upipe_fenc_catch_first_inner(struct uprobe *uprobe,
+                                        struct upipe *inner,
+                                        int event, va_list args)
+{
+    struct upipe_fenc *upipe_fenc = upipe_fenc_from_first_inner_probe(uprobe);
+    struct upipe *upipe = upipe_fenc_to_upipe(upipe_fenc);
 
-/** @hidden */
-static void upipe_fenc_free(struct urefcount *urefcount_real);
+    switch (event) {
+        case UPROBE_NEW_FLOW_DEF:
+            return UBASE_ERR_NONE;
+    }
+
+    return upipe_throw_proxy(upipe, inner, event, args);
+}
 
 /** @internal @This allocates the inner encoder pipe.
  *
@@ -212,9 +241,9 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
         return NULL;
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     upipe_fenc_init_urefcount(upipe);
-    urefcount_init(upipe_fenc_to_urefcount_real(upipe_fenc),
-                   upipe_fenc_free);
+    upipe_fenc_init_urefcount_real(upipe);
     upipe_fenc_init_uref_mgr(upipe);
+    upipe_fenc_init_first_inner_probe(upipe);
     upipe_fenc_init_last_inner_probe(upipe);
     upipe_fenc_init_bin_input(upipe);
     upipe_fenc_init_bin_output(upipe);
@@ -236,6 +265,40 @@ static struct upipe *upipe_fenc_alloc(struct upipe_mgr *mgr,
     }
 
     return upipe;
+}
+
+/** @This frees a upipe.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_fenc_free(struct upipe *upipe)
+{
+    struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
+
+    upipe_throw_dead(upipe);
+
+    uref_free(upipe_fenc->flow_def_input);
+    uref_free(upipe_fenc->options);
+    free(upipe_fenc->preset);
+    free(upipe_fenc->tune);
+    free(upipe_fenc->profile);
+    upipe_fenc_clean_last_inner_probe(upipe);
+    upipe_fenc_clean_first_inner_probe(upipe);
+    upipe_fenc_clean_uref_mgr(upipe);
+    upipe_fenc_clean_urefcount_real(upipe);
+    upipe_fenc_clean_urefcount(upipe);
+    upipe_fenc_free_flow(upipe);
+}
+
+/** @This is called when there is no external reference to the pipe anymore.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_fenc_no_ref(struct upipe *upipe)
+{
+    upipe_fenc_clean_bin_input(upipe);
+    upipe_fenc_clean_bin_output(upipe);
+    upipe_fenc_release_urefcount_real(upipe);
 }
 
 /** @internal @This allocates the options uref.
@@ -264,8 +327,8 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
-    if (upipe_fenc->last_inner != NULL) {
-        if (ubase_check(upipe_set_flow_def(upipe_fenc->last_inner, flow_def)))
+    if (upipe_fenc->first_inner != NULL) {
+        if (ubase_check(upipe_set_flow_def(upipe_fenc->first_inner, flow_def)))
             return UBASE_ERR_NONE;
     }
     upipe_fenc_store_bin_input(upipe, NULL);
@@ -275,34 +338,34 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         return UBASE_ERR_UNHANDLED;
 
     if (upipe_fenc->x262) {
-        UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->last_inner))
+        UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->first_inner))
     }
     if (upipe_fenc->bit_depth) {
-        UBASE_RETURN(upipe_x265_set_default(upipe_fenc->last_inner,
+        UBASE_RETURN(upipe_x265_set_default(upipe_fenc->first_inner,
                                             upipe_fenc->bit_depth))
     }
     if (upipe_fenc->preset != NULL || upipe_fenc->tune != NULL) {
-        upipe_x264_set_default_preset(upipe_fenc->last_inner,
+        upipe_x264_set_default_preset(upipe_fenc->first_inner,
                                       upipe_fenc->preset, upipe_fenc->tune);
-        upipe_x265_set_default_preset(upipe_fenc->last_inner,
+        upipe_x265_set_default_preset(upipe_fenc->first_inner,
                                       upipe_fenc->preset, upipe_fenc->tune);
     }
     if (upipe_fenc->profile != NULL) {
-        upipe_x264_set_profile(upipe_fenc->last_inner, upipe_fenc->profile);
-        upipe_x265_set_profile(upipe_fenc->last_inner, upipe_fenc->profile);
+        upipe_x264_set_profile(upipe_fenc->first_inner, upipe_fenc->profile);
+        upipe_x265_set_profile(upipe_fenc->first_inner, upipe_fenc->profile);
     }
     if (upipe_fenc->sc_latency != UINT64_MAX) {
-        upipe_x264_set_sc_latency(upipe_fenc->last_inner,
+        upipe_x264_set_sc_latency(upipe_fenc->first_inner,
                                   upipe_fenc->sc_latency);
-        upipe_x265_set_sc_latency(upipe_fenc->last_inner,
+        upipe_x265_set_sc_latency(upipe_fenc->first_inner,
                                   upipe_fenc->sc_latency);
     }
     if (upipe_fenc->slice_type_enforce) {
-        upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
+        upipe_x264_set_slice_type_enforce(upipe_fenc->first_inner,
                                           upipe_fenc->slice_type_enforce);
-        upipe_x265_set_slice_type_enforce(upipe_fenc->last_inner,
+        upipe_x265_set_slice_type_enforce(upipe_fenc->first_inner,
                                           upipe_fenc->slice_type_enforce);
-        upipe_avcenc_set_slice_type_enforce(upipe_fenc->last_inner,
+        upipe_avcenc_set_slice_type_enforce(upipe_fenc->first_inner,
                                             upipe_fenc->slice_type_enforce);
     }
 
@@ -316,13 +379,13 @@ static int upipe_fenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                 !ubase_check(udict_get_string(upipe_fenc->options->udict,
                                               &value, type, key)))
                 continue;
-            if (!ubase_check(upipe_set_option(upipe_fenc->last_inner,
+            if (!ubase_check(upipe_set_option(upipe_fenc->first_inner,
                                               key, value)))
                 upipe_warn_va(upipe, "option %s=%s invalid", key, value);
         }
     }
 
-    if (ubase_check(upipe_set_flow_def(upipe_fenc->last_inner, flow_def)))
+    if (ubase_check(upipe_set_flow_def(upipe_fenc->first_inner, flow_def)))
         return UBASE_ERR_NONE;
     upipe_fenc_store_bin_input(upipe, NULL);
     upipe_fenc_store_bin_output(upipe, NULL);
@@ -365,8 +428,8 @@ static int upipe_fenc_set_option(struct upipe *upipe,
     if (upipe_fenc->options == NULL)
         return UBASE_ERR_ALLOC;
 
-    if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_set_option(upipe_fenc->last_inner, key, value))
+    if (upipe_fenc->first_inner != NULL) {
+        UBASE_RETURN(upipe_set_option(upipe_fenc->first_inner, key, value))
     }
     if (value != NULL)
         return udict_set_string(upipe_fenc->options->udict, value,
@@ -387,8 +450,8 @@ static int upipe_fenc_set_default_mpeg2(struct upipe *upipe)
 
     upipe_fenc->x262 = true;
 
-    if (upipe_fenc->last_inner != NULL) {
-        UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->last_inner))
+    if (upipe_fenc->first_inner != NULL) {
+        UBASE_RETURN(upipe_x264_set_default_mpeg2(upipe_fenc->first_inner))
     }
     return UBASE_ERR_NONE;
 }
@@ -408,9 +471,9 @@ static int upipe_fenc_set_default(struct upipe *upipe,
 
     upipe_fenc->bit_depth = bit_depth;
 
-    if (upipe_fenc->last_inner != NULL) {
+    if (upipe_fenc->first_inner != NULL) {
         if (signature == UPIPE_X265_SIGNATURE) {
-            UBASE_RETURN(upipe_x265_set_default(upipe_fenc->last_inner,
+            UBASE_RETURN(upipe_x265_set_default(upipe_fenc->first_inner,
                                                 bit_depth))
         }
     }
@@ -439,12 +502,12 @@ static int upipe_fenc_set_default_preset(struct upipe *upipe,
     if (tune != NULL)
         upipe_fenc->tune = strdup(tune);
 
-    if (upipe_fenc->last_inner != NULL) {
+    if (upipe_fenc->first_inner != NULL) {
         if (signature == UPIPE_X264_SIGNATURE)
-            UBASE_RETURN(upipe_x264_set_default_preset(upipe_fenc->last_inner,
+            UBASE_RETURN(upipe_x264_set_default_preset(upipe_fenc->first_inner,
                                                        preset, tune))
         else if (signature == UPIPE_X265_SIGNATURE)
-            UBASE_RETURN(upipe_x265_set_default_preset(upipe_fenc->last_inner,
+            UBASE_RETURN(upipe_x265_set_default_preset(upipe_fenc->first_inner,
                                                        preset, tune))
     }
     return UBASE_ERR_NONE;
@@ -467,12 +530,12 @@ static int upipe_fenc_set_profile(struct upipe *upipe,
     if (profile != NULL)
         upipe_fenc->profile = strdup(profile);
 
-    if (upipe_fenc->last_inner != NULL) {
+    if (upipe_fenc->first_inner != NULL) {
         if (signature == UPIPE_X264_SIGNATURE)
-            UBASE_RETURN(upipe_x264_set_profile(upipe_fenc->last_inner,
+            UBASE_RETURN(upipe_x264_set_profile(upipe_fenc->first_inner,
                                                 profile))
         else if (signature == UPIPE_X265_SIGNATURE)
-            UBASE_RETURN(upipe_x265_set_profile(upipe_fenc->last_inner,
+            UBASE_RETURN(upipe_x265_set_profile(upipe_fenc->first_inner,
                                                 profile))
     }
     return UBASE_ERR_NONE;
@@ -493,12 +556,12 @@ static int upipe_fenc_set_sc_latency(struct upipe *upipe,
 
     upipe_fenc->sc_latency = sc_latency;
 
-    if (upipe_fenc->last_inner != NULL) {
+    if (upipe_fenc->first_inner != NULL) {
         if (signature == UPIPE_X264_SIGNATURE)
-                UBASE_RETURN(upipe_x264_set_sc_latency(upipe_fenc->last_inner,
+                UBASE_RETURN(upipe_x264_set_sc_latency(upipe_fenc->first_inner,
                                                        sc_latency))
         else if (signature == UPIPE_X265_SIGNATURE)
-                UBASE_RETURN(upipe_x265_set_sc_latency(upipe_fenc->last_inner,
+                UBASE_RETURN(upipe_x265_set_sc_latency(upipe_fenc->first_inner,
                                                        sc_latency))
     }
     return UBASE_ERR_NONE;
@@ -518,16 +581,16 @@ static int upipe_fenc_set_slice_type_enforce(struct upipe *upipe,
     struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
     upipe_fenc->slice_type_enforce = enforce;
 
-    if (upipe_fenc->last_inner != NULL) {
+    if (upipe_fenc->first_inner != NULL) {
         if (signature == UPIPE_X264_SIGNATURE)
-            UBASE_RETURN(upipe_x264_set_slice_type_enforce(upipe_fenc->last_inner,
-                                                           enforce))
+            UBASE_RETURN(upipe_x264_set_slice_type_enforce(
+                    upipe_fenc->first_inner, enforce))
         else if (signature == UPIPE_X265_SIGNATURE)
-            UBASE_RETURN(upipe_x265_set_slice_type_enforce(upipe_fenc->last_inner,
-                                                           enforce))
+            UBASE_RETURN(upipe_x265_set_slice_type_enforce(
+                    upipe_fenc->first_inner, enforce))
         else if (signature == UPIPE_AVCENC_SIGNATURE)
             UBASE_RETURN(upipe_avcenc_set_slice_type_enforce(
-                    upipe_fenc->last_inner, enforce))
+                    upipe_fenc->first_inner, enforce))
     }
     return UBASE_ERR_NONE;
 }
@@ -646,40 +709,6 @@ static int upipe_fenc_control(struct upipe *upipe, int command, va_list args)
     if (err == UBASE_ERR_UNHANDLED)
         return upipe_fenc_control_bin_output(upipe, command, args);
     return err;
-}
-
-/** @This frees a upipe.
- *
- * @param urefcount_real pointer to urefcount_real structure
- */
-static void upipe_fenc_free(struct urefcount *urefcount_real)
-{
-    struct upipe_fenc *upipe_fenc =
-        upipe_fenc_from_urefcount_real(urefcount_real);
-    struct upipe *upipe = upipe_fenc_to_upipe(upipe_fenc);
-    upipe_throw_dead(upipe);
-    uref_free(upipe_fenc->flow_def_input);
-    uref_free(upipe_fenc->options);
-    free(upipe_fenc->preset);
-    free(upipe_fenc->tune);
-    free(upipe_fenc->profile);
-    upipe_fenc_clean_last_inner_probe(upipe);
-    upipe_fenc_clean_uref_mgr(upipe);
-    urefcount_clean(urefcount_real);
-    upipe_fenc_clean_urefcount(upipe);
-    upipe_fenc_free_flow(upipe);
-}
-
-/** @This is called when there is no external reference to the pipe anymore.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_fenc_no_ref(struct upipe *upipe)
-{
-    struct upipe_fenc *upipe_fenc = upipe_fenc_from_upipe(upipe);
-    upipe_fenc_clean_bin_input(upipe);
-    upipe_fenc_clean_bin_output(upipe);
-    urefcount_release(upipe_fenc_to_urefcount_real(upipe_fenc));
 }
 
 /** @This frees a upipe manager.
