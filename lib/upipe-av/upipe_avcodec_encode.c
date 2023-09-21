@@ -697,6 +697,12 @@ static void upipe_avcenc_output_pkt(struct upipe *upipe,
     } else
         uref_clock_rebase_dts_sys(uref);
 
+    if (codec->type == AVMEDIA_TYPE_AUDIO) {
+        if (context->sample_rate)
+            uref_clock_set_duration(uref, context->frame_size * UCLOCK_FREQ /
+                                    context->sample_rate);
+    }
+
     uref_clock_rebase_dts_orig(uref);
     uref_clock_set_rate(uref, upipe_avcenc->drift_rate);
 
