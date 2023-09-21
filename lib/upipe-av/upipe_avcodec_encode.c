@@ -546,7 +546,11 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
     }
 
     if (context->bit_rate) {
-        uref_block_flow_set_octetrate(flow_def, context->bit_rate / 8);
+        uint64_t octetrate = context->bit_rate / 8;
+
+        if (!strcmp(context->codec->name, "libopus"))
+            octetrate += context->sample_rate / context->frame_size;
+        uref_block_flow_set_octetrate(flow_def, octetrate);
         if (context->rc_buffer_size)
             uref_block_flow_set_buffer_size(flow_def,
                                             context->rc_buffer_size / 8);
