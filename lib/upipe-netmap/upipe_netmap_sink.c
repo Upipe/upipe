@@ -53,6 +53,7 @@
 #include <linux/if_packet.h>
 #include <pthread.h>
 #include <limits.h>
+#include <libgen.h>
 
 #define NETMAP_WITH_LIBS
 #include <net/netmap.h>
@@ -135,6 +136,10 @@ struct upipe_netmap_intf {
 
     /** time at which intf came back up */
     uint64_t wait;
+
+    char *device_base_name;
+    unsigned vendor_id;
+    unsigned device_id;
 };
 
 struct audio_packet_state {
@@ -400,6 +405,107 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
     return got_mac && got_ip;
 }
 
+/* Discover the actual HW device */
+static int probe_hw(struct upipe_netmap_intf *intf, const char *ifname)
+{
+    char *path = NULL, *real_path = NULL, *base_name = NULL;
+    int ret = 0;
+
+    /* Format the device path. */
+    ret = asprintf(&path, "/sys/class/net/%s/device", ifname);
+    if (ret == -1) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+
+    /* Resolve to the real path. */
+    real_path = realpath(path, NULL);
+    if (!real_path) {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    free(path);
+    path = NULL;
+
+    /* Get the last directory component which represents the bus details. */
+    char *temp = basename(real_path);
+    if (!temp) {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    /* "Both dirname() and basename() return pointers to null‐terminated strings.  (Do not pass these pointers to free(3).)" */
+    base_name = strdup(temp);
+    temp = NULL;
+    if (!base_name) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+
+    /* Get vendor ID. */
+    char c = 0;
+    FILE *fh = NULL;
+    unsigned vendor = 0, device = 0;
+
+    /* Format the file path. */
+    ret = asprintf(&path, "%s/vendor", real_path);
+    if (ret == -1) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+    /* Open the file. */
+    fh = fopen(path, "r");
+    if (!fh) {
+        //perror(path);
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    /* Scan the file. */
+    ret = fscanf(fh, "%x%c", &vendor, &c);
+    fclose(fh);
+    /* If the scan did not read 2 values or the trailing character is not a
+     * newline then it is an error. */
+    if (ret != 2 || c != '\n') {
+        //fprintf(stderr, "invalid scan\n");
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    free(path);
+    path = NULL;
+
+    /* Repeat for device ID. */
+    ret = asprintf(&path, "%s/device", real_path);
+    if (ret == -1) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+    fh = fopen(path, "r");
+    if (!fh) {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    ret = fscanf(fh, "%x%c", &device, &c);
+    fclose(fh);
+    if (ret != 2 || c != '\n') {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+
+    intf->device_base_name = base_name;
+    intf->vendor_id = vendor;
+    intf->device_id = device;
+
+    free(path);
+    free(real_path);
+    return UBASE_ERR_NONE;
+
+error_hw_probe:
+    free(path);
+    free(real_path);
+    free(base_name);
+
+    return ret;
+}
+
 static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *uri)
 {
@@ -472,6 +578,15 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         nm_close(intf->d);
         ret = UBASE_ERR_ALLOC;
         goto error;
+    }
+
+    if (ubase_check(probe_hw(intf, intf_addr))) {
+        upipe_dbg_va(upipe, "%s: base name: %s, vendor: %u (%#x), device: %u (%#x)",
+                intf_addr, intf->device_base_name,
+                intf->vendor_id, intf->vendor_id,
+                intf->device_id, intf->device_id);
+    } else {
+        upipe_warn_va(upipe, "error probing HW for '%s'", intf_addr);
     }
 
 error:
@@ -2818,6 +2933,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         free(intf->maxrate_uri);
+        free(intf->device_base_name);
         nm_close(intf->d);
         close(intf->fd);
     }
