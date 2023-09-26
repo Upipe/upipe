@@ -53,6 +53,7 @@
 #include <linux/if_packet.h>
 #include <pthread.h>
 #include <limits.h>
+#include <libgen.h>
 
 #define NETMAP_WITH_LIBS
 #include <net/netmap.h>
@@ -92,6 +93,10 @@
 #endif
 
 #define MAX_AUDIO_UREFS 20
+
+/* From pciutils' pci.ids */
+#define VENDOR_ID_MELLANOX 0x15b3
+#define DEVICE_ID_CONNECTX6DX 0x101d
 
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
@@ -135,6 +140,10 @@ struct upipe_netmap_intf {
 
     /** time at which intf came back up */
     uint64_t wait;
+
+    char *device_base_name;
+    unsigned vendor_id;
+    unsigned device_id;
 };
 
 struct audio_packet_state {
@@ -275,6 +284,7 @@ struct upipe_netmap_sink {
     uint64_t bits;
     uint64_t start;
 
+    double tx_rate_factor;
     uint64_t fakes;
     uint32_t step;
     int64_t needed_fakes;
@@ -400,6 +410,107 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
     return got_mac && got_ip;
 }
 
+/* Discover the actual HW device */
+static int probe_hw(struct upipe_netmap_intf *intf, const char *ifname)
+{
+    char *path = NULL, *real_path = NULL, *base_name = NULL;
+    int ret = 0;
+
+    /* Format the device path. */
+    ret = asprintf(&path, "/sys/class/net/%s/device", ifname);
+    if (ret == -1) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+
+    /* Resolve to the real path. */
+    real_path = realpath(path, NULL);
+    if (!real_path) {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    free(path);
+    path = NULL;
+
+    /* Get the last directory component which represents the bus details. */
+    char *temp = basename(real_path);
+    if (!temp) {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    /* "Both dirname() and basename() return pointers to null‐terminated strings.  (Do not pass these pointers to free(3).)" */
+    base_name = strdup(temp);
+    temp = NULL;
+    if (!base_name) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+
+    /* Get vendor ID. */
+    char c = 0;
+    FILE *fh = NULL;
+    unsigned vendor = 0, device = 0;
+
+    /* Format the file path. */
+    ret = asprintf(&path, "%s/vendor", real_path);
+    if (ret == -1) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+    /* Open the file. */
+    fh = fopen(path, "r");
+    if (!fh) {
+        //perror(path);
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    /* Scan the file. */
+    ret = fscanf(fh, "%x%c", &vendor, &c);
+    fclose(fh);
+    /* If the scan did not read 2 values or the trailing character is not a
+     * newline then it is an error. */
+    if (ret != 2 || c != '\n') {
+        //fprintf(stderr, "invalid scan\n");
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    free(path);
+    path = NULL;
+
+    /* Repeat for device ID. */
+    ret = asprintf(&path, "%s/device", real_path);
+    if (ret == -1) {
+        ret = UBASE_ERR_ALLOC;
+        goto error_hw_probe;
+    }
+    fh = fopen(path, "r");
+    if (!fh) {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+    ret = fscanf(fh, "%x%c", &device, &c);
+    fclose(fh);
+    if (ret != 2 || c != '\n') {
+        ret = UBASE_ERR_EXTERNAL;
+        goto error_hw_probe;
+    }
+
+    intf->device_base_name = base_name;
+    intf->vendor_id = vendor;
+    intf->device_id = device;
+
+    free(path);
+    free(real_path);
+    return UBASE_ERR_NONE;
+
+error_hw_probe:
+    free(path);
+    free(real_path);
+    free(base_name);
+
+    return ret;
+}
+
 static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         struct upipe_netmap_intf *intf, const char *uri)
 {
@@ -474,6 +585,15 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         goto error;
     }
 
+    if (ubase_check(probe_hw(intf, intf_addr))) {
+        upipe_dbg_va(upipe, "%s: base name: %s, vendor: %u (%#x), device: %u (%#x)",
+                intf_addr, intf->device_base_name,
+                intf->vendor_id, intf->vendor_id,
+                intf->device_id, intf->device_id);
+    } else {
+        upipe_warn_va(upipe, "error probing HW for '%s'", intf_addr);
+    }
+
 error:
     free(netmap_device);
     free(intf_addr);
@@ -512,6 +632,16 @@ static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
     if (p) {
         p[-1] = '+';
         UBASE_RETURN(upipe_netmap_sink_open_intf(upipe, intf+1, p));
+    }
+
+    if (upipe_netmap_sink->intf[0].vendor_id == VENDOR_ID_MELLANOX
+            && upipe_netmap_sink->intf[0].device_id == DEVICE_ID_CONNECTX6DX
+            && upipe_netmap_sink->intf[1].vendor_id == VENDOR_ID_MELLANOX
+            && upipe_netmap_sink->intf[1].device_id == DEVICE_ID_CONNECTX6DX)
+    {
+        /* Device is a Mellanox ConnectX-6 Dx assuming REAL_TIME_CLOCK_ENABLE=1 */
+        /* TODO: eventually add detection of the config variables. */
+        upipe_netmap_sink->tx_rate_factor = 1.0001;
     }
 
     free((char*)dev);
@@ -610,6 +740,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 0;
     upipe_netmap_sink->gap_fakes_current = 0;
+    upipe_netmap_sink->tx_rate_factor = 1;
 
     upipe_netmap_sink->uri = NULL;
     for (size_t i = 0; i < 2; i++) {
@@ -1387,10 +1518,9 @@ static void handle_tx_stamp(struct upipe *upipe, uint64_t t, uint16_t seq)
         upipe_netmap_sink->step = 0;
 
     upipe_dbg_va(upipe,
-            "%.2f ms, ideal %.2f"
-            " step %.2f, fakes %" PRIu64 " needed fakes %.2f",
-            (float)(dur - x) / 27000., ideal, step,
-            upipe_netmap_sink->fakes, needed_fakes);
+            "% .3f ms, ideal % .2f step % .2f, fakes %u needed fakes %.2f",
+            (double)(dur - x) / 27000., ideal, step,
+            (unsigned)upipe_netmap_sink->fakes, needed_fakes);
     upipe_netmap_sink->fakes = 0;
 
     upipe_netmap_sink->pkts_in_frame = 0;
@@ -2137,7 +2267,13 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                 upipe_err_va(upipe, "Could not open maxrate sysctl %s",
                         intf->maxrate_uri);
             } else {
-                fprintf(f, "%" PRIu64, upipe_netmap_sink->rate / upipe_netmap_sink->fps.den);
+                double tx_rate_factor = 1;
+                if (!upipe_netmap_sink->rfc4175)
+                    tx_rate_factor = upipe_netmap_sink->tx_rate_factor;
+                double tx_rate = tx_rate_factor
+                    * upipe_netmap_sink->rate
+                    / upipe_netmap_sink->fps.den;
+                fprintf(f, "%.0f", tx_rate);
                 fclose(f);
             }
         }
@@ -2819,6 +2955,7 @@ static void upipe_netmap_sink_free(struct upipe *upipe)
     for (size_t i = 0; i < 2; i++) {
         struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
         free(intf->maxrate_uri);
+        free(intf->device_base_name);
         nm_close(intf->d);
         close(intf->fd);
     }
