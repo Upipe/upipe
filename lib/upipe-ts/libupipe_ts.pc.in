@@ -6,5 +6,6 @@ Name: libupipe_ts
 Description: Upipe multimedia framework, MPEG-2 transport stream modules
 Version: @VERSION@
 Requires: libupipe libupipe_modules
+Requires.private: @LIBUPIPE_TS_PKGCONFIG_REQUIRES@
 Libs: -L${libdir} -lupipe_ts
 Cflags: -I${includedir}

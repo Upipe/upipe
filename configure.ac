@@ -2,11 +2,12 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.61])
-AC_INIT([upipe], [0.5], [cmassiot@upipe.org])
+AC_INIT([upipe],[0.5],[cmassiot@upipe.org])
 AC_CONFIG_SRCDIR([lib/upipe/uprobe_stdio.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_AUX_DIR([autotools])
 AC_CONFIG_MACRO_DIR([m4])
+AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE([foreign nostdinc parallel-tests color-tests subdir-objects])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 PKG_PROG_PKG_CONFIG
@@ -16,7 +17,7 @@ AC_CHECK_PROGS(PERL, perl)
 AC_PATH_PROG(MOC, [moc-qt4 moc], moc)
 AC_PROG_CXX
 AC_PROG_AWK
-AC_PROG_CC_C99
+AC_PROG_CC
 AC_USE_SYSTEM_EXTENSIONS
 AC_PROG_CPP
 AC_PROG_INSTALL
@@ -26,16 +27,14 @@ AM_PROG_CC_C_O
 AM_PROG_AS
 LT_INIT([win32-dll])
 
-AC_ARG_ENABLE(
-    [luajit],
-    AS_HELP_STRING(
-        [--enable-luajit],
-        [Enable build of luajit bindings]))
-AM_CONDITIONAL(BUILD_LUAJIT, test "$enable_luajit" = yes -a "$OBJDUMP" != false -a "$enable_shared" != no)
-AM_COND_IF(BUILD_LUAJIT,
+AC_ARG_ENABLE([luajit],
+              AS_HELP_STRING([--enable-luajit], [Enable build of luajit bindings]))
+AM_CONDITIONAL(BUILD_LUAJIT,
+               test "$enable_luajit" = yes -a "$OBJDUMP" != false -a "$enable_shared" != no)
+AM_COND_IF(BUILD_LUAJIT,[
            AC_CHECK_PROGS(LUAJIT, luajit)
            AC_CHECK_PROGS(EU_READELF, eu-readelf)
-           AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"]))
+           AC_CHECK_PROGS(LLVM_DWARFDUMP, [llvm-dwarfdump "xcrun llvm-dwarfdump"])])
 
 AC_PATH_PROGS(NASM, [nasm yasm])
 
@@ -106,12 +105,6 @@ AC_SUBST(PTHREAD_CFLAGS)
 AC_SUBST(PTHREAD_LIBS)
 AM_ICONV
 
-# Check for libgcrypt
-AM_PATH_LIBGCRYPT([],
-        AM_CONDITIONAL(HAVE_GCRYPT, true)
-        AC_DEFINE(HAVE_GCRYPT, 1, Define if libgcrypt is available.),
-        AM_CONDITIONAL(HAVE_GCRYPT, false))
-
 # Check for header, then libev3 (ev_loop), then libev4 (ev_run)
 AC_CHECK_HEADERS([ev.h], [
         AC_CHECK_LIB(ev, ev_loop,
@@ -124,7 +117,10 @@ AC_CHECK_HEADERS([dvbcsa/dvbcsa.h],
                  AM_CONDITIONAL(HAVE_DVBCSA, true),
                  AM_CONDITIONAL(HAVE_DVBCSA, false))
 
+PKG_CHECK_UPIPE(GCRYPT, libgcrypt, [gcrypt.h])
+PKG_CHECK_EXISTS([libgcrypt], [LIBUPIPE_TS_PKGCONFIG_REQUIRES="$LIBUPIPE_TS_PKGCONFIG_REQUIRES libgcrypt"])
 PKG_CHECK_UPIPE(TASN1, libtasn1, [libtasn1.h])
+PKG_CHECK_EXISTS([libtasn1], [LIBUPIPE_TS_PKGCONFIG_REQUIRES="$LIBUPIPE_TS_PKGCONFIG_REQUIRES libtasn1"])
 PKG_CHECK_UPIPE(BITSTREAM, bitstream >= 1.4, [bitstream/common.h])
 PKG_CHECK_UPIPE(AVUTIL, libavutil, [libavutil/avutil.h])
 PKG_CHECK_UPIPE(AVFORMAT, [libavformat >= 53.32.0 libavcodec libavutil], [libavformat/avformat.h libavformat/avio.h libavutil/avutil.h])
@@ -142,6 +138,9 @@ PKG_CHECK_UPIPE(DVBV5, libdvbv5, [libdvbv5/dvb-dev.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
+
+# if have gcrypt and tasn then
+AC_SUBST(LIBUPIPE_TS_PKGCONFIG_REQUIRES)
 
 CFLAGS="${CFLAGS} -D_REENTRANT"
 LIBS="${LIBS} -lpthread"
@@ -179,7 +178,6 @@ AC_CHECK_HEADERS([net/netmap.h], AM_CONDITIONAL(HAVE_NETMAP, true), AM_CONDITION
 #include <net/if.h>])
 
 # Checks for header files.
-AC_HEADER_STDC
 AC_CHECK_HEADERS([fcntl.h stddef.h stdint.h stdlib.h string.h unistd.h sys/ioctl.h semaphore.h features.h net/if.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
