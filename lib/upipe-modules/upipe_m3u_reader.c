@@ -214,6 +214,8 @@ struct upipe_m3u_reader {
     struct uref *map;
     /** current program date time */
     uint64_t program_date_time;
+    /** current discontinuity */
+    bool discontinuity;
     /** list of items */
     struct uchain items;
 
@@ -263,6 +265,7 @@ static struct upipe *upipe_m3u_reader_alloc(struct upipe_mgr *mgr,
     upipe_m3u_reader->key = NULL;
     upipe_m3u_reader->map = NULL;
     upipe_m3u_reader->program_date_time = UINT64_MAX;
+    upipe_m3u_reader->discontinuity = false;
     upipe_m3u_reader->restart = false;
     upipe_throw_ready(upipe);
 
@@ -1062,6 +1065,59 @@ static int upipe_m3u_reader_daterange(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This checks and parses a "#EXT-X-DISCONTINUITY" tag.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def the current flow definition
+ * @param line the trailing characters of the line
+ * @return an error code
+ */
+static int upipe_m3u_reader_discontinuity(struct upipe *upipe,
+                                          struct uref *flow_def,
+                                          const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    if (unlikely(
+            !ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)) &&
+            !ubase_check(uref_flow_match_def(flow_def, PLAYLIST_FLOW_DEF))))
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
+
+    upipe_m3u_reader->discontinuity = true;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks and parses a "#EXT-X-DISCONTINUITY-SEQUENCE" tag.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def the current flow definition
+ * @param line the trailing characters of the line
+ * @return an error code
+ */
+static int upipe_m3u_reader_discontinuity_sequence(struct upipe *upipe,
+                                                   struct uref *flow_def,
+                                                   const char *line)
+{
+    const char *def;
+    UBASE_RETURN(uref_flow_get_def(flow_def, &def));
+    if (strcmp(def, M3U_FLOW_DEF) && strcmp(def, PLAYLIST_FLOW_DEF))
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
+
+    char *endptr;
+    uint64_t discontinuity_sequence = strtoull(line, &endptr, 10);
+    if (endptr == line || strlen(endptr)) {
+        upipe_warn_va(upipe, "invalid discontinuity sequence %s", line);
+        return UBASE_ERR_INVALID;
+    }
+    upipe_dbg_va(upipe, "discontinuity sequence %"PRIu64,
+                 discontinuity_sequence);
+    return uref_m3u_playlist_flow_set_discontinuity_sequence(
+        flow_def, discontinuity_sequence);
+}
+
 /** @internal @This checks an URI.
  *
  * @param upipe description structure of the pipe
@@ -1091,6 +1147,10 @@ static int upipe_m3u_reader_process_uri(struct upipe *upipe,
         uint64_t duration;
         if (ubase_check(uref_m3u_playlist_get_seq_duration(item, &duration)))
             upipe_m3u_reader->program_date_time += duration;
+    }
+    if (upipe_m3u_reader->discontinuity) {
+        UBASE_RETURN(uref_m3u_playlist_set_discontinuity(item, true));
+        upipe_m3u_reader->discontinuity = false;
     }
     upipe_m3u_reader->item = NULL;
     ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
@@ -1126,6 +1186,8 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
         { "#EXT-X-MAP:", upipe_m3u_reader_map },
         { "#EXT-X-PROGRAM-DATE-TIME:", upipe_m3u_reader_program_date_time },
         { "#EXT-X-DATERANGE:", upipe_m3u_reader_daterange },
+        { "#EXT-X-DISCONTINUITY-SEQUENCE:", upipe_m3u_reader_discontinuity_sequence },
+        { "#EXT-X-DISCONTINUITY", upipe_m3u_reader_discontinuity },
     };
 
     size_t block_size;

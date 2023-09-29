@@ -1,0 +1,18 @@
+flow definition: block.m3u.playlist.
+version: 3
+playlist target duration: 162000000
+playlist media sequence: 2680
+playlist discontinuity sequence: 42
+uri: https://priv.example.com/fileSequence2680.ts
+playlist sequence duration: 162000000
+playlist program date time: 45819615617145000
+uri: https://priv.example.com/fileSequence2681.ts
+playlist sequence duration: 124200000
+playlist program date time: 45819615779145000
+uri: https://priv.example.com/fileSequence2682.ts
+playlist sequence duration: 162000000
+playlist program date time: 45819616143321000
+playlist discontinuity: yes
+uri: https://priv.example.com/fileSequence2683.ts
+playlist sequence duration: 162000000
+playlist program date time: 45819616305321000
