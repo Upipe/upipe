@@ -38,6 +38,9 @@ UREF_ATTR_UNSIGNED(m3u_playlist_flow, target_duration,
 UREF_ATTR_UNSIGNED(m3u_playlist_flow, media_sequence,
                    "m3u.playlist.media_sequence",
                    media sequence)
+UREF_ATTR_UNSIGNED(m3u_playlist_flow, discontinuity_sequence,
+                   "m3u.playlist.discontinuity_sequence",
+                   discontinuity sequence)
 UREF_ATTR_VOID(m3u_playlist_flow, endlist, "m3u.playlist.endlist",
                endlist)
 
@@ -47,6 +50,7 @@ static inline int uref_m3u_playlist_flow_delete(struct uref *uref)
         uref_m3u_playlist_flow_delete_type,
         uref_m3u_playlist_flow_delete_target_duration,
         uref_m3u_playlist_flow_delete_media_sequence,
+        uref_m3u_playlist_flow_delete_discontinuity_sequence,
         uref_m3u_playlist_flow_delete_endlist,
     };
 
@@ -60,6 +64,7 @@ static inline int uref_m3u_playlist_flow_copy(struct uref *uref,
         uref_m3u_playlist_flow_copy_type,
         uref_m3u_playlist_flow_copy_target_duration,
         uref_m3u_playlist_flow_copy_media_sequence,
+        uref_m3u_playlist_flow_copy_discontinuity_sequence,
         uref_m3u_playlist_flow_copy_endlist,
     };
 

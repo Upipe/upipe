@@ -80,6 +80,12 @@ static int catch_uref(struct uprobe *uprobe,
                     uref, &media_sequence)))
             printf("playlist media sequence: %"PRIu64"\n", media_sequence);
 
+        uint64_t discontinuity_sequence;
+        if (ubase_check(uref_m3u_playlist_flow_get_discontinuity_sequence(
+                    uref, &discontinuity_sequence)))
+            printf("playlist discontinuity sequence: %"PRIu64"\n",
+                   discontinuity_sequence);
+
         if (ubase_check(uref_m3u_playlist_flow_get_endlist(uref)))
             printf("playlist end\n");
 
@@ -111,6 +117,18 @@ static int catch_uref(struct uprobe *uprobe,
                     uref, &playlist_byte_range_off)))
             printf("playlist byte range offset: %"PRIu64"\n",
                    playlist_byte_range_off);
+
+        uint64_t playlist_program_date_time;
+        if (ubase_check(uref_m3u_playlist_get_program_date_time(
+                    uref, &playlist_program_date_time)))
+            printf("playlist program date time: %"PRIu64"\n",
+                   playlist_program_date_time);
+
+        bool playlist_discontinuity;
+        if (ubase_check(uref_m3u_playlist_get_discontinuity(
+                    uref, &playlist_discontinuity)))
+            printf("playlist discontinuity: %s\n",
+                   playlist_discontinuity ? "yes" : "no");
 
         uint64_t master_bandwidth;
         if (ubase_check(uref_m3u_master_get_bandwidth(
