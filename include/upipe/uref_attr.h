@@ -332,8 +332,8 @@ static inline int uref_##group##_set_##attr(struct uref *uref,              \
  * @param v value to set                                                    \
  * @return an error code                                                    \
  */                                                                         \
-static inline int uref_##group##_set_##attr##_from_hex(struct uref *uref,   \
-                                                       const char *v)       \
+static UBASE_UNUSED inline int                                              \
+uref_##group##_set_##attr##_from_hex(struct uref *uref, const char *v)      \
 {                                                                           \
     return uref_attr_set_opaque_from_hex(uref, v, UDICT_TYPE_OPAQUE, name); \
 }                                                                           \
