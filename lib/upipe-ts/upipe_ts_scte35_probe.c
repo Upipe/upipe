@@ -90,6 +90,8 @@ struct upipe_ts_scte35p_event {
     struct uref *uref;
     /** upump which will trigger the event */
     struct upump *upump;
+    /** first debug message? */
+    bool first_debug;
 
     /** pointer to public upipe structure */
     struct upipe *upipe;
@@ -113,6 +115,8 @@ struct upipe_ts_scte35p_signal {
     struct uref *uref;
     /** upump which will trigger the event */
     struct upump *upump;
+    /** first debug message? */
+    bool first_debug;
 
     /** pointer to public upipe structure */
     struct upipe *upipe;
@@ -188,6 +192,7 @@ static struct upipe_ts_scte35p_event *
         return NULL;
 
     uchain_init(&event->uchain);
+    event->first_debug = true;
     event->event_id = event_id;
     event->uref = uref;
     event->upump = NULL;
@@ -240,8 +245,14 @@ static void upipe_ts_scte35p_event_wait(struct upipe *upipe,
 {
     struct upipe_ts_scte35p *upipe_ts_scte35p =
         upipe_ts_scte35p_from_upipe(upipe);
-    upipe_dbg_va(upipe, "splice %"PRIu64" waiting %"PRIu64" ms",
-                 event->event_id, timeout * 1000 / UCLOCK_FREQ);
+
+    if (event->first_debug)
+        upipe_dbg_va(upipe, "splice %"PRIu64" waiting %"PRIu64" ms",
+                     event->event_id, timeout * 1000 / UCLOCK_FREQ);
+    else
+        upipe_verbose_va(upipe, "splice %"PRIu64" waiting %"PRIu64" ms",
+                         event->event_id, timeout * 1000 / UCLOCK_FREQ);
+    event->first_debug = false;
 
     struct upump *watcher = upump_alloc_timer(upipe_ts_scte35p->upump_mgr,
             upipe_ts_scte35p_event_watcher, event, upipe->refcount, timeout, 0);
@@ -359,6 +370,7 @@ upipe_ts_scte35p_signal_find(struct upipe *upipe, struct uref *uref)
     if (!signal)
         return NULL;
 
+    signal->first_debug = true;
     signal->pts_orig = pts_orig;
     signal->pts = pts;
     signal->upipe = upipe;
@@ -410,8 +422,14 @@ static void upipe_ts_scte35p_signal_wait(struct upipe *upipe,
 {
     struct upipe_ts_scte35p *upipe_ts_scte35p =
         upipe_ts_scte35p_from_upipe(upipe);
-    upipe_dbg_va(upipe, "signal waiting %"PRIu64" ms",
-                 timeout * 1000 / UCLOCK_FREQ);
+
+    if (signal->first_debug)
+        upipe_dbg_va(upipe, "signal waiting %"PRIu64" ms",
+                     timeout * 1000 / UCLOCK_FREQ);
+    else
+        upipe_verbose_va(upipe, "signal waiting %"PRIu64" ms",
+                         timeout * 1000 / UCLOCK_FREQ);
+    signal->first_debug = false;
 
     if (signal->upump) {
         upump_stop(signal->upump);
@@ -458,7 +476,7 @@ static void upipe_ts_scte35p_input_null(struct upipe *upipe,
                                         struct uref *uref,
                                         struct upump **upump_p)
 {
-    upipe_dbg_va(upipe, "throw ts_scte35p_null");
+    upipe_verbose_va(upipe, "throw ts_scte35p_null");
     upipe_throw(upipe, UPROBE_TS_SCTE35P_NULL, UPIPE_TS_SCTE35P_SIGNATURE,
                 uref);
     uref_free(uref);
