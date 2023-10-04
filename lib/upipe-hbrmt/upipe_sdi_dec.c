@@ -591,11 +591,20 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         clock |= (packet[14] & 0x20) << 7;
         bool mpf = packet[14] & 0x10;
 
-        if (audio_group == 0) {
-            uint16_t prev_clk = upipe_sdi_dec->audio_debug.prev_clk[0];
+        for (int i = 0; i < 1; i++) {
+            uint16_t prev_clk = upipe_sdi_dec->audio_debug.prev_clk[i];
+            uint64_t prev_line = upipe_sdi_dec->audio_debug.prev_line[i];
+            uint64_t line = upipe_sdi_dec->audio_debug.line_counter;
+
+            int diff = clock - prev_clk;
+            if (line != prev_line)
+                diff = upipe_sdi_dec->f->width - prev_clk + clock;
+
             upipe_notice_va(upipe, "line: %d, prev clk: %d, clk: %d, diff: %d",
-                    line_num, prev_clk, clock, clock - prev_clk);
-            upipe_sdi_dec->audio_debug.prev_clk[0] = clock;
+                    line_num, prev_clk, clock, diff);
+
+            upipe_sdi_dec->audio_debug.prev_clk[i] = clock;
+            upipe_sdi_dec->audio_debug.prev_line[i] = line;
 
         }
 
