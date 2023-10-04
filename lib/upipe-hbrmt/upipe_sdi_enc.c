@@ -997,7 +997,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
                 /* If the mpf bit is set roll the clock back to the previous line and
                  * signal the bit in the packet to indicate it was meant to arrive on
-                 * the previous line which happened to be a switching point */
+                 * the previous line */
                 uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
 
                 /* Sample clock is the difference between the actual audio clock [position] and the EAV pixel clock */
