@@ -111,6 +111,16 @@ struct audio_ctx {
     int aes[8];
 };
 
+/* Audio position debugging */
+struct audio_debug {
+    uint64_t line_counter;
+    uint64_t prev_line[UPIPE_SDI_MAX_GROUPS];
+    uint64_t cur_line[UPIPE_SDI_MAX_GROUPS];
+    uint64_t pkt_counter[UPIPE_SDI_MAX_GROUPS];
+    int pkts_per_line[UPIPE_SDI_MAX_GROUPS];
+    uint16_t prev_clk[UPIPE_SDI_MAX_GROUPS];
+};
+
 /** upipe_sdi_dec structure with sdi_dec parameters */
 struct upipe_sdi_dec {
     /** refcount management structure */
@@ -176,6 +186,8 @@ struct upipe_sdi_dec {
 
     /* Enable CPU-intensive debugging (CRC) */
     int debug;
+
+    struct audio_debug audio_debug;
 
     /* check DBN sequence for each Type 1 packet */
     uint8_t dbn[0x80];
@@ -522,6 +534,9 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 
     if (upipe_sdi_dec->debug) {
+        upipe_sdi_dec->audio_debug.pkts_per_line[audio_group] += 1;
+        //upipe_sdi_dec->cur_line[audio_group] = upipe_sdi_dec->line_counter;
+
         int local_line_num = line_num;
         if (upipe_sdi_dec->sdi3g_levelb)
             local_line_num = (local_line_num + 1) / 2;
@@ -575,6 +590,14 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         clock |= (packet[14] & 0x0f) << 8;
         clock |= (packet[14] & 0x20) << 7;
         bool mpf = packet[14] & 0x10;
+
+        if (audio_group == 0) {
+            uint16_t prev_clk = upipe_sdi_dec->audio_debug.prev_clk[0];
+            upipe_dbg_va(upipe, "prev clk: %d, clk: %d, diff: %d",
+                    prev_clk, clock, clock - prev_clk);
+            upipe_sdi_dec->audio_debug.prev_clk[0] = clock;
+
+        }
 
         /* FIXME */
         if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
@@ -1291,6 +1314,9 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
+        upipe_sdi_dec->audio_debug.line_counter += 1;
+        memset(upipe_sdi_dec->audio_debug.pkts_per_line, 0, sizeof upipe_sdi_dec->audio_debug.pkts_per_line);
+
         bool active = 0, f2 = 0, special_case = 0;
         /* ACTIVE F1 */
         if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
@@ -1934,6 +1960,8 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
         upipe_sdi_dec->aes_detected[i] = -1;
     upipe_sdi_dec->eav_clock = 0;
     upipe_sdi_dec->frame_num = 0;
+
+    memset(&upipe_sdi_dec->audio_debug, 0, sizeof upipe_sdi_dec->audio_debug);
 
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < UPIPE_SDI_CHANNELS_PER_GROUP; j++)
