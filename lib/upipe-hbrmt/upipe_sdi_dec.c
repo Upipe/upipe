@@ -603,6 +603,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                 /* If mpf is set then treat this sample as though it were on the
                  * next line. */
                 diff = upipe_sdi_dec->f->width - prev_clk + clock;
+                line += 1;
             }
 
             upipe_notice_va(upipe, "line: %d, packet: %d, mpf: %d, prev clk: %d, clk: %d, diff: %d",
