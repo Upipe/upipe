@@ -606,9 +606,14 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                 line += 1;
             }
 
-            upipe_notice_va(upipe, "line: %d, packet: %d, mpf: %d, prev clk: %d, clk: %d, diff: %d",
-                    line_num, upipe_sdi_dec->audio_debug.pkts_per_line[0], mpf,
-                    prev_clk, clock, diff);
+            if (diff == 1545 || diff == 1546)
+                upipe_notice_va(upipe, "line: %d, packet: %d, mpf: %d, prev clk: %d, clk: %d, diff: %d",
+                        line_num, upipe_sdi_dec->audio_debug.pkts_per_line[0], mpf,
+                        prev_clk, clock, diff);
+            else
+                upipe_warn_va(upipe, "line: %d, packet: %d, mpf: %d, prev clk: %d, clk: %d, diff: %d",
+                        line_num, upipe_sdi_dec->audio_debug.pkts_per_line[0], mpf,
+                        prev_clk, clock, diff);
 
             upipe_sdi_dec->audio_debug.prev_clk[0] = clock;
             upipe_sdi_dec->audio_debug.prev_line[0] = line;
