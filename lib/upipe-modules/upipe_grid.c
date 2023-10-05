@@ -875,7 +875,6 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
                                         struct uref **flow_def_p)
 {
     struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
-    struct upipe_grid *upipe_grid = upipe_grid_from_out_mgr(upipe->mgr);
 
     if (!upipe_grid_out->input) {
         if (upipe_grid_out->warn_no_input)
@@ -916,18 +915,14 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
         else if (extracts.prev.uref &&
                  extracts.prev.pts == upipe_grid_out->last_input_pts) {
             e = &extracts.prev;
-            uint64_t input_duration = 0;
-            uref_clock_get_duration(e->uref, &input_duration);
-            if (input_duration > upipe_grid->max_retention)
-                max_diff = input_duration;
+            if (e->duration > max_diff)
+                max_diff = e->duration;
         }
         else if (extracts.current.uref &&
                  extracts.current.pts == upipe_grid_out->last_input_pts) {
             e = &extracts.current;
-            uint64_t input_duration = 0;
-            uref_clock_get_duration(e->uref, &input_duration);
-            if (input_duration > upipe_grid->max_retention)
-                max_diff = input_duration;
+            if (e->duration > max_diff)
+                max_diff = e->duration;
         }
     } else if (!e->duration) {
         if (extracts.prev.uref && extracts.prev.pts < pts)
