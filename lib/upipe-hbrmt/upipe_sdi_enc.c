@@ -982,7 +982,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                       We can live with the two sample error for now (~40us) */
 
             /* Audio clock is the total number of samples written times the pixel clock divided by the audio clockrate */
-            uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num / f->fps.den / 48000;
+            uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
+
+            /* Round to the nearest value */
+            audio_clock = (audio_clock + (f->fps.den / 48000 / 2)) / (f->fps.den / 48000);
 
             /* Audio sample is from the future */
             if (audio_clock > (upipe_sdi_enc->eav_clock + f->width))
