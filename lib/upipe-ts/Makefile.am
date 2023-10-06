@@ -36,6 +36,7 @@ libupipe_ts_la_SOURCES = \
 	upipe_rtp_fec.c \
 	upipe_ts_scte104_generator.c \
 	uref_ts_scte35.c \
+	upipe_ts_metadata_generator.c \
 	$(NULL)
 
 libupipe_ts_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include
