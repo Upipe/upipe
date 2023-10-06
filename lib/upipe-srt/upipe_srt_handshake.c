@@ -774,7 +774,7 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
             if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.even_key")))
                 upipe_err(upipe, "damn");
 
-            // TODO: odd key
+            // TODO: odd key ?
 
             uref_pic_set_number(flow_def, upipe_srt_handshake->isn);
             upipe_srt_handshake_store_flow_def(upipe, flow_def);
@@ -985,7 +985,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
 
             // XXX: move to bitstream?
-            // TODO : salt
             uint8_t kk = 1;
             out_ext[0] = 0x12;  // S V PT
             out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
@@ -994,7 +993,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             out_ext[10] = 2; // SE
             out_ext[14] = 4; // slen;
 
-            // TODO wrap
             uint8_t wrap[8+128/8] = {0};
             uint8_t klen = 128/8;
 
