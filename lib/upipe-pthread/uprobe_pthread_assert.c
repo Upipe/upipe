@@ -28,14 +28,11 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/upump.h>
 #include <upipe/uprobe.h>
 #include <upipe-pthread/uprobe_pthread_assert.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
 
 #include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
 #include <stdbool.h>
 
@@ -51,9 +48,9 @@ static int uprobe_pthread_assert_throw(struct uprobe *uprobe,
                                        struct upipe *upipe,
                                        int event, va_list args)
 {
+#ifndef NDEBUG
     struct uprobe_pthread_assert *uprobe_pthread_assert =
         uprobe_pthread_assert_from_uprobe(uprobe);
-#ifndef NDEBUG
     switch (event) {
         case UPROBE_NEED_UPUMP_MGR: {
             struct upump_mgr **upump_mgr_p = va_arg(args, struct upump_mgr **);

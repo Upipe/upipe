@@ -289,15 +289,21 @@ do {                                                                        \
  *
  * @param command command whose return code is to be checked
  */
-#define ubase_assert(command)                                               \
-    assert(ubase_check(command))
+#ifndef NDEBUG
+# define ubase_assert(command) assert(ubase_check(command))
+#else
+# define ubase_assert(command) ubase_check(command)
+#endif
 
 /** @This asserts if the given command (returning an @ref ubase_err) succeeded.
  *
  * @param command command whose return code is to be checked
  */
-#define ubase_nassert(command)                                              \
-    assert(!ubase_check(command))
+#ifndef NDEBUG
+# define ubase_nassert(command) assert(!ubase_check(command))
+#else
+# define ubase_nassert(command) !ubase_check(command)
+#endif
 
 /** @This checks that the first argument is equal to the given signature.
  *

@@ -28,8 +28,6 @@
  *        to baseband ntsc (first line=283 bff)
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic.h>
 #include <upipe/uref_flow.h>

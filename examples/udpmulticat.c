@@ -64,9 +64,6 @@
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
-#include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
-#include <upipe/ubuf_block_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
 #include <upipe/upump.h>
@@ -82,9 +79,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <inttypes.h>
-#include <signal.h>
 
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10

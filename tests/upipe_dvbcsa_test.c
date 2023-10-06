@@ -1,4 +1,4 @@
-#include <upipe/ubase.h>
+#undef NDEBUG
 
 #include <upipe-dvbcsa/upipe_dvbcsa_common.h>
 

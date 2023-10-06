@@ -38,7 +38,6 @@
 
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
-#include <upipe/uref_void_flow.h>
 #include <upipe/uref_clock.h>
 
 #include <upipe-modules/upipe_void_source.h>

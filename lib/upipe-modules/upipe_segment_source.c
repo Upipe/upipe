@@ -24,7 +24,6 @@
 #include <upipe-modules/upipe_segment_source.h>
 #include <upipe-modules/upipe_burst.h>
 #include <upipe-modules/upipe_probe_uref.h>
-#include <upipe-modules/upipe_auto_source.h>
 
 #include <upipe/upipe_helper_uclock.h>
 #include <upipe/upipe_helper_uprobe.h>

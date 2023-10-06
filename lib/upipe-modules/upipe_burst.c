@@ -28,13 +28,11 @@
  * the pump.
  */
 
-#include <upipe/uref_block.h>
 #include <upipe/ueventfd.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_burst.h>

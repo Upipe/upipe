@@ -33,21 +33,12 @@
 #include <upipe-gl/uprobe_gl_sink_cube.h>
 #include <upipe/uprobe_helper_uprobe.h>
 #include <upipe/uprobe_helper_alloc.h>
-#include <upipe/upipe.h>
-#include <upipe/uref_pic.h>
-#include <upipe/uref_pic_flow.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
 #include <assert.h>
 
 #include <GL/gl.h>
-#include <GL/glu.h>
 
 /** @This is a super-set of the uprobe structure with additional
  * local members.
@@ -134,8 +125,7 @@ static int uprobe_gl_sink_cube_throw(struct uprobe *uprobe,
 {
     switch (event) {
         case UPROBE_GL_SINK_RENDER: {
-            unsigned int signature = va_arg(args, unsigned int);
-            assert(signature == UPIPE_GL_SINK_SIGNATURE);
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GL_SINK_SIGNATURE)
             struct uref *uref = va_arg(args, struct uref *);
             uprobe_gl_sink_cube_render(uprobe, upipe, uref);
             return UBASE_ERR_NONE;

@@ -31,15 +31,10 @@
 #define _GNU_SOURCE
 
 #include <upipe/ubase.h>
-#include <upipe/urefcount.h>
 #include <upipe/ueventfd.h>
 #include <upipe/umutex.h>
 #include <upipe/uprobe.h>
-#include <upipe/uprobe_prefix.h>
 #include <upipe/upump.h>
-#include <upipe/upipe.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
 #include <upipe-modules/upipe_transfer.h>
 #include <upipe-pthread/upipe_pthread_transfer.h>
 #include <upipe-pthread/uprobe_pthread_upump_mgr.h>
@@ -47,14 +42,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <inttypes.h>
-#include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
 #include <signal.h>
-#include <errno.h>
-#include <math.h>
-#include <assert.h>
 
 /** @internal @This is the private context for pthread. */
 struct upipe_pthread_ctx {

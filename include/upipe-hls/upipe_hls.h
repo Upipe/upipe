@@ -27,8 +27,6 @@
 extern "C" {
 #endif
 
-#include <upipe/upipe.h>
-
 #define UPIPE_HLS_SIGNATURE UBASE_FOURCC('h','l','s',' ')
 
 struct upipe_mgr *upipe_hls_mgr_alloc(void);

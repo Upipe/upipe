@@ -37,12 +37,10 @@
 #include <upipe/ubuf_pic_common.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/ubuf_mem_common.h>
-#include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_pic_flow.h>
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
 #include <assert.h>

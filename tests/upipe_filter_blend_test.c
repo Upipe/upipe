@@ -34,7 +34,6 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_pic.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/uref.h>
 #include <upipe/uref_pic_flow.h>
@@ -45,8 +44,6 @@
 #include <upipe-modules/upipe_null.h>
 
 #include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
 

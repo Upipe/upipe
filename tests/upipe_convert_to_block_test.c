@@ -34,7 +34,6 @@
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/ubuf.h>
-#include <upipe/ubuf_block.h>
 #include <upipe/ubuf_pic_mem.h>
 #include <upipe/ubuf_sound_mem.h>
 #include <upipe/uref.h>
@@ -51,7 +50,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH    0

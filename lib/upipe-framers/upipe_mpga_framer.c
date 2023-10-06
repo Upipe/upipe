@@ -24,10 +24,7 @@
  * and ISO/IEC 13818-7 (ADTS AAC) and ISO/IEC 14496-3 (raw AAC) streams
  */
 
-#include <upipe/ubase.h>
 #include <upipe/ubits.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_block.h>
@@ -57,7 +54,6 @@
 #include <stdarg.h>
 #include <string.h>
 #include <inttypes.h>
-#include <assert.h>
 
 #include <bitstream/mpeg/mpga.h>
 #include <bitstream/mpeg/aac.h>

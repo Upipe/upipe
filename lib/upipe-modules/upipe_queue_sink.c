@@ -33,16 +33,12 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/upump.h>
-#include <upipe/upump_blocker.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_upump_mgr.h>
 #include <upipe/upipe_helper_upump.h>
 #include <upipe/upipe_helper_input.h>
 #include <upipe-modules/upipe_queue_sink.h>
-#include <upipe-modules/upipe_queue_source.h>
 
 #include "upipe_queue.h"
 
@@ -50,7 +46,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
 #include <assert.h>
 
 /** @hidden */

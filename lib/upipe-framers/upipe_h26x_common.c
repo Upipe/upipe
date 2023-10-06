@@ -33,7 +33,6 @@
 
 #include <stdlib.h>
 #include <stdint.h>
-#include <inttypes.h>
 
 /** @This translates the h26x aspect_ratio_idc to urational */
 const struct urational upipe_h26xf_sar_from_idc[17] = {

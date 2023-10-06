@@ -27,7 +27,9 @@
  */
 
 #include <stdint.h>
-#include <upipe-v210/upipe_v210enc.h>
+
+#include <upipe/ubase.h>
+
 #include "v210enc.h"
 
 #define CLIP(v) ubase_clip(v, 4, 1019)

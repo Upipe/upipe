@@ -37,7 +37,6 @@
 
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
-#include <upipe/uprobe_prefix.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
 

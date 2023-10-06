@@ -32,13 +32,10 @@
  *  - SMPTE 340-2008 (non-PCM in AES3 - ATSC A/52B)
  */
 
-#include <upipe/ubase.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_sound.h>
 #include <upipe/upipe.h>
-#include <upipe/udict.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>

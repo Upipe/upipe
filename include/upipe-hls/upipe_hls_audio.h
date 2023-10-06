@@ -27,9 +27,6 @@
 extern "C" {
 #endif
 
-#include <upipe/uprobe.h>
-#include <upipe/upipe.h>
-
 #define UPIPE_HLS_AUDIO_SIGNATURE UBASE_FOURCC('h','l','s','a')
 
 struct upipe_mgr *upipe_hls_audio_mgr_alloc(void);

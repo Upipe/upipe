@@ -29,7 +29,6 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
 #include <upipe/uprobe_upump_mgr.h>
 #include <upipe/upipe.h>
 #include <upipe/upump.h>
@@ -37,7 +36,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 
 #define UPUMP_POOL 1

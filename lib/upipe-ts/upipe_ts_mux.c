@@ -36,7 +36,6 @@
  *  - ETSI TS 103 197 V1.3.1 (2003-01) (DVB SimulCrypt)
  */
 
-#include <upipe/ubase.h>
 #include <upipe/ulist.h>
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
@@ -46,7 +45,6 @@
 #include <upipe/uref_block_flow.h>
 #include <upipe/uref_pic_flow.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_program_flow.h>
 #include <upipe/uref_clock.h>
 #include <upipe/ubuf.h>
 #include <upipe/uclock.h>
@@ -64,10 +62,8 @@
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_input.h>
 #include <upipe/upipe_helper_subpipe.h>
-#include <upipe-framers/uref_h265_flow.h>
 #include <upipe-framers/uref_h26x_flow.h>
 #include <upipe-framers/uref_mpga_flow.h>
-#include <upipe-framers/uref_mpgv_flow.h>
 #include <upipe-ts/uref_ts_flow.h>
 #include <upipe-ts/upipe_ts_mux.h>
 #include <upipe-ts/upipe_ts_encaps.h>

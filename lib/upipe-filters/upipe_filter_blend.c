@@ -27,16 +27,10 @@
  * - modules/video_filter/deinterlace/algo_basic.c
  */
 
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
-#include <upipe/udict.h>
 #include <upipe/uref.h>
-#include <upipe/uref_std.h>
 #include <upipe/uref_flow.h>
-#include <upipe/umem.h>
 #include <upipe/ubuf.h>
 #include <upipe/uref_pic.h>
-#include <upipe/ubuf_pic_mem.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -46,8 +40,6 @@
 #include <upipe/upipe_helper_input.h>
 #include <upipe-filters/upipe_filter_blend.h>
 
-#include <stdlib.h>
-#include <strings.h>
 #include <stdint.h>
 #include <stdio.h>
 

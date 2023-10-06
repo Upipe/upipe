@@ -41,7 +41,6 @@ extern "C" {
 
 #include <stdbool.h>
 
-
 /** @This defines a function that will be called after a uclock has been
  * received. The second argument is an unused uref. */
 typedef int (*upipe_helper_uclock_check)(struct upipe *, struct uref *);

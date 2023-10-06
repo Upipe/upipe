@@ -38,7 +38,6 @@ extern "C" {
 #include <upipe/ubuf.h>
 
 #include <stdint.h>
-#include <stdbool.h>
 
 /** @This is a simple signature to make sure the ubuf_alloc internal API
  * is used properly. */

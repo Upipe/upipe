@@ -39,7 +39,6 @@
 #include <upipe/umem.h>
 #include <upipe/umem_alloc.h>
 #include <upipe/uclock_std.h>
-#include <upipe/ubuf.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
 #include <upipe/uref_dump.h>
@@ -56,9 +55,7 @@
 #include <upipe-modules/upipe_blank_source.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <assert.h>
 
 #define UPUMP_POOL          1

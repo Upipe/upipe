@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#undef NDEBUG
+
 #include <upump-ev/upump_ev.h>
 
 #include <upipe/upipe_helper_upipe.h>

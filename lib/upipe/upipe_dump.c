@@ -35,7 +35,6 @@
 #include <upipe/uprobe_prefix.h>
 
 #include <stdio.h>
-#include <errno.h>
 #include <assert.h>
 
 /** @This is a structure allocated per pipe. */

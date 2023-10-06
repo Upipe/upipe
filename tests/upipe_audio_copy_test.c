@@ -23,6 +23,8 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#undef NDEBUG
+
 #include <upipe/umem_alloc.h>
 #include <upipe/udict.h>
 #include <upipe/udict_inline.h>
@@ -36,7 +38,6 @@
 
 #include <upipe/uref.h>
 #include <upipe/uref_sound_flow.h>
-#include <upipe/uref_void_flow.h>
 #include <upipe/uref_dump.h>
 #include <upipe/uref_sound.h>
 

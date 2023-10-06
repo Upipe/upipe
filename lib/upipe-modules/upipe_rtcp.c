@@ -30,7 +30,6 @@
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/urequest.h>
-#include <upipe/upump.h>
 #include <upipe/ustring.h>
 #include <upipe/uref_clock.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -39,8 +38,6 @@
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_uref_mgr.h>
 #include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
 #include <upipe-modules/upipe_rtcp.h>
 
 #include <bitstream/ietf/rtp.h>
@@ -241,40 +238,34 @@ static int upipe_rtcp_control_handle(struct upipe *upipe, int command,
     }
 
     case UPIPE_RTCP_GET_CLOCKRATE: {
-        unsigned int signature = va_arg(args, unsigned int);
-        assert(signature == UPIPE_RTCP_SIGNATURE);
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTCP_SIGNATURE)
         uint32_t *rate_p = va_arg(args, uint32_t *);
         return _upipe_rtcp_get_clockrate(upipe, rate_p);
     }
     case UPIPE_RTCP_SET_CLOCKRATE: {
-        unsigned int signature = va_arg(args, unsigned int);
-        assert(signature == UPIPE_RTCP_SIGNATURE);
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTCP_SIGNATURE)
         uint32_t rate = va_arg(args, uint32_t);
         return _upipe_rtcp_set_clockrate(upipe, rate);
     }
 
     case UPIPE_RTCP_GET_RATE: {
-        unsigned int signature = va_arg(args, unsigned int);
-        assert(signature == UPIPE_RTCP_SIGNATURE);
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTCP_SIGNATURE)
         uint64_t *rate_p = va_arg(args, uint64_t *);
         return _upipe_rtcp_get_rate(upipe, rate_p);
     }
     case UPIPE_RTCP_SET_RATE: {
-        unsigned int signature = va_arg(args, unsigned int);
-        assert(signature == UPIPE_RTCP_SIGNATURE);
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTCP_SIGNATURE)
         uint64_t rate = va_arg(args, uint64_t);
         return _upipe_rtcp_set_rate(upipe, rate);
     }
 
     case UPIPE_RTCP_GET_NAME: {
-        unsigned int signature = va_arg(args, unsigned int);
-        assert(signature == UPIPE_RTCP_SIGNATURE);
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTCP_SIGNATURE)
         const char **name_p = va_arg(args, const char **);
         return _upipe_rtcp_get_name(upipe, name_p);
     }
     case UPIPE_RTCP_SET_NAME: {
-        unsigned int signature = va_arg(args, unsigned int);
-        assert(signature == UPIPE_RTCP_SIGNATURE);
+        UBASE_SIGNATURE_CHECK(args, UPIPE_RTCP_SIGNATURE)
         const char *name = va_arg(args, const char *);
         return _upipe_rtcp_set_name(upipe, name);
     }

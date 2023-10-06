@@ -39,7 +39,6 @@
 #include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/upump.h>
-#include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_output.h>
@@ -50,10 +49,8 @@
 #include "upipe_queue.h"
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdarg.h>
-#include <string.h>
 #include <assert.h>
 
 /** maximum length of out of band queues */

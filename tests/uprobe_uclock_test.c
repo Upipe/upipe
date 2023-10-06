@@ -29,7 +29,6 @@
 
 #undef NDEBUG
 
-#include <upipe/uprobe.h>
 #include <upipe/uprobe_uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/uclock.h>
@@ -38,7 +37,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 
 static struct uclock *uclock;

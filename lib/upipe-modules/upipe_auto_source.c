@@ -36,8 +36,6 @@
 #include <upipe/upipe_helper_inner.h>
 #include <upipe/upipe_helper_bin_output.h>
 #include <upipe-modules/upipe_auto_source.h>
-#include <upipe-modules/upipe_file_source.h>
-#include <upipe-modules/upipe_http_source.h>
 
 /** @hidden */
 static struct upipe *upipe_auto_src_alloc(struct upipe_mgr *mgr,

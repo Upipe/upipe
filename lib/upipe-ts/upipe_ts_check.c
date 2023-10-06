@@ -32,11 +32,8 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -48,7 +45,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
 #include <inttypes.h>
 #include <assert.h>
 

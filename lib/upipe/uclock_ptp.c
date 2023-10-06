@@ -34,8 +34,6 @@
 
 #include <stdbool.h>
 #include <sys/ioctl.h>
-#include <unistd.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <net/if.h>
 #ifdef __linux__

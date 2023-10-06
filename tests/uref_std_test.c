@@ -37,7 +37,6 @@
 #include <upipe/uref_std.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <assert.h>
 
 #define UDICT_POOL_DEPTH 1

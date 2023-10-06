@@ -24,14 +24,9 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/ulist.h>
-#include <upipe/uprobe.h>
 #include <upipe/uref.h>
 #include <upipe/uref_flow.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_clock.h>
-#include <upipe/ubuf.h>
-#include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
 #include <upipe/upipe_helper_urefcount.h>
@@ -42,8 +37,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdarg.h>
-#include <string.h>
-#include <assert.h>
 
 /** we only accept TS packets */
 #define EXPECTED_FLOW_DEF "block.mpegts."

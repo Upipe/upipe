@@ -1,3 +1,5 @@
+#undef NDEBUG
+
 #include <upipe/ucookie.h>
 
 #include <assert.h>

@@ -50,3 +50,58 @@ check-whitespace:
 
 check-untracked:
 	@if git ls-files $(srcdir) --others --exclude-standard | grep .; then exit 1; fi
+
+check-headers:
+	@if [ "$(AM_COLOR_TESTS)" != "no" ]; then \
+	  if [ "$(AM_COLOR_TESTS)" = "always" -o -t 1 ]; then \
+	    red='[0;31m'; grn='[0;32m'; std='[m'; \
+	  fi; \
+	fi; \
+	for header in $(srcdir)/include/*/*.h; do \
+	  h=$${header#$(srcdir)/include/}; \
+	  if [ $$h != "upipe/config.h" ]; then \
+	    guard=$$(echo _$${h}_ | tr [a-z] [A-Z] | tr '/.-' _); \
+	    if ! grep -q $$guard $$header; then \
+	      echo "$${red}FAIL$${std}: $$h: invalid guard"; ret=1; \
+	    fi; \
+	    if ! grep -q Copyright $$header; then \
+	      echo "$${red}FAIL$${std}: $$h: missing copyright"; ret=1; \
+	    fi; \
+	  fi; \
+	  if $(CC) -I$(srcdir)/include -I$(builddir)/include \
+	    $(CPPFLAGS) $(CFLAGS) $(AM_CFLAGS) -Werror \
+	    -include $$header -c -x c /dev/null -o /dev/null; \
+	  then echo "$${grn}PASS$${std}: $$h"; \
+	  else echo "$${red}FAIL$${std}: $$h"; ret=1; \
+	  fi; \
+	done; \
+	test -z "$$ret"
+
+check-spelling:
+	@codespell \
+	  --skip=$(srcdir)/lib/upipe-blackmagic/include \
+	  --skip=$(srcdir)/lib/upipe-modules/http-parser \
+	  --ignore-words-list multicat,happend,inout,parms,hist \
+	  --ignore-regex '"te\.' \
+	  $(srcdir)/doc \
+	  $(srcdir)/examples \
+	  $(srcdir)/include \
+	  $(srcdir)/lib \
+	  $(srcdir)/luajit \
+	  $(srcdir)/tests \
+	  $(srcdir)/x86
+
+check-tests:
+	@if [ "$(AM_COLOR_TESTS)" != "no" ]; then \
+	  if [ "$(AM_COLOR_TESTS)" = "always" -o -t 1 ]; then \
+	    red='[0;31m'; grn='[0;32m'; std='[m'; \
+	  fi; \
+	fi; \
+	cd $(srcdir)/tests; \
+	for src in *.c; do \
+	  if grep -q '^#undef NDEBUG' $$src; \
+	  then echo "$${grn}PASS$${std}: $$src"; \
+	  else echo "$${red}FAIL$${std}: $$src"; ret=1; \
+	  fi; \
+	done; \
+	test -z "$$ret"

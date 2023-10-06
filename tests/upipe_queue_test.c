@@ -40,11 +40,9 @@
 #include <upipe/udict_inline.h>
 #include <upipe/uref.h>
 #include <upipe/uref_std.h>
-#include <upipe/uref_flow.h>
 #include <upipe/uref_block_flow.h>
 #include <upipe/upump.h>
 #include <upump-ev/upump_ev.h>
-#include <upipe/upipe.h>
 #include <upipe-modules/upipe_queue_source.h>
 #include <upipe-modules/upipe_queue_sink.h>
 

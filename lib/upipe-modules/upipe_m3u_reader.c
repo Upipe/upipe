@@ -24,18 +24,10 @@
  */
 
 #include <stdlib.h>
-#include <limits.h>
-#include <libgen.h>
 #include <ctype.h>
 
 #include <upipe/ustring.h>
 #include <upipe/uclock.h>
-#include <upipe/uprobe_helper_uprobe.h>
-#include <upipe/uprobe_helper_alloc.h>
-#include <upipe/uprobe_prefix.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/uref_dump.h>
-#include <upipe/uref_uri.h>
 #include <upipe/uref_m3u.h>
 #include <upipe/uref_m3u_master.h>
 #include <upipe/uref_m3u_playlist.h>
@@ -45,9 +37,7 @@
 #include <upipe/upipe_helper_urefcount.h>
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe/upipe_helper_uref_stream.h>
-#include <upipe/upipe_helper_input.h>
 #include <upipe-modules/upipe_m3u_reader.h>
 
 /** @hidden */

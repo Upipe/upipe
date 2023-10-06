@@ -37,7 +37,6 @@ extern "C" {
 #include <upipe/ustring.h>
 
 #include <stddef.h>
-#include <string.h>
 
 /** @This parses an IPv4 and shifts ustring str.
  * (ex: 192.168.0.1)

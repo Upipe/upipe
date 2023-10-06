@@ -28,11 +28,9 @@
 #include <upipe/uprobe.h>
 #include <upipe/uprobe_prefix.h>
 #include <upipe/uref.h>
-#include <upipe/uref_block.h>
 #include <upipe/uref_flow.h>
 #include <upipe/uref_sound_flow.h>
 #include <upipe/uref_clock.h>
-#include <upipe/ubuf.h>
 #include <upipe/uclock.h>
 #include <upipe/upipe.h>
 #include <upipe/upipe_helper_upipe.h>
@@ -51,7 +49,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
-#include <assert.h>
 
 /** max interval between clock refs */
 #define MAX_CLOCK_REF_INTERVAL UCLOCK_FREQ

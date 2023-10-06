@@ -23,14 +23,10 @@
  */
 
 #include <upipe/ubase.h>
-#include <upipe/uprobe.h>
-#include <upipe/uclock.h>
 #include <upipe/uref.h>
 #include <upipe/uref_block.h>
 #include <upipe/uref_block_flow.h>
-#include <upipe/uref_clock.h>
 #include <upipe/upump.h>
-#include <upipe/ubuf.h>
 #include <upipe/upipe.h>
 
 #include <upipe/upipe_helper_upipe.h>
@@ -47,9 +43,7 @@
 
 #include <libdvbv5/dvb-dev.h>
 #include <libdvbv5/dvb-fe.h>
-#include <libdvbv5/dvb-demux.h>
 
-#include <ctype.h>
 
 #define MTU (7 * 188)
 
