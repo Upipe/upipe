@@ -2055,6 +2055,7 @@ static void upipe_ts_mux_program_change(struct upipe *upipe)
         }
         if (input->input_type == UPIPE_TS_MUX_INPUT_OTHER ||
             input->input_type == UPIPE_TS_MUX_INPUT_SCTE35 ||
+            input->input_type == UPIPE_TS_MUX_INPUT_METADATA ||
             input->input_type == UPIPE_TS_MUX_INPUT_UNKNOWN)
             continue;
         if (pcr_input == NULL ||
@@ -3230,6 +3231,7 @@ static uint64_t upipe_ts_mux_check_available(struct upipe *upipe)
                     continue;
                 } else if (input->input_type != UPIPE_TS_MUX_INPUT_OTHER &&
                            input->input_type != UPIPE_TS_MUX_INPUT_SCTE35 &&
+                           input->input_type != UPIPE_TS_MUX_INPUT_METADATA &&
                            (input->input_type != UPIPE_TS_MUX_INPUT_UNKNOWN ||
                             mux->preroll)) {
                     upipe_release(upipe_ts_mux_program_to_upipe(program));
