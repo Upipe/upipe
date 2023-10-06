@@ -985,7 +985,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
 
             /* Round to the nearest value */
-            audio_clock = (audio_clock + (f->fps.den / 48000 / 2)) / f->fps.den / 48000;
+            audio_clock = (audio_clock + (f->fps.den * 48000 / 2)) / (f->fps.den * 48000);
 
             /* Audio sample is from the future */
             if (audio_clock > (upipe_sdi_enc->eav_clock + f->width))
