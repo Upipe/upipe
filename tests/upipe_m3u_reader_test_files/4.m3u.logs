@@ -1,7 +1,7 @@
 flow definition: block.m3u.playlist.
 version: 3
 playlist target duration: 216000000
-playlist target duration: 2680
+playlist media sequence: 2680
 uri: https://priv.example.com/fileSequence2680.ts
 playlist sequence duration: 215325000
 uri: https://priv.example.com/fileSequence2681.ts

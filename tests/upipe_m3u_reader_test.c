@@ -78,7 +78,7 @@ static int catch_uref(struct uprobe *uprobe,
         uint64_t media_sequence;
         if (ubase_check(uref_m3u_playlist_flow_get_media_sequence(
                     uref, &media_sequence)))
-            printf("playlist target duration: %"PRIu64"\n", media_sequence);
+            printf("playlist media sequence: %"PRIu64"\n", media_sequence);
 
         if (ubase_check(uref_m3u_playlist_flow_get_endlist(uref)))
             printf("playlist end\n");
