@@ -365,6 +365,40 @@ UREF_CLOCK_REBASE(prog, pts)
 UREF_CLOCK_REBASE(orig, pts)
 #undef UREF_CLOCK_REBASE
 
+/** @hidden */
+#define UREF_CLOCK_CMP(dv, dt)                                              \
+/** @This compares the dv dt date of two uref.                              \
+ *                                                                          \
+ * @param uref1 uref structure                                              \
+ * @param uref2 uref structure                                              \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int uref_clock_cmp_##dt##_##dv(struct uref *uref1,            \
+                                             struct uref *uref2)            \
+{                                                                           \
+    uint64_t v1 = UINT64_MAX, v2 = UINT64_MAX;                              \
+    int err1 = uref_clock_get_##dt##_##dv(uref1, &v1);                      \
+    int err2 = uref_clock_get_##dt##_##dv(uref2, &v2);                      \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return -1;                                                          \
+    return v1 == v2 ? 0 : 1;                                                \
+}
+
+UREF_CLOCK_CMP(sys, cr)
+UREF_CLOCK_CMP(prog, cr)
+UREF_CLOCK_CMP(orig, cr)
+
+UREF_CLOCK_CMP(sys, dts)
+UREF_CLOCK_CMP(prog, dts)
+UREF_CLOCK_CMP(orig, dts)
+
+UREF_CLOCK_CMP(sys, pts)
+UREF_CLOCK_CMP(prog, pts)
+UREF_CLOCK_CMP(orig, pts)
+#undef UREF_CLOCK_CMP
+
 #ifdef __cplusplus
 }
 #endif
