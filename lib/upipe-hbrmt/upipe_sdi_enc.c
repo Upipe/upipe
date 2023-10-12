@@ -36,6 +36,8 @@
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
+#define UPIPE_SMPTE_299_AUDIO_PKT_LEN 31
+
 static const bool parity_tab[512] = {
 #   define P2(n) n, n^1, n^1, n
 #   define P4(n) P2(n), P2(n^1), P2(n^1), P2(n)
@@ -535,7 +537,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
     /* Total amount to increment the destination including the luma words,
      * so in total it's 31 chroma words */
-    return 62;
+    return UPIPE_SMPTE_299_AUDIO_PKT_LEN*2;
 }
 
 /** @hidden */
