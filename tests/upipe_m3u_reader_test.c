@@ -130,6 +130,10 @@ static int catch_uref(struct uprobe *uprobe,
             printf("playlist discontinuity: %s\n",
                    playlist_discontinuity ? "yes" : "no");
 
+        bool playlist_gap;
+        if (ubase_check(uref_m3u_playlist_get_gap(uref, &playlist_gap)))
+            printf("playlist gap: %s\n", playlist_gap ? "yes" : "no");
+
         uint64_t master_bandwidth;
         if (ubase_check(uref_m3u_master_get_bandwidth(
                     uref, &master_bandwidth)))
