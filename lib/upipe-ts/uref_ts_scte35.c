@@ -38,7 +38,7 @@
 /** ratio between Upipe freq and MPEG freq */
 #define CLOCK_SCALE (UCLOCK_FREQ / 90000)
 
-/** @This extracts a segmentation descriptor and checks its validity.
+/** @This extracts a splice descriptor and checks its validity.
  *
  * @param uref uref describing time signal event
  * @param desc_p pointer filled with descriptor
@@ -46,10 +46,10 @@
  * @param at index of the descriptor to extract
  * @return an error code
  */
-int uref_ts_scte35_desc_get_seg(struct uref *uref,
-                                const uint8_t **desc_p,
-                                size_t *desc_len_p,
-                                uint64_t at)
+int uref_ts_scte35_desc_get_splice(struct uref *uref,
+                                   const uint8_t **desc_p,
+                                   size_t *len_p,
+                                   uint64_t at)
 {
     uint64_t nb = 0;
     UBASE_RETURN(uref_ts_flow_get_descriptors(uref, &nb));
@@ -57,16 +57,16 @@ int uref_ts_scte35_desc_get_seg(struct uref *uref,
         return UBASE_ERR_INVALID;
 
     const uint8_t *desc = NULL;
-    size_t desc_len = 0;
-    UBASE_RETURN(uref_ts_flow_get_descriptor(uref, &desc, &desc_len, at));
+    size_t len = 0;
+    UBASE_RETURN(uref_ts_flow_get_descriptor(uref, &desc, &len, at));
     if (!desc)
         return UBASE_ERR_INVALID;
 
-    if (desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE + SCTE35_SEG_DESC_HEADER_SIZE)
+    if (len < SCTE35_SPLICE_DESC_HEADER_SIZE)
         return UBASE_ERR_INVALID;
 
-    uint8_t length = scte35_splice_desc_get_length(desc) + DESC_HEADER_SIZE;
-    if (length != desc_len)
+    uint8_t total_len = scte35_splice_desc_get_length(desc) + DESC_HEADER_SIZE;
+    if (total_len != len)
         return UBASE_ERR_INVALID;
 
     uint32_t identifier = scte35_splice_desc_get_identifier(desc);
@@ -75,8 +75,37 @@ int uref_ts_scte35_desc_get_seg(struct uref *uref,
 
     if (desc_p)
         *desc_p = desc;
-    if (desc_len_p)
-        *desc_len_p = desc_len;
+    if (len_p)
+        *len_p = len;
+    return UBASE_ERR_NONE;
+}
+
+/** @This extracts a segmentation descriptor and checks its validity.
+ *
+ * @param uref uref describing time signal event
+ * @param desc_p pointer filled with descriptor
+ * @param len_p pointer filled with descriptor length
+ * @param at index of the descriptor to extract
+ * @return an error code
+ */
+int uref_ts_scte35_desc_get_seg(struct uref *uref,
+                                const uint8_t **desc_p,
+                                size_t *len_p,
+                                uint64_t at)
+{
+    const uint8_t *desc = NULL;
+    size_t len = 0;
+    UBASE_RETURN(uref_ts_scte35_desc_get_splice(uref, &desc, &len, at));
+
+    uint8_t tag = scte35_splice_desc_get_tag(desc);
+    if (tag != SCTE35_SPLICE_DESC_TAG_SEG ||
+        len < SCTE35_SPLICE_DESC_HEADER_SIZE + SCTE35_SEG_DESC_HEADER_SIZE)
+        return UBASE_ERR_INVALID;
+
+    if (desc_p)
+        *desc_p = desc;
+    if (len_p)
+        *len_p = len;
     return UBASE_ERR_NONE;
 }
 
@@ -90,7 +119,7 @@ struct uref *uref_ts_scte35_extract_desc(struct uref *uref, uint64_t at)
 {
     const uint8_t *desc;
     size_t length;
-    int ret = uref_ts_scte35_desc_get_seg(uref, &desc, &length, at);
+    int ret = uref_ts_scte35_desc_get_splice(uref, &desc, &length, at);
     if (unlikely(!ubase_check(ret)))
         return NULL;
 
