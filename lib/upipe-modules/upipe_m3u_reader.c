@@ -216,6 +216,8 @@ struct upipe_m3u_reader {
     uint64_t program_date_time;
     /** current discontinuity */
     bool discontinuity;
+    /** current gap */
+    bool gap;
     /** list of items */
     struct uchain items;
 
@@ -266,6 +268,7 @@ static struct upipe *upipe_m3u_reader_alloc(struct upipe_mgr *mgr,
     upipe_m3u_reader->map = NULL;
     upipe_m3u_reader->program_date_time = UINT64_MAX;
     upipe_m3u_reader->discontinuity = false;
+    upipe_m3u_reader->gap = false;
     upipe_m3u_reader->restart = false;
     upipe_throw_ready(upipe);
 
@@ -1079,6 +1082,11 @@ static int upipe_m3u_reader_discontinuity(struct upipe *upipe,
     struct upipe_m3u_reader *upipe_m3u_reader =
         upipe_m3u_reader_from_upipe(upipe);
 
+    if (*line) {
+        upipe_dbg_va(upipe, "ignore `#EXT-X-DISCONTINUITY%s'", line);
+        return UBASE_ERR_NONE;
+    }
+
     if (unlikely(
             !ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)) &&
             !ubase_check(uref_flow_match_def(flow_def, PLAYLIST_FLOW_DEF))))
@@ -1086,6 +1094,35 @@ static int upipe_m3u_reader_discontinuity(struct upipe *upipe,
     UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
 
     upipe_m3u_reader->discontinuity = true;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks and parses a "#EXT-X-GAP" tag.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def the current flow definition
+ * @param line the trailing characters of the line
+ * @return an error code
+ */
+static int upipe_m3u_reader_gap(struct upipe *upipe,
+                                struct uref *flow_def,
+                                const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    if (*line) {
+        upipe_dbg_va(upipe, "ignore `#EXT-X-GAP%s'", line);
+        return UBASE_ERR_NONE;
+    }
+
+    if (unlikely(
+            !ubase_check(uref_flow_match_def(flow_def, M3U_FLOW_DEF)) &&
+            !ubase_check(uref_flow_match_def(flow_def, PLAYLIST_FLOW_DEF))))
+        return UBASE_ERR_INVALID;
+    UBASE_RETURN(uref_flow_set_def(flow_def, PLAYLIST_FLOW_DEF));
+
+    upipe_m3u_reader->gap = true;
     return UBASE_ERR_NONE;
 }
 
@@ -1152,6 +1189,10 @@ static int upipe_m3u_reader_process_uri(struct upipe *upipe,
         UBASE_RETURN(uref_m3u_playlist_set_discontinuity(item, true));
         upipe_m3u_reader->discontinuity = false;
     }
+    if (upipe_m3u_reader->gap) {
+        UBASE_RETURN(uref_m3u_playlist_set_gap(item, true));
+        upipe_m3u_reader->gap = false;
+    }
     upipe_m3u_reader->item = NULL;
     ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
     return UBASE_ERR_NONE;
@@ -1188,6 +1229,7 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
         { "#EXT-X-DATERANGE:", upipe_m3u_reader_daterange },
         { "#EXT-X-DISCONTINUITY-SEQUENCE:", upipe_m3u_reader_discontinuity_sequence },
         { "#EXT-X-DISCONTINUITY", upipe_m3u_reader_discontinuity },
+        { "#EXT-X-GAP", upipe_m3u_reader_gap },
     };
 
     size_t block_size;

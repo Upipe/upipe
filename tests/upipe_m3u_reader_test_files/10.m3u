@@ -8,6 +8,7 @@
 #EXTINF:6.000,
 https://priv.example.com/fileSequence2680.ts
 
+#EXT-X-GAP
 #EXTINF:4.600,
 https://priv.example.com/fileSequence2681.ts
 

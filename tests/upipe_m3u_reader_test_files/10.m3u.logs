@@ -9,6 +9,7 @@ playlist program date time: 45819615617145000
 uri: https://priv.example.com/fileSequence2681.ts
 playlist sequence duration: 124200000
 playlist program date time: 45819615779145000
+playlist gap: yes
 uri: https://priv.example.com/fileSequence2682.ts
 playlist sequence duration: 162000000
 playlist program date time: 45819616143321000
