@@ -453,7 +453,7 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
         upipe_srt_sender_free_void(upipe);
         return NULL;
     }
-#endif 
+#endif
 
     struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe);
     upipe_srt_sender_init_urefcount(upipe);
