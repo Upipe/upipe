@@ -1282,6 +1282,15 @@ static struct uref *upipe_srt_handshake_input_control(struct upipe *upipe, const
     } else if (type == SRT_CONTROL_TYPE_SHUTDOWN) {
         upipe_err_va(upipe, "shutdown requested");
         upipe_throw_source_end(upipe);
+    } else if (type == SRT_CONTROL_TYPE_DROPREQ) {
+        const uint8_t *cif = srt_get_control_packet_cif(buf);
+        if (!srt_check_dropreq(cif, size - SRT_HEADER_SIZE)) {
+            upipe_err_va(upipe, "dropreq pkt invalid");
+        } else {
+            uint32_t first = srt_get_dropreq_first_seq(cif);
+            uint32_t last = srt_get_dropreq_last_seq(cif);
+            upipe_dbg_va(upipe, "sender dropped packets from %u to %u", first, last);
+        }
     } else {
         *handled = false;
     }
