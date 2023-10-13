@@ -759,6 +759,37 @@ static const char *get_ctrl_type(uint16_t type)
     return ctrl_type[type];
 }
 
+static const char hs_error[][40] = {
+	[SRT_HANDSHAKE_TYPE_REJ_UNKNOWN - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "Unknown reason",
+	[SRT_HANDSHAKE_TYPE_REJ_SYSTEM - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "System function error",
+	[SRT_HANDSHAKE_TYPE_REJ_PEER - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "Rejected by peer",
+	[SRT_HANDSHAKE_TYPE_REJ_RESOURCE - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "Resource allocation problem",
+	[SRT_HANDSHAKE_TYPE_REJ_ROGUE - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "incorrect data in handshake",
+	[SRT_HANDSHAKE_TYPE_REJ_BACKLOG - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "listener's backlog exceeded",
+	[SRT_HANDSHAKE_TYPE_REJ_IPE - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "internal program error",
+	[SRT_HANDSHAKE_TYPE_REJ_CLOSE - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "socket is closing",
+	[SRT_HANDSHAKE_TYPE_REJ_VERSION - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "peer is older version than agent's min",
+	[SRT_HANDSHAKE_TYPE_REJ_RDVCOOKIE - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "rendezvous cookie collision",
+	[SRT_HANDSHAKE_TYPE_REJ_BADSECRET - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "wrong password",
+	[SRT_HANDSHAKE_TYPE_REJ_UNSECURE - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "password required or unexpected",
+	[SRT_HANDSHAKE_TYPE_REJ_MESSAGEAPI - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "Stream flag collision",
+	[SRT_HANDSHAKE_TYPE_REJ_CONGESTION - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "incompatible congestion-controller type",
+	[SRT_HANDSHAKE_TYPE_REJ_FILTER - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "incompatible packet filter",
+	[SRT_HANDSHAKE_TYPE_REJ_GROUP - SRT_HANDSHAKE_TYPE_REJ_UNKNOWN] = "incompatible group",
+};
+
+static const char *get_hs_error(uint32_t hs_type)
+{
+    if (hs_type < SRT_HANDSHAKE_TYPE_REJ_UNKNOWN)
+        hs_type = SRT_HANDSHAKE_TYPE_REJ_UNKNOWN;
+
+    hs_type -= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN;
+    if (hs_type >= (sizeof(hs_error) / sizeof(*hs_error)))
+        hs_type = 0;
+
+    return hs_error[hs_type];
+}
+
 static void upipe_srt_handshake_finalize(struct upipe *upipe)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -914,8 +945,13 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             upipe_srt_handshake_set_upump_timer(upipe, NULL);
             upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
 
+            if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN) {
+                upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+                upipe_srt_handshake->expect_conclusion = false;
+                return NULL;
+            }
+
             /* At least HSREQ is expected */
-            printf("size %u\n", size);
             size -= SRT_HEADER_SIZE + SRT_HANDSHAKE_CIF_SIZE;
             if (size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
                 upipe_err_va(upipe, "Malformed conclusion handshake (size %u)", size);
@@ -954,6 +990,12 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         }
 
         /* */
+
+        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN) {
+            upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+            return NULL;
+        }
+
         if (version != SRT_HANDSHAKE_VERSION || dst_socket_id != upipe_srt_handshake->socket_id
                 || hs_type != SRT_HANDSHAKE_TYPE_INDUCTION
            ) {
