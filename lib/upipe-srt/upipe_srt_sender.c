@@ -242,6 +242,9 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
         }
 
         upipe_srt_sender_output(upipe_super, uref_dup(uref), NULL);
+        if (--pkts == 0)
+            return;
+        seq++;
     }
 }
 
