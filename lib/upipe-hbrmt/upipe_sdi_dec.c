@@ -600,13 +600,13 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
             else
                 position -= upipe_sdi_dec->audio_debug.video_ticks;
 
-            upipe_notice_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
+            upipe_verbose_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
                     line_num, (unsigned)audio_samples, mpf, clock, position, offset,
                     clock - position);
 
             /* Position is "clock", position should be "position+offset". */
-            if (fabs(clock - (position + offset)) > 1)
-                upipe_verbose_va(upipe, "audio sample position predicted at %.1f but found at %d",
+            if (fabs(clock - (position + offset)) > 2)
+                upipe_err_va(upipe, "audio sample position predicted at %.1f but found at %d",
                         position + offset, clock);
 
             if (audio_samples == 0)
@@ -632,7 +632,7 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
         if (offset + 1 < clock || offset - 1 > clock) {
             upipe_sdi_dec->eav_clock -= clock - offset;
-            if (0) upipe_notice_va(upipe,
+            if (audio_group == 0) upipe_notice_va(upipe,
                     "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %" PRId64 " => %"PRId64"",
                     audio_group, line_num, mpf, clock, offset, offset - clock);
         }
