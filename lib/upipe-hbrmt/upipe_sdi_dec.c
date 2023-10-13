@@ -53,6 +53,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
+#include <math.h>
 
 #include <bitstream/smpte/291.h>
 #include <bitstream/smpte/337.h>
@@ -113,12 +114,11 @@ struct audio_ctx {
 
 /* Audio position debugging */
 struct audio_debug {
-    uint64_t line_counter;
-    uint64_t prev_line[UPIPE_SDI_MAX_GROUPS];
-    uint64_t cur_line[UPIPE_SDI_MAX_GROUPS];
-    uint64_t pkt_counter[UPIPE_SDI_MAX_GROUPS];
-    int pkts_per_line[UPIPE_SDI_MAX_GROUPS];
-    uint16_t prev_clk[UPIPE_SDI_MAX_GROUPS];
+    uint64_t video_ticks;
+    struct {
+        uint64_t audio_samples;
+        int clock_offset;
+    } groups[UPIPE_SDI_MAX_GROUPS];
 };
 
 /** upipe_sdi_dec structure with sdi_dec parameters */
@@ -534,9 +534,6 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
     }
 
     if (upipe_sdi_dec->debug) {
-        upipe_sdi_dec->audio_debug.pkts_per_line[audio_group] += 1;
-        //upipe_sdi_dec->cur_line[audio_group] = upipe_sdi_dec->line_counter;
-
         int local_line_num = line_num;
         if (upipe_sdi_dec->sdi3g_levelb)
             local_line_num = (local_line_num + 1) / 2;
@@ -592,32 +589,30 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         bool mpf = packet[14] & 0x10;
 
         if (audio_group == 0) {
-            uint16_t prev_clk = upipe_sdi_dec->audio_debug.prev_clk[0];
-            uint64_t prev_line = upipe_sdi_dec->audio_debug.prev_line[0];
-            uint64_t line = upipe_sdi_dec->audio_debug.line_counter;
+            uint64_t audio_samples = upipe_sdi_dec->audio_debug.groups[0].audio_samples;
+            double position = 74.25e6 * audio_samples / 48e3;
+            int offset = upipe_sdi_dec->audio_debug.groups[0].clock_offset;
 
-            int diff = clock - prev_clk;
-            if (line != prev_line)
-                diff = upipe_sdi_dec->f->width - prev_clk + clock;
-            if (mpf) {
-                /* If mpf is set then treat this sample as though it were on the
-                 * next line. */
-                diff = upipe_sdi_dec->f->width - prev_clk + clock;
-                line += 1;
-            }
-
-            if (diff == 1545 || diff == 1546)
-                upipe_notice_va(upipe, "line: %d, packet: %d, mpf: %d, prev clk: %d, clk: %d, diff: %d",
-                        line_num, upipe_sdi_dec->audio_debug.pkts_per_line[0], mpf,
-                        prev_clk, clock, diff);
+            /* If mpf is set then from the decoder POV the audio should be
+             * associated with the previous line. */
+            if (mpf)
+                position -= upipe_sdi_dec->audio_debug.video_ticks - upipe_sdi_dec->f->width;
             else
-                upipe_warn_va(upipe, "line: %d, packet: %d, mpf: %d, prev clk: %d, clk: %d, diff: %d",
-                        line_num, upipe_sdi_dec->audio_debug.pkts_per_line[0], mpf,
-                        prev_clk, clock, diff);
+                position -= upipe_sdi_dec->audio_debug.video_ticks;
 
-            upipe_sdi_dec->audio_debug.prev_clk[0] = clock;
-            upipe_sdi_dec->audio_debug.prev_line[0] = line;
+            upipe_notice_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
+                    line_num, (unsigned)audio_samples, mpf, clock, position, offset,
+                    clock - position);
 
+            /* Position is "clock", position should be "position+offset". */
+            if (fabs(clock - (position + offset)) > 1)
+                upipe_verbose_va(upipe, "audio sample position predicted at %.1f but found at %d",
+                        position + offset, clock);
+
+            if (audio_samples == 0)
+                upipe_sdi_dec->audio_debug.groups[0].clock_offset = round(clock - position);
+
+            upipe_sdi_dec->audio_debug.groups[0].audio_samples += 1;
         }
 
         /* FIXME */
@@ -1335,8 +1330,7 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
-        upipe_sdi_dec->audio_debug.line_counter += 1;
-        memset(upipe_sdi_dec->audio_debug.pkts_per_line, 0, sizeof upipe_sdi_dec->audio_debug.pkts_per_line);
+        upipe_sdi_dec->audio_debug.video_ticks += upipe_sdi_dec->f->width;
 
         bool active = 0, f2 = 0, special_case = 0;
         /* ACTIVE F1 */
