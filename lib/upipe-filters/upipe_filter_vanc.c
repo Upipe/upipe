@@ -40,6 +40,7 @@
 #include "upipe/uref_block_flow.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_pic_flow.h"
+#include "upipe/uref_clock.h"
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
@@ -605,6 +606,9 @@ static void upipe_vanc_output_telx(struct upipe *upipe,
                 upipe_vanc_output_to_upipe(upipe_vanc_op47));
     }
 
+    uref_block_set_start(upipe_vanc->telx_uref);
+    uref_block_set_end(upipe_vanc->telx_uref);
+    uref_clock_delete_duration(upipe_vanc->telx_uref);
     upipe_vanc_output_output(upipe_vanc_output_to_upipe(upipe_vanc_op47),
                              upipe_vanc->telx_uref, upump_p);
     upipe_vanc->telx_uref = NULL;
