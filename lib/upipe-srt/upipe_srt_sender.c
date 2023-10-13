@@ -137,27 +137,6 @@ struct upipe_srt_sender_input {
     struct upipe upipe;
 };
 
-static const char ctrl_type[][10] =
-{
-    [SRT_CONTROL_TYPE_HANDSHAKE] = "handshake",
-    [SRT_CONTROL_TYPE_KEEPALIVE] = "keepalive",
-    [SRT_CONTROL_TYPE_ACK] = "ack",
-    [SRT_CONTROL_TYPE_NAK] = "nak",
-    [SRT_CONTROL_TYPE_SHUTDOWN] = "shutdown",
-    [SRT_CONTROL_TYPE_ACKACK] = "ackack",
-    [SRT_CONTROL_TYPE_DROPREQ] = "dropreq",
-    [SRT_CONTROL_TYPE_PEERERROR] = "peererror",
-};
-
-static const char *get_ctrl_type(uint16_t type)
-{
-    if (type == SRT_CONTROL_TYPE_USER)
-        return "user";
-    if (type >= (sizeof(ctrl_type) / sizeof(*ctrl_type)))
-        return "?";
-    return ctrl_type[type];
-}
-
 static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts);
 
 /** @internal @This handles SRT messages.
@@ -186,7 +165,6 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
     }
 
     uint16_t type = srt_get_control_packet_type(buf);
-    //upipe_dbg_va(upipe, "control pkt %s", get_ctrl_type(type));
 
     if (type == SRT_CONTROL_TYPE_NAK) {
         buf += SRT_HEADER_SIZE;
