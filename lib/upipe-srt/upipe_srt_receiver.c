@@ -59,6 +59,11 @@
 /** @hidden */
 static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_format);
 
+struct ack_entry {
+    uint32_t ack_num;
+    uint64_t timestamp;
+};
+
 /** @internal @This is the private context of a SRT receiver pipe. */
 struct upipe_srt_receiver {
     /** real refcount management structure */
@@ -109,10 +114,6 @@ struct upipe_srt_receiver {
     /** last seq output */
     uint64_t last_output_seqnum;
 
-    uint64_t last_ack;
-
-    uint32_t ack_num;
-
     /* stats */
     size_t buffered;
     size_t nacks;
@@ -124,6 +125,13 @@ struct upipe_srt_receiver {
     uint64_t latency;
     /** last time a NACK was sent */
     uint64_t last_nack[65536];
+
+    uint32_t ack_num;
+    uint64_t last_ack;
+    struct ack_entry *acks;
+    size_t n_acks;
+    size_t ack_ridx;
+    size_t ack_widx;
 
     uint64_t rtt;
 
@@ -449,12 +457,13 @@ next:
                 uref_free(uref);
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             } else {
+                uint32_t ack_num = upipe_srt_receiver->ack_num++;
                 srt_set_packet_control(out, true);
                 srt_set_packet_timestamp(out, now / 27);
                 srt_set_packet_dst_socket_id(out, upipe_srt_receiver->socket_id);
                 srt_set_control_packet_type(out, SRT_CONTROL_TYPE_ACK);
                 srt_set_control_packet_subtype(out, 0);
-                srt_set_control_packet_type_specific(out, upipe_srt_receiver->ack_num++);
+                srt_set_control_packet_type_specific(out, ack_num);
                 uint8_t *out_cif = (uint8_t*)srt_get_control_packet_cif(out);
 
                 uint64_t last_seq = 0;
@@ -473,6 +482,11 @@ next:
                 upipe_srt_receiver->last_ack = now;
                 assert(upipe_srt_receiver->control);
                 upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref, NULL);
+
+                upipe_srt_receiver->acks[upipe_srt_receiver->ack_widx].ack_num = ack_num;
+                upipe_srt_receiver->acks[upipe_srt_receiver->ack_widx].timestamp = now;
+                upipe_srt_receiver->ack_widx++;
+                upipe_srt_receiver->ack_widx %= upipe_srt_receiver->n_acks;
             }
         }
     }
@@ -688,13 +702,19 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
     upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
     upipe_srt_receiver->last_ack = UINT64_MAX;
     upipe_srt_receiver->ack_num = 0;
+
+    upipe_srt_receiver->acks = NULL;
+    upipe_srt_receiver->n_acks = 0;
+    upipe_srt_receiver->ack_ridx = 0;
+    upipe_srt_receiver->ack_widx = 0;
+
     upipe_srt_receiver->buffered = 0;
     upipe_srt_receiver->nacks = 0;
     upipe_srt_receiver->repaired = 0;
     upipe_srt_receiver->loss = 0;
     upipe_srt_receiver->dups = 0;
 
-    upipe_srt_receiver->latency = UCLOCK_FREQ;
+    upipe_srt_receiver->latency = 0;
 
     upipe_srt_receiver->sek_len = 0;
 
@@ -714,6 +734,11 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
     upipe_srt_receiver_check_upump_mgr(upipe);
+
+    if (upipe_srt_receiver->latency == 0) {
+        upipe_err(upipe, "Latency unset");
+        return UBASE_ERR_UNKNOWN;
+    }
 
     if (flow_format != NULL) {
         uint64_t latency;
@@ -842,6 +867,7 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
             struct uref *flow = va_arg(args, struct uref *);
             return upipe_srt_receiver_set_flow_def(upipe, flow);
         }
+
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
             const char *v = va_arg(args, const char *);
@@ -849,10 +875,22 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
                 return UBASE_ERR_INVALID;
 
             struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
-            upipe_srt_receiver->latency = atoi(v) * UCLOCK_FREQ / 1000;
-            upipe_dbg_va(upipe, "Set latency to %s msecs", v);
+            if (upipe_srt_receiver->latency) {
+                upipe_err(upipe, "Latency already set");
+                return UBASE_ERR_UNHANDLED;
+            }
+            unsigned latency = atoi(v);
+            upipe_srt_receiver->latency = latency * UCLOCK_FREQ / 1000;
+            upipe_dbg_va(upipe, "Set latency to %u msecs", latency);
+
+            upipe_srt_receiver->n_acks = (latency + 9) / 10;
+            upipe_srt_receiver->acks = malloc(sizeof(*upipe_srt_receiver->acks) * upipe_srt_receiver->n_acks);
+            if (!upipe_srt_receiver->acks)
+                return UBASE_ERR_ALLOC;
+
             return UBASE_ERR_NONE;
         }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -943,6 +981,46 @@ static bool upipe_srt_receiver_insert(struct upipe *upipe, struct uref *uref, co
     return false;
 }
 
+static uint64_t upipe_srt_receiver_ackack(struct upipe *upipe, uint32_t ack_num, uint64_t ts)
+{
+    struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
+
+    const size_t n = upipe_srt_receiver->n_acks;
+    const size_t ridx = upipe_srt_receiver->ack_ridx;;
+
+    //upipe_verbose_va(upipe,"%s(%u), start at %zu", __func__, ack_num, ridx);
+
+    size_t max = (ridx > 0) ? (ridx - 1) : (n - 1); // end of loop
+
+    for (size_t i = ridx; ; i++) {
+        uint32_t a = upipe_srt_receiver->acks[i].ack_num;
+
+        if (upipe_srt_receiver->acks[i].timestamp == UINT64_MAX) { // already acked
+            //upipe_verbose_va(upipe, "break at %zu", i);
+            break;
+        }
+
+        if (ack_num < a) { // too late
+            //upipe_verbose_va(upipe, "break2 at %zu", i);
+            break;
+        } else if (ack_num == a) {
+            uint64_t rtt = ts - upipe_srt_receiver->acks[i].timestamp;
+            //upipe_verbose_va(upipe, "rtt[%d] %" PRId64, a, rtt);
+            upipe_srt_receiver->acks[i].timestamp = UINT64_MAX; // do not ack twice
+            upipe_srt_receiver->ack_ridx = (i+1) % n; // advance
+            return rtt;
+        }
+
+        i %= n;
+        if (i == max)
+            break;
+    }
+
+    //upipe_verbose_va(upipe, "%d not found", ack_num);
+
+    return 0;
+}
+
 static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
         struct upump **upump_p)
 {
@@ -967,9 +1045,18 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     if (srt_get_packet_control(buf)) {
         if (srt_get_control_packet_type(buf) == SRT_CONTROL_TYPE_ACKACK)  {
             uint32_t ack_num = srt_get_control_packet_type_specific(buf);
-            (void)ack_num; // TODO: check ack_num ? keep a rotating list of acks ?
             uint64_t now = uclock_now(upipe_srt_receiver->uclock);
-            upipe_srt_receiver->rtt = now - upipe_srt_receiver->last_ack;
+            uint64_t rtt = upipe_srt_receiver_ackack(upipe, ack_num, now);
+            upipe_verbose_va(upipe, "RTT %.2f", (float) rtt / 27000.);
+            if (rtt) {
+                if (upipe_srt_receiver->rtt) {
+                    upipe_srt_receiver->rtt *= 7;
+                    upipe_srt_receiver->rtt += rtt;
+                    upipe_srt_receiver->rtt /= 8;
+                } else {
+                    upipe_srt_receiver->rtt = rtt;
+                }
+            }
         }
 
         ubase_assert(uref_block_unmap(uref, 0));
@@ -992,7 +1079,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     uref_block_resize(uref, SRT_HEADER_SIZE, -1); /* skip SRT header */
     total_size -= SRT_HEADER_SIZE;
 
-//    upipe_dbg_va(upipe, "Data seq %u", seqnum);
+    upipe_verbose_va(upipe, "Data seq %u (retx %u)", seqnum, retransmit);
 
     (void)order;
     (void)num;
