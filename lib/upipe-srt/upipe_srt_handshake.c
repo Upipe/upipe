@@ -945,7 +945,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             upipe_srt_handshake_set_upump_timer(upipe, NULL);
             upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
 
-            if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN) {
+            if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
                 upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
                 upipe_srt_handshake->expect_conclusion = false;
                 return NULL;
@@ -991,7 +991,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
         /* */
 
-        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN) {
+        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
             upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
             return NULL;
         }
