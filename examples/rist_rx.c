@@ -84,6 +84,7 @@ static struct uprobe *logger;
 static char *dirpath;
 static char *srcpath;
 static char *password;
+static char *latency;
 
 static bool restart;
 
@@ -123,6 +124,9 @@ static int start(void)
             upipe_srt_handshake_mgr, &uprobe_srt);
     assert(upipe_srth);
     upipe_set_option(upipe_srth, "listener", listener ? "1" : "0");
+    if (!ubase_check(upipe_set_option(upipe_srth, "latency", latency)))
+        return EXIT_FAILURE;
+
     upipe_srt_handshake_set_password(upipe_srth, password);
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
@@ -138,6 +142,9 @@ static int start(void)
     struct upipe *upipe_srtr = upipe_void_chain_output(upipe_srth,
             upipe_srt_receiver_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srtr"));
     assert(upipe_srtr);
+    if (!ubase_check(upipe_set_option(upipe_srtr, "latency", latency)))
+        return EXIT_FAILURE;
+
     upipe_mgr_release(upipe_srt_receiver_mgr);
 
     upipe_srtr_sub = upipe_void_alloc_sub(upipe_srtr,
@@ -242,7 +249,7 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d] [-k password] <udp source> <udp dest>", argv0);
+    fprintf(stdout, "Usage: %s [-d] [-k password] <udp source> <udp dest> <latency>", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     fprintf(stdout, "   -k encryption password\n");
@@ -269,11 +276,12 @@ int main(int argc, char *argv[])
                 usage(argv[0]);
         }
     }
-    if (argc - optind < 2) {
+    if (argc - optind < 3) {
         usage(argv[0]);
     }
     srcpath = argv[optind++];
     dirpath = argv[optind++];
+    latency = argv[optind++];
 
 #ifdef UPIPE_HAVE_GCRYPT_H
     gcry_check_version(NULL);
