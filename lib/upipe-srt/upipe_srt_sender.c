@@ -137,7 +137,7 @@ struct upipe_srt_sender_input {
     struct upipe upipe;
 };
 
-static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts);
+static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts, struct upump **upump_p);
 
 /** @internal @This handles SRT messages.
  *
@@ -173,7 +173,7 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
         uint32_t seq;
         uint32_t packets;
         while (srt_get_nak_range(&buf, &s, &seq, &packets)) {
-            upipe_srt_sender_lost_sub_n(upipe, seq, packets);
+            upipe_srt_sender_lost_sub_n(upipe, seq, packets, upump_p);
         }
     }
 
@@ -188,7 +188,7 @@ UPIPE_HELPER_SUBPIPE(upipe_srt_sender, upipe_srt_sender_input, output, sub_mgr, 
                      uchain)
 
 /** @internal @This retransmits a number of packets */
-static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts)
+static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts, struct upump **upump_p)
 {
     struct upipe *upipe_super = NULL;
     upipe_srt_sender_input_get_super(upipe, &upipe_super);
@@ -205,7 +205,7 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
             /* packet not in range */
             if (diff < 0x80000000) {
                 /* packet after range */
-                return;
+                break;
             }
             continue;
         }
@@ -224,6 +224,41 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
             return;
         seq++;
     }
+
+    /* XXX: Is it needed? */
+
+    int s = SRT_HEADER_SIZE + SRT_DROPREQ_CIF_SIZE;
+    struct uref *uref = uref_block_alloc(upipe_srt_sender->uref_mgr,
+            upipe_srt_sender->ubuf_mgr, s);
+    if (!uref) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
+        return;
+    }
+
+    uint8_t *buf;
+    s = -1;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &s, &buf)))) {
+        upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
+        uref_free(uref);
+        return;
+    }
+
+    uint64_t now = uclock_now(upipe_srt_sender->uclock);
+
+    memset(buf, 0, s);
+    srt_set_packet_control(buf, true);
+    srt_set_control_packet_type(buf, SRT_CONTROL_TYPE_DROPREQ);
+    srt_set_control_packet_subtype(buf, 0); // message number
+
+    srt_set_packet_timestamp(buf, (now - upipe_srt_sender->establish_time) / 27);
+    srt_set_packet_dst_socket_id(buf, upipe_srt_sender->socket_id);
+
+    uint8_t *cif = (uint8_t*)srt_get_control_packet_cif(buf);
+    srt_set_dropreq_first_seq(cif, seq);
+    srt_set_dropreq_last_seq(cif, seq + pkts - 1);
+
+    uref_block_unmap(uref, 0);
+    upipe_srt_sender_output(&upipe_srt_sender->upipe, uref, upump_p);
 }
 
 /** @This is called when there is no external reference to the pipe anymore.
