@@ -912,8 +912,42 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     if (!upipe_srt_handshake->listener) {
         if (upipe_srt_handshake->expect_conclusion) {
             upipe_srt_handshake_set_upump_timer(upipe, NULL);
-            // check 
             upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
+
+            /* At least HSREQ is expected */
+            printf("size %u\n", size);
+            size -= SRT_HEADER_SIZE + SRT_HANDSHAKE_CIF_SIZE;
+            if (size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
+                upipe_err_va(upipe, "Malformed conclusion handshake (size %u)", size);
+                upipe_srt_handshake->expect_conclusion = false;
+                return NULL;
+            }
+
+            uint8_t *ext = srt_get_handshake_extension_buf((uint8_t*)cif);
+
+            while (size >= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) {
+                uint16_t ext_type = srt_get_handshake_extension_type(ext);
+                uint16_t ext_len = 4 * srt_get_handshake_extension_len(ext);
+
+                size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+                ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+
+                if (ext_len > size) {
+                    upipe_err_va(upipe, "Malformed extension: %u > %u", ext_len, size);
+                    break;
+                }
+
+                if (ext_type == SRT_HANDSHAKE_EXT_TYPE_HSRSP) {
+                    if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE)
+                        upipe_srt_handshake_parse_hsreq(upipe, ext);
+                    else
+                        upipe_err_va(upipe, "Malformed HSRSP: %u < %u\n", ext_len,
+                                SRT_HANDSHAKE_HSREQ_SIZE);
+                }
+
+                ext += ext_len;
+                size -= ext_len;
+            }
 
             upipe_srt_handshake_finalize(upipe);
             return NULL;
