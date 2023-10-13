@@ -522,7 +522,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_handshake->listener = true;
     upipe_srt_handshake->last_hs_sent = 0;
-    
+
     upipe_srt_handshake->expect_conclusion = false;
     upipe_srt_handshake->control = NULL;
 
@@ -1049,7 +1049,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
     if (!upipe_srt_handshake->expect_conclusion) {
         if (version != SRT_HANDSHAKE_VERSION_MIN || encryption != SRT_HANDSHAKE_CIPHER_NONE
-                || extension != SRT_HANDSHAKE_EXT_KMREQ 
+                || extension != SRT_HANDSHAKE_EXT_KMREQ
                 || hs_type != SRT_HANDSHAKE_TYPE_INDUCTION ||
                 syn_cookie != 0 || dst_socket_id != 0) {
             upipe_err_va(upipe, "Malformed first handshake syn %u dst_id %u", syn_cookie, dst_socket_id);
@@ -1112,7 +1112,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             }
 
             if (ext_type == SRT_HANDSHAKE_EXT_TYPE_HSREQ) {
-                if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE) 
+                if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE)
                     upipe_srt_handshake_parse_hsreq(upipe, ext);
                 else
                     upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
