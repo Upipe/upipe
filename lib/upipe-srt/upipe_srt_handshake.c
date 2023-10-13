@@ -660,6 +660,12 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
         return UBASE_ERR_NONE;
     }
 
+    if (!strcmp(option, "latency")) {
+        upipe_srt_handshake->receiver_tsbpd_delay = atoi(value);
+        upipe_srt_handshake->sender_tsbpd_delay = atoi(value);
+        return UBASE_ERR_NONE;
+    }
+
     upipe_err_va(upipe, "Unknown option %s", option);
     return UBASE_ERR_INVALID;
 }
@@ -960,8 +966,9 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         uint32_t flags = SRT_HANDSHAKE_EXT_FLAG_CRYPT | SRT_HANDSHAKE_EXT_FLAG_PERIODICNAK
             | SRT_HANDSHAKE_EXT_FLAG_REXMITFLG | SRT_HANDSHAKE_EXT_FLAG_TSBPDSND | SRT_HANDSHAKE_EXT_FLAG_TSBPDRCV | SRT_HANDSHAKE_EXT_FLAG_TLPKTDROP;
         srt_set_handshake_extension_srt_flags(out_ext, flags);
-        srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, 120); // made up delays
-        srt_set_handshake_extension_sender_tsbpd_delay(out_ext, 120);
+
+        srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
+        srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
         size -= ext_size;
         out_ext += ext_size;
 
