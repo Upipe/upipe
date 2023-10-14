@@ -590,27 +590,40 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
         if (audio_group == 0) {
             uint64_t audio_samples = upipe_sdi_dec->audio_debug.groups[0].audio_samples;
-            double position = 74.25e6 * audio_samples / 48e3;
             int offset = upipe_sdi_dec->audio_debug.groups[0].clock_offset;
 
-            /* If mpf is set then from the decoder POV the audio should be
-             * associated with the previous line. */
+            /* Video tick rate in hertz */
+            const struct urational rate = {
+                upipe_sdi_dec->f->width * upipe_sdi_dec->f->height * upipe_sdi_dec->f->fps.num,
+                upipe_sdi_dec->f->fps.den
+            };
+            /* Position of audio in video ticks. */
+            struct urational position = {
+                audio_samples * rate.num,
+                48000 * rate.den
+            };
+            /* Subtract video ticks. */
+            position.num -= upipe_sdi_dec->audio_debug.video_ticks * position.den;
+            /* SMPTE 299-2009 6.2.1.3
+             * If mpf is set then from the decoder POV the audio should be
+             * associated with the previous line. Meaning one line too many has
+             * been used above. */
             if (mpf)
-                position -= upipe_sdi_dec->audio_debug.video_ticks - upipe_sdi_dec->f->width;
-            else
-                position -= upipe_sdi_dec->audio_debug.video_ticks;
+                position.num += upipe_sdi_dec->f->width * position.den;
+            double pf = (double)position.num / (double)position.den;
 
             upipe_verbose_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
-                    line_num, (unsigned)audio_samples, mpf, clock, position, offset,
-                    clock - position);
+                    line_num, (unsigned)audio_samples, mpf, clock, pf, offset,
+                    clock - pf);
 
             /* Position is "clock", position should be "position+offset". */
-            if (fabs(clock - (position + offset)) > 2)
+            int64_t err = clock * (int64_t)position.den - (position.num + offset * (int64_t)position.den);
+            if (labs(err) > position.den)
                 upipe_err_va(upipe, "audio sample position predicted at %.1f but found at %d",
-                        position + offset, clock);
+                        pf + offset, clock);
 
             if (audio_samples == 0)
-                upipe_sdi_dec->audio_debug.groups[0].clock_offset = round(clock - position);
+                upipe_sdi_dec->audio_debug.groups[0].clock_offset = clock;
 
             upipe_sdi_dec->audio_debug.groups[0].audio_samples += 1;
         }
