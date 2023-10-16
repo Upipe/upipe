@@ -619,8 +619,8 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
             /* Position is "clock", position should be "position+offset". */
             int64_t err = clock * (int64_t)position.den - (position.num + offset * (int64_t)position.den);
             if (labs(err) > 2*position.den)
-                upipe_err_va(upipe, "audio sample position predicted at %.1f but found at %d",
-                        pf + offset, clock);
+                upipe_err_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but predicted at %.1f",
+                        line_num, audio_samples, mpf, clock, pf + offset);
 
             if (audio_samples == 0)
                 upipe_sdi_dec->audio_debug.groups[0].clock_offset = clock;
