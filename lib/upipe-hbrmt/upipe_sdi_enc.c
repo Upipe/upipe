@@ -999,7 +999,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             audio_clock = (audio_clock + (f->fps.den * 48000 / 2)) / (f->fps.den * 48000);
 
             /* Audio sample is from the future */
-            if ((uint64_t)audio_clock > (upipe_sdi_enc->eav_clock + f->width))
+            if ((uint64_t)audio_clock >= (upipe_sdi_enc->eav_clock + f->width))
                 break;
 
             uint8_t mpf_bit = 0;
