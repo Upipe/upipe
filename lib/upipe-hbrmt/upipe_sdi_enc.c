@@ -37,6 +37,7 @@
 #define UPIPE_SDI_MAX_CHANNELS 16
 
 #define UPIPE_SMPTE_299_AUDIO_PKT_LEN 31
+#define UPIPE_MAX_AUDIO_PKTS_PER_LINE 2
 
 static const bool parity_tab[512] = {
 #   define P2(n) n, n^1, n^1, n
@@ -164,6 +165,8 @@ struct upipe_sdi_enc {
 
     /* worst case audio buffer (~128kB) */
     int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
+    int num_buffered_pkts;
+    uint16_t buffered_audio_pkt[UPIPE_SDI_MAX_GROUPS][UPIPE_MAX_AUDIO_PKTS_PER_LINE][UPIPE_SMPTE_299_AUDIO_PKT_LEN*2];
 
     /* sample offset for dolby E to be on the right line */
     unsigned dolby_offset;
@@ -968,8 +971,18 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
          * chroma horizontal blanking */
         int dst_pos = hanc_start;
 
-        /* If more than a single audio packet must be put on a line
-         * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
+        /* Write buffered audio packets. SMPTE 299 says audio samples are written on the *next* available line, although
+           CLK calculations are done relative to the previous EAV. If more than a single audio packet must be put on a line
+         * then the following sequence of groups will be sent: 1 2 3 4 1 2 3 4 */
+        for(int sample = 0; sample < upipe_sdi_enc->num_buffered_pkts; sample++) {
+            for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
+                /* memcpy works in bytes, and len is also in terms of chroma so *4 is needed */
+                memcpy(&dst[dst_pos], upipe_sdi_enc->buffered_audio_pkt[group][sample], UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2 * 2);
+                dst_pos += UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2;
+            }
+        }
+        upipe_sdi_enc->num_buffered_pkts = 0;
+
         for (int sample = 0; ; sample++) {
             /* Don't write too many samples. Important to maintain the NTSC pattern */
             if (upipe_sdi_enc->sample_pos == num_samples)
@@ -978,10 +991,6 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             /* Don't write too many audio samples per line */
             if (sample == max_audio_samples_per_line)
                 break;
-
-            /* FIXME: This is NOT technically correct, audio packets should be written into the NEXT HANC packet.
-                      We write into the current HANC packet to avoid complexity with putting audio into the next video frame
-                      We can live with the two sample error for now (~40us) */
 
             /* Audio clock is the total number of samples written times the pixel clock divided by the audio clockrate */
             __uint128_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
@@ -1008,9 +1017,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             uint16_t sample_clock = audio_clock - eav_clock;
 
             for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
-                dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
-                                                    group, mpf_bit, sample_clock);
+                put_hd_audio_data_packet(upipe_sdi_enc, upipe_sdi_enc->buffered_audio_pkt[group][sample],
+                                         group, mpf_bit, sample_clock);
             }
+            upipe_sdi_enc->num_buffered_pkts++;
             upipe_sdi_enc->audio_samples_written++;
             upipe_sdi_enc->sample_pos++;
         }
@@ -1797,6 +1807,11 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
     upipe_sdi_enc->uref_audio = NULL;
+
+    upipe_sdi_enc->num_buffered_pkts = 0;
+    for (int i = 0; i < UPIPE_SDI_MAX_GROUPS; i++)
+        for(int j = 0; j < UPIPE_MAX_AUDIO_PKTS_PER_LINE; j++)
+            upipe_sdi_blank_c(upipe_sdi_enc->buffered_audio_pkt[i][j], UPIPE_SMPTE_299_AUDIO_PKT_LEN);
 
     upipe_throw_ready(upipe);
     return upipe;
