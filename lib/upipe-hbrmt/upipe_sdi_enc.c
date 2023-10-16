@@ -999,13 +999,13 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             audio_clock = (audio_clock + (f->fps.den * 48000 / 2)) / (f->fps.den * 48000);
 
             /* Audio sample is from the future */
-            if (audio_clock > (upipe_sdi_enc->eav_clock + f->width))
+            if ((uint64_t)audio_clock > (upipe_sdi_enc->eav_clock + f->width))
                 break;
 
             uint8_t mpf_bit = 0;
 
             /* Packet belongs to the previous line */
-            if (audio_clock < upipe_sdi_enc->eav_clock)
+            if ((uint64_t)audio_clock < upipe_sdi_enc->eav_clock)
                 mpf_bit = 1;
 
             /* If the mpf bit is set roll the clock back to the previous line and
@@ -1014,7 +1014,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
 
             /* Sample clock is the difference between the actual audio clock [position] and the EAV pixel clock */
-            uint16_t sample_clock = audio_clock - eav_clock;
+            uint16_t sample_clock = (uint64_t)audio_clock - eav_clock;
 
             for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
                 put_hd_audio_data_packet(upipe_sdi_enc, upipe_sdi_enc->buffered_audio_pkt[group][sample],
