@@ -963,26 +963,26 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         }
     }
 
-    /* Audio can go anywhere but the switching lines+1 */
-    if (!(line_num == p->switching_line + 1) &&
-        !(p->field_offset && line_num == p->switching_line + switching_line_offset + 1)) {
+    /* Start counting the destination from the start of the
+        * chroma horizontal blanking */
+    int dst_pos = hanc_start;
 
-        /* Start counting the destination from the start of the
-         * chroma horizontal blanking */
-        int dst_pos = hanc_start;
-
-        /* Write buffered audio packets. SMPTE 299 says audio samples are written on the *next* available line, although
-           CLK calculations are done relative to the previous EAV. If more than a single audio packet must be put on a line
-         * then the following sequence of groups will be sent: 1 2 3 4 1 2 3 4 */
-        for(int sample = 0; sample < upipe_sdi_enc->num_buffered_pkts; sample++) {
-            for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
-                /* memcpy works in bytes, and len is also in terms of chroma so *4 is needed */
-                memcpy(&dst[dst_pos], upipe_sdi_enc->buffered_audio_pkt[group][sample], UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2 * 2);
-                dst_pos += UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2;
-            }
+    /* Write buffered audio packets. SMPTE 299 says audio samples are written on the *next* available line, although
+        CLK calculations are done relative to the previous EAV. If more than a single audio packet must be put on a line
+        * then the following sequence of groups will be sent: 1 2 3 4 1 2 3 4 */
+    for(int sample = 0; sample < upipe_sdi_enc->num_buffered_pkts; sample++) {
+        for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
+            /* memcpy works in bytes, and len is also in terms of chroma so *4 is needed */
+            memcpy(&dst[dst_pos], upipe_sdi_enc->buffered_audio_pkt[group][sample], UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2 * 2);
+            dst_pos += UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2;
         }
-        upipe_sdi_enc->num_buffered_pkts = 0;
+    }
+    upipe_sdi_enc->num_buffered_pkts = 0;
 
+    /* Audio can go anywhere but the switching lines+1.
+       BUT, because we buffer packets to be written on the next line, the line that's not allowed to create a packet is the switching line */
+    if (!(line_num == p->switching_line) &&
+        !(p->field_offset && line_num == p->switching_line + switching_line_offset)) {
         for (int sample = 0; ; sample++) {
             /* Don't write too many samples. Important to maintain the NTSC pattern */
             if (upipe_sdi_enc->sample_pos == num_samples)
