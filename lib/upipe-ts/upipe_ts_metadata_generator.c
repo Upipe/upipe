@@ -159,11 +159,11 @@ static void upipe_ts_mdg_free(struct upipe *upipe)
     upipe_ts_mdg_free_void(upipe);
 }
 
-/** @internal @This wait the next event to be sent.
+/** @internal @This sends a metadata or wait for the next run.
  *
  * @param upipe description structure of the pipe
  */
-static void upipe_ts_mdg_wait(struct upipe *upipe)
+static void upipe_ts_mdg_send(struct upipe *upipe)
 {
     struct upipe_ts_mdg *upipe_ts_mdg = upipe_ts_mdg_from_upipe(upipe);
     uint64_t now = upipe_ts_mdg_now(upipe);
@@ -178,23 +178,41 @@ static void upipe_ts_mdg_wait(struct upipe *upipe)
 
     uref_clock_get_cr_sys(uref, &cr_sys);
     uref_clock_get_pts_prog(uref, &pts_prog);
-    if (cr_sys < now) {
-        if (!upipe_ts_mdg->interval) {
-            uref_free(upipe_ts_mdg->metadata);
-            return;
-        }
 
-        unsigned count = (now - cr_sys) / upipe_ts_mdg->interval;
-        cr_sys += count * upipe_ts_mdg->interval;
-        pts_prog += count * upipe_ts_mdg->interval;
-        if (cr_sys < now) {
-            cr_sys += upipe_ts_mdg->interval;
-            pts_prog += upipe_ts_mdg->interval;
-        }
-        uref_clock_set_cr_sys(uref, cr_sys);
-        uref_clock_set_pts_prog(uref, pts_prog);
+    if (cr_sys > now) {
+        upipe_ts_mdg_wait_upump(upipe, cr_sys - now, upipe_ts_mdg_upump_cb);
+        return;
     }
-    upipe_ts_mdg_wait_upump(upipe, cr_sys - now, upipe_ts_mdg_upump_cb);
+
+    /* compute max octetrate */
+    size_t size = 0;
+    uref_block_size(uref, &size);
+    if (upipe_ts_mdg->last == UINT64_MAX ||
+        upipe_ts_mdg->last + UCLOCK_FREQ < now) {
+        upipe_ts_mdg->last = now;
+        upipe_ts_mdg->size = 0;
+    }
+    upipe_ts_mdg->size += size;
+    if (upipe_ts_mdg->size > upipe_ts_mdg->max_octetrate) {
+        struct uref *flow_def = uref_dup(upipe_ts_mdg->flow_def);
+        uref_block_flow_set_max_octetrate(flow_def, upipe_ts_mdg->size);
+        uref_block_flow_set_max_buffer_size(flow_def, upipe_ts_mdg->size);
+        upipe_ts_mdg_store_flow_def(upipe, flow_def);
+        upipe_ts_mdg->max_octetrate = upipe_ts_mdg->size;
+    }
+
+    upipe_ts_mdg_output(upipe, uref_dup(uref), &upipe_ts_mdg->upump);
+
+    if (!upipe_ts_mdg->interval)
+        return;
+
+    cr_sys += upipe_ts_mdg->interval;
+    pts_prog += upipe_ts_mdg->interval;
+    uref_clock_set_cr_sys(uref, cr_sys);
+    uref_clock_set_pts_prog(uref, pts_prog);
+
+    uint64_t wait = cr_sys > now ? cr_sys - now : 0;
+    upipe_ts_mdg_wait_upump(upipe, wait, upipe_ts_mdg_upump_cb);
 }
 
 /** @internal @This is called by the pump.
@@ -204,30 +222,7 @@ static void upipe_ts_mdg_wait(struct upipe *upipe)
 static void upipe_ts_mdg_upump_cb(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_ts_mdg *upipe_ts_mdg = upipe_ts_mdg_from_upipe(upipe);
-    struct uref *uref = upipe_ts_mdg->metadata;
-
-    if (uref) {
-        uint64_t now = upipe_ts_mdg_now(upipe);
-        size_t size = 0;
-
-        uref_block_size(uref, &size);
-        if (upipe_ts_mdg->last == UINT64_MAX ||
-            upipe_ts_mdg->last + UCLOCK_FREQ < now) {
-            upipe_ts_mdg->last = now;
-            upipe_ts_mdg->size = 0;
-        }
-        upipe_ts_mdg->size += size;
-        if (upipe_ts_mdg->size > upipe_ts_mdg->max_octetrate) {
-            struct uref *flow_def = uref_dup(upipe_ts_mdg->flow_def);
-            uref_block_flow_set_max_octetrate(flow_def, upipe_ts_mdg->size);
-            uref_block_flow_set_max_buffer_size(flow_def, upipe_ts_mdg->size);
-            upipe_ts_mdg_store_flow_def(upipe, flow_def);
-            upipe_ts_mdg->max_octetrate = upipe_ts_mdg->size;
-        }
-        upipe_ts_mdg_output(upipe, uref_dup(uref), &upipe_ts_mdg->upump);
-        upipe_ts_mdg_wait(upipe);
-    }
+    upipe_ts_mdg_send(upipe);
 }
 
 /** @internal @This handles input buffers.
@@ -243,7 +238,7 @@ static void upipe_ts_mdg_input(struct upipe *upipe, struct uref *uref,
 
     uref_free(upipe_ts_mdg->metadata);
     upipe_ts_mdg->metadata = uref;
-    upipe_ts_mdg_wait(upipe);
+    upipe_ts_mdg_send(upipe);
 }
 
 /** @internal @This sets the input flow definition.
@@ -366,7 +361,7 @@ static int upipe_ts_mdg_check(struct upipe *upipe, struct uref *flow_def)
     UBASE_RETURN(upipe_ts_mdg_check_upump_mgr(upipe));
 
     if (upipe_ts_mdg->upump_mgr && !upipe_ts_mdg->upump)
-        upipe_ts_mdg_wait(upipe);
+        upipe_ts_mdg_send(upipe);
 
     return UBASE_ERR_NONE;
 }
