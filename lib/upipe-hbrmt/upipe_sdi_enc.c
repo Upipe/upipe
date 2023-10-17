@@ -167,6 +167,7 @@ struct upipe_sdi_enc {
     int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
     int num_buffered_pkts;
     uint16_t buffered_audio_pkt[UPIPE_SDI_MAX_GROUPS][UPIPE_MAX_AUDIO_PKTS_PER_LINE][UPIPE_SMPTE_299_AUDIO_PKT_LEN*2];
+    struct urational clock_multiplier;
 
     /* sample offset for dolby E to be on the right line */
     unsigned dolby_offset;
@@ -990,19 +991,19 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 break;
 
             /* Audio clock is the total number of samples written times the pixel clock divided by the audio clockrate */
-            __uint128_t audio_clock = (__uint128_t)upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
+            uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * upipe_sdi_enc->clock_multiplier.num;
 
             /* Round to the nearest value */
-            audio_clock = (audio_clock + (f->fps.den * 48000 / 2)) / (f->fps.den * 48000);
+            audio_clock = (audio_clock + (upipe_sdi_enc->clock_multiplier.den / 2)) / (upipe_sdi_enc->clock_multiplier.den);
 
             /* Audio sample is from the future */
-            if ((uint64_t)audio_clock >= (upipe_sdi_enc->eav_clock + f->width))
+            if (audio_clock >= (upipe_sdi_enc->eav_clock + f->width))
                 break;
 
             uint8_t mpf_bit = 0;
 
             /* Packet belongs to the previous line */
-            if ((uint64_t)audio_clock < upipe_sdi_enc->eav_clock)
+            if (audio_clock < upipe_sdi_enc->eav_clock)
                 mpf_bit = 1;
 
             /* If the mpf bit is set roll the clock back to the previous line and
@@ -1011,7 +1012,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             uint64_t eav_clock = upipe_sdi_enc->eav_clock - mpf_bit*f->width;
 
             /* Sample clock is the difference between the actual audio clock [position] and the EAV pixel clock */
-            uint16_t sample_clock = (uint64_t)audio_clock - eav_clock;
+            uint16_t sample_clock = audio_clock - eav_clock;
 
             for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
                 put_hd_audio_data_packet(upipe_sdi_enc, upipe_sdi_enc->buffered_audio_pkt[group][sample],
@@ -1494,7 +1495,12 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         upipe_err(upipe, "Could not figure out SDI offsets");
         return UBASE_ERR_INVALID;
     }
-    upipe_sdi_enc->p = upipe_sdi_enc->f->pict_fmt;
+    const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
+    upipe_sdi_enc->p = f->pict_fmt;
+
+    upipe_sdi_enc->clock_multiplier.num = f->width * f->height * f->fps.num;
+    upipe_sdi_enc->clock_multiplier.den = 48000 * f->fps.den;
+    urational_simplify(&upipe_sdi_enc->clock_multiplier);
 
     if (upipe_sdi_enc->p->active_height == 576) {
         upipe_sdi_enc->sp.scanning         = 625; /* PAL */
@@ -1542,7 +1548,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 #undef u
 
     upipe_sdi_enc->dolby_offset = 0;
-    if (upipe_sdi_enc->f->height == 1125) { /* Full HD */
+    if (f->height == 1125) { /* Full HD */
         static const struct urational pal = { 25, 1 };
         static const struct urational ntsc = { 30000, 1001 };
         if (!urational_cmp(&upipe_sdi_enc->fps, &pal)) {
