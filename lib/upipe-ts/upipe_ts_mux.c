@@ -1339,6 +1339,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
          * 30 Hz system */
         au_per_sec.num = 30;
         au_per_sec.den = 1;
+        if (!ubase_ncmp(sub_def, ".id3."))
+            pes_alignment = true;
         pes_overhead += PES_HEADER_SIZE_PTS *
             (au_per_sec.num + au_per_sec.den - 1) / au_per_sec.den;
     }
