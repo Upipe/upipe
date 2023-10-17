@@ -270,6 +270,10 @@ static void upipe_id3v2d_input(struct upipe *upipe,
         upipe_id3v2d_flush(upipe, upump_p);
         upipe_id3v2d_store_flow_def(upipe, uref);
     } else {
+        if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
+            upipe_warn(upipe, "discontinuity");
+            upipe_id3v2d_flush(upipe, upump_p);
+        }
         upipe_id3v2d_append_uref_stream(upipe, uref);
         upipe_id3v2d_work(upipe, upump_p);
     }
