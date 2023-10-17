@@ -993,7 +993,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 break;
 
             /* Audio clock is the total number of samples written times the pixel clock divided by the audio clockrate */
-            __uint128_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
+            __uint128_t audio_clock = (__uint128_t)upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
 
             /* Round to the nearest value */
             audio_clock = (audio_clock + (f->fps.den * 48000 / 2)) / (f->fps.den * 48000);
