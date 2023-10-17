@@ -27,6 +27,7 @@
 
 #include "upipe/ubase.h"
 #include "upipe/uclock.h"
+#include "upipe/uref_flow.h"
 #include "upipe/urefcount.h"
 #include "upipe/ubuf_block.h"
 #include "upipe/uref_block.h"
@@ -238,18 +239,19 @@ static void upipe_id3v2d_work(struct upipe *upipe, struct upump **upump_p)
         if (!ubase_check(ret))
             return;
 
-        if (id3v2_check_tag(tag)) {
-            if (skipped) {
-                struct uref *uref =
-                    upipe_id3v2d_extract_uref_stream(upipe, skipped);
-                upipe_id3v2d_output(upipe, uref, upump_p);
-                skipped = 0;
-            }
-            if (!upipe_id3v2d_parse(upipe))
-                return;
-        } else {
-            skipped += 3;
+        if (!id3v2_check_tag(tag)) {
+            skipped++;
+            continue;
         }
+
+        if (skipped) {
+            struct uref *uref =
+                upipe_id3v2d_extract_uref_stream(upipe, skipped);
+            upipe_id3v2d_output(upipe, uref, upump_p);
+        }
+        if (!upipe_id3v2d_parse(upipe))
+            return;
+        skipped = 0;
     }
     upipe_id3v2d_flush(upipe, upump_p);
 }
