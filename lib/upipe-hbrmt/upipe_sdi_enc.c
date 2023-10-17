@@ -171,9 +171,6 @@ struct upipe_sdi_enc {
     /* sample offset for dolby E to be on the right line */
     unsigned dolby_offset;
 
-    /* popped uref that still has samples */
-    struct uref *uref_audio;
-
     /** OP47 teletext sequence counter **/
     uint16_t op47_sequence_counter[2];
 
@@ -1806,8 +1803,6 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
-    upipe_sdi_enc->uref_audio = NULL;
-
     upipe_sdi_enc->num_buffered_pkts = 0;
     for (int i = 0; i < UPIPE_SDI_MAX_GROUPS; i++)
         for(int j = 0; j < UPIPE_MAX_AUDIO_PKTS_PER_LINE; j++)
@@ -1826,7 +1821,6 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
 
     upipe_throw_dead(upipe);
-    uref_free(upipe_sdi_enc->uref_audio);
     upipe_sdi_enc_clean_output(upipe);
     upipe_sdi_enc_clean_ubuf_mgr(upipe);
     upipe_sdi_enc_clean_urefcount(upipe);
