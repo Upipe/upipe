@@ -202,10 +202,6 @@ struct upipe_sdi_dec {
 
     int32_t aes_preamble[8][4];
 
-    int64_t eav_clock;
-    /* Per audio group number of samples written */
-    uint64_t audio_samples[UPIPE_SDI_CHANNELS_PER_GROUP];
-
     /** Average errors when getting incomplete audio frames.
      * they might come from a converter using a corrupted SDI source e.g. when switching */
     uint8_t audio_fix;
@@ -526,7 +522,6 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                             struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
-    const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     uint16_t switching_line_offset = p->field_offset - 1;
 
@@ -627,28 +622,6 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
 
             upipe_sdi_dec->audio_debug.groups[0].audio_samples += 1;
         }
-
-        /* FIXME */
-        if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
-        } else
-            mpf = false;
-
-        uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
-            f->width * f->height * upipe_sdi_dec->f->fps.num /
-            upipe_sdi_dec->f->fps.den / 48000;
-
-        if (unlikely(upipe_sdi_dec->eav_clock == 0))
-            upipe_sdi_dec->eav_clock -= clock; // initial phase offset
-
-        int64_t offset = audio_clock -
-            (upipe_sdi_dec->eav_clock - (mpf ? f->width : 0));
-
-        if (offset + 1 < clock || offset - 1 > clock) {
-            upipe_sdi_dec->eav_clock -= clock - offset;
-            if (0) upipe_notice_va(upipe,
-                    "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %" PRId64 " => %"PRId64"",
-                    audio_group, line_num, mpf, clock, offset, offset - clock);
-        }
     }
 
     if (ctx->buf_audio)
@@ -670,7 +643,6 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
             }
         }
 
-    upipe_sdi_dec->audio_samples[audio_group]++;
     ctx->group_offset[audio_group]++;
 }
 
@@ -757,7 +729,6 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet,
                                        audio_group * UPIPE_SDI_CHANNELS_PER_GROUP];
         extract_sd_audio_group(upipe, dst, &src[3*i]);
 
-        upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
     }
 }
@@ -1505,7 +1476,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             fields[f2][2] += output_stride[2];
             active_lines += 1;
         }
-        upipe_sdi_dec->eav_clock += f->width;
 
         whole_input_size   -= 4 * f->width;
         input_size         -= 4 * f->width;
@@ -1993,11 +1963,8 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     sdi_crc_setup(upipe_sdi_dec->crc_lut);
 
     upipe_sdi_dec->debug = 0;
-    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
-        upipe_sdi_dec->audio_samples[i] = 0;
     for (int i = 0; i < 8; i++)
         upipe_sdi_dec->aes_detected[i] = -1;
-    upipe_sdi_dec->eav_clock = 0;
     upipe_sdi_dec->frame_num = 0;
 
     memset(&upipe_sdi_dec->audio_debug, 0, sizeof upipe_sdi_dec->audio_debug);
