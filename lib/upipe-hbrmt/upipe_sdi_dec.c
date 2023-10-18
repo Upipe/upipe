@@ -1021,6 +1021,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec->sdi3g_levelb_second_frame = false;
         upipe_sdi_dec->audio_fix = 0;
         clear_audio_ctx(&upipe_sdi_dec->audio_ctx);
+        upipe_sdi_dec->audio_debug.video_ticks = 0;
+        memset(&upipe_sdi_dec->audio_debug.groups, 0, sizeof upipe_sdi_dec->audio_debug.groups);
     }
 
     /* Find start of frame and discard data before it. */
