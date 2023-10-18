@@ -1498,6 +1498,9 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
     const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
     upipe_sdi_enc->p = f->pict_fmt;
 
+    upipe_sdi_enc->eav_clock = 0;
+    upipe_sdi_enc->audio_samples_written = 0;
+
     upipe_sdi_enc->clock_multiplier.num = f->width * f->height * f->fps.num;
     upipe_sdi_enc->clock_multiplier.den = 48000 * f->fps.den;
     urational_simplify(&upipe_sdi_enc->clock_multiplier);
