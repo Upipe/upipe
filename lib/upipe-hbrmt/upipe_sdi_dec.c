@@ -114,9 +114,14 @@ struct audio_ctx {
 
 /* Audio position debugging */
 struct audio_debug {
+    /* Audio to video tick rate */
+    struct urational clock_rate;
+    /* Video ticks */
     uint64_t video_ticks;
     struct {
+        /* Audio ticks */
         uint64_t audio_samples;
+        /* Recorded offset, clock value of first sample */
         int clock_offset;
     } groups[UPIPE_SDI_MAX_GROUPS];
 };
@@ -592,15 +597,10 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
             uint64_t audio_samples = upipe_sdi_dec->audio_debug.groups[0].audio_samples;
             int offset = upipe_sdi_dec->audio_debug.groups[0].clock_offset;
 
-            /* Video tick rate in hertz */
-            const struct urational rate = {
-                upipe_sdi_dec->f->width * upipe_sdi_dec->f->height * upipe_sdi_dec->f->fps.num,
-                upipe_sdi_dec->f->fps.den
-            };
             /* Position of audio in video ticks. */
             struct urational position = {
-                audio_samples * rate.num,
-                48000 * rate.den
+                audio_samples * upipe_sdi_dec->audio_debug.clock_rate.num,
+                upipe_sdi_dec->audio_debug.clock_rate.den
             };
             /* Subtract video ticks. */
             position.num -= upipe_sdi_dec->audio_debug.video_ticks * position.den;
@@ -1817,6 +1817,15 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
     uref_pic_flow_set_vsubsampling(flow_def_dup, 1, 0);
 
     upipe_input(upipe, flow_def_dup, NULL);
+
+    /* Update the audio to video tick rate and clear other fields. */
+    upipe_sdi_dec->audio_debug = (struct audio_debug) {
+        .clock_rate = {
+            upipe_sdi_dec->f->width * upipe_sdi_dec->f->height * upipe_sdi_dec->f->fps.num,
+            48000 * upipe_sdi_dec->f->fps.den
+        }
+    };
+    urational_simplify(&upipe_sdi_dec->audio_debug.clock_rate);
 
     return UBASE_ERR_NONE;
 }
