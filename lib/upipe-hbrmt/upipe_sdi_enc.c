@@ -59,12 +59,15 @@ struct upipe_sdi_enc_sub {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** buffered urefs */
+    /** buffered urefs (ancillary) */
     struct uchain urefs;
     size_t n;
 
     /** structure for double-linked lists */
     struct uchain uchain;
+
+    /** audio uref **/
+    struct uref *uref_audio;
 
     /** channels */
     uint8_t channels;
@@ -638,8 +641,17 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
         break;
     }
 
-    ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
-    upipe_verbose_va(upipe, "sub urefs: %zu", ++sdi_enc_sub->n);
+    if(sdi_enc_sub->type == SDIENC_SOUND) {
+        if(sdi_enc_sub->uref_audio) {
+            upipe_warn_va(upipe, "removing existing audio uref");
+            uref_free(sdi_enc_sub->uref_audio);
+        }
+        sdi_enc_sub->uref_audio = uref;
+    }
+    else {
+        ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
+        upipe_verbose_va(upipe, "sub urefs: %zu", ++sdi_enc_sub->n);
+    }
 }
 
 /** @internal @This initializes an subpipe of a sdi enc pipe.
@@ -658,6 +670,7 @@ static void upipe_sdi_enc_sub_init(struct upipe *upipe,
 
     ulist_init(&sdi_enc_sub->urefs);
     sdi_enc_sub->n = 0;
+    sdi_enc_sub->uref_audio = NULL;
     sdi_enc_sub->dolbye = false;
     sdi_enc_sub->type = type;
 
@@ -712,6 +725,7 @@ static void upipe_sdi_enc_sub_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
     upipe_throw_dead(upipe);
+    uref_free(sdi_enc_sub->uref_audio);
     upipe_sdi_enc_clean_urefs(&sdi_enc_sub->urefs);
     upipe_sdi_enc_sub_clean_sub(upipe);
     upipe_sdi_enc_sub_clean_urefcount(upipe);
@@ -1157,9 +1171,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         if (sdi_enc_sub->type != SDIENC_SOUND)
             continue;
 
-        struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+        struct uref *uref_audio = sdi_enc_sub->uref_audio;
         if (uref_audio) {
-            upipe_verbose_va(upipe, "sub urefs after pop: %zu", --sdi_enc_sub->n);
             const uint8_t channels = sdi_enc_sub->channels;
 
             size_t size = 0;
@@ -1186,6 +1199,10 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
             uref_sound_unmap(uref_audio, 0, -1, 1);
             uref_free(uref_audio);
+            sdi_enc_sub->uref_audio = NULL;
+        }
+        else {
+            upipe_warn(upipe, "Video uref received without audio");
         }
     }
 
