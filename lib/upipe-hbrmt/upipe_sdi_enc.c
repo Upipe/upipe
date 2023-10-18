@@ -1556,7 +1556,6 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         } else if (!urational_cmp(&upipe_sdi_enc->fps, &ntsc)) {
             upipe_sdi_enc->dolby_offset = 32;
         }
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sdi_enc->fps))
     }
 
     if (upipe_sdi_enc->input_is_v210) {
