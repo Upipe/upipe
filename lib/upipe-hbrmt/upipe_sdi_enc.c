@@ -36,6 +36,9 @@
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
 
+#define UPIPE_SMPTE_299_AUDIO_PKT_LEN 31
+#define UPIPE_MAX_AUDIO_PKTS_PER_LINE 2
+
 static const bool parity_tab[512] = {
 #   define P2(n) n, n^1, n^1, n
 #   define P4(n) P2(n), P2(n^1), P2(n^1), P2(n)
@@ -56,12 +59,15 @@ struct upipe_sdi_enc_sub {
     /** refcount management structure */
     struct urefcount urefcount;
 
-    /** buffered urefs */
+    /** buffered urefs (ancillary) */
     struct uchain urefs;
     size_t n;
 
     /** structure for double-linked lists */
     struct uchain uchain;
+
+    /** audio uref **/
+    struct uref *uref_audio;
 
     /** channels */
     uint8_t channels;
@@ -162,12 +168,12 @@ struct upipe_sdi_enc {
 
     /* worst case audio buffer (~128kB) */
     int32_t audio_buf[UPIPE_SDI_MAX_CHANNELS /* channels */ * 48000 * 1001 / 24000];
+    int num_buffered_pkts;
+    uint16_t buffered_audio_pkt[UPIPE_SDI_MAX_GROUPS][UPIPE_MAX_AUDIO_PKTS_PER_LINE][UPIPE_SMPTE_299_AUDIO_PKT_LEN*2];
+    struct urational clock_multiplier;
 
     /* sample offset for dolby E to be on the right line */
     unsigned dolby_offset;
-
-    /* popped uref that still has samples */
-    struct uref *uref_audio;
 
     /** OP47 teletext sequence counter **/
     uint16_t op47_sequence_counter[2];
@@ -535,7 +541,7 @@ static int put_hd_audio_data_packet(struct upipe_sdi_enc *upipe_sdi_enc, uint16_
 
     /* Total amount to increment the destination including the luma words,
      * so in total it's 31 chroma words */
-    return 62;
+    return UPIPE_SMPTE_299_AUDIO_PKT_LEN*2;
 }
 
 /** @hidden */
@@ -635,8 +641,17 @@ static void upipe_sdi_enc_sub_input(struct upipe *upipe, struct uref *uref,
         break;
     }
 
-    ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
-    upipe_verbose_va(upipe, "sub urefs: %zu", ++sdi_enc_sub->n);
+    if(sdi_enc_sub->type == SDIENC_SOUND) {
+        if(sdi_enc_sub->uref_audio) {
+            upipe_warn_va(upipe, "removing existing audio uref");
+            uref_free(sdi_enc_sub->uref_audio);
+        }
+        sdi_enc_sub->uref_audio = uref;
+    }
+    else {
+        ulist_add(&sdi_enc_sub->urefs, uref_to_uchain(uref));
+        upipe_verbose_va(upipe, "sub urefs: %zu", ++sdi_enc_sub->n);
+    }
 }
 
 /** @internal @This initializes an subpipe of a sdi enc pipe.
@@ -655,6 +670,7 @@ static void upipe_sdi_enc_sub_init(struct upipe *upipe,
 
     ulist_init(&sdi_enc_sub->urefs);
     sdi_enc_sub->n = 0;
+    sdi_enc_sub->uref_audio = NULL;
     sdi_enc_sub->dolbye = false;
     sdi_enc_sub->type = type;
 
@@ -709,6 +725,7 @@ static void upipe_sdi_enc_sub_free(struct upipe *upipe)
 {
     struct upipe_sdi_enc_sub *sdi_enc_sub = upipe_sdi_enc_sub_from_upipe(upipe);
     upipe_throw_dead(upipe);
+    uref_free(sdi_enc_sub->uref_audio);
     upipe_sdi_enc_clean_urefs(&sdi_enc_sub->urefs);
     upipe_sdi_enc_sub_clean_sub(upipe);
     upipe_sdi_enc_sub_clean_urefcount(upipe);
@@ -958,16 +975,26 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         }
     }
 
-    /* Audio can go anywhere but the switching lines+1 */
-    if (!(line_num == p->switching_line + 1) &&
-        !(p->field_offset && line_num == p->switching_line + switching_line_offset + 1)) {
+    /* Start counting the destination from the start of the
+        * chroma horizontal blanking */
+    int dst_pos = hanc_start;
 
-        /* Start counting the destination from the start of the
-         * chroma horizontal blanking */
-        int dst_pos = hanc_start;
+    /* Write buffered audio packets. SMPTE 299 says audio samples are written on the *next* available line, although
+        CLK calculations are done relative to the previous EAV. If more than a single audio packet must be put on a line
+        * then the following sequence of groups will be sent: 1 2 3 4 1 2 3 4 */
+    for(int sample = 0; sample < upipe_sdi_enc->num_buffered_pkts; sample++) {
+        for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
+            /* memcpy works in bytes, and len is also in terms of chroma so *4 is needed */
+            memcpy(&dst[dst_pos], upipe_sdi_enc->buffered_audio_pkt[group][sample], UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2 * 2);
+            dst_pos += UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2;
+        }
+    }
+    upipe_sdi_enc->num_buffered_pkts = 0;
 
-        /* If more than a single audio packet must be put on a line
-         * then the following sequence will be sent: 1 2 3 4 1 2 3 4 */
+    /* Audio can go anywhere but the switching lines+1.
+       BUT, because we buffer packets to be written on the next line, the line that's not allowed to create a packet is the switching line */
+    if (!(line_num == p->switching_line) &&
+        !(p->field_offset && line_num == p->switching_line + switching_line_offset)) {
         for (int sample = 0; ; sample++) {
             /* Don't write too many samples. Important to maintain the NTSC pattern */
             if (upipe_sdi_enc->sample_pos == num_samples)
@@ -977,18 +1004,14 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             if (sample == max_audio_samples_per_line)
                 break;
 
-            /* FIXME: This is NOT technically correct, audio packets should be written into the NEXT HANC packet.
-                      We write into the current HANC packet to avoid complexity with putting audio into the next video frame
-                      We can live with the two sample error for now (~40us) */
-
             /* Audio clock is the total number of samples written times the pixel clock divided by the audio clockrate */
-            uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * f->width * f->height * f->fps.num;
+            uint64_t audio_clock = upipe_sdi_enc->audio_samples_written * upipe_sdi_enc->clock_multiplier.num;
 
             /* Round to the nearest value */
-            audio_clock = (audio_clock + (f->fps.den * 48000 / 2)) / (f->fps.den * 48000);
+            audio_clock = (audio_clock + (upipe_sdi_enc->clock_multiplier.den / 2)) / (upipe_sdi_enc->clock_multiplier.den);
 
             /* Audio sample is from the future */
-            if (audio_clock > (upipe_sdi_enc->eav_clock + f->width))
+            if (audio_clock >= (upipe_sdi_enc->eav_clock + f->width))
                 break;
 
             uint8_t mpf_bit = 0;
@@ -1006,9 +1029,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             uint16_t sample_clock = audio_clock - eav_clock;
 
             for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
-                dst_pos += put_hd_audio_data_packet(upipe_sdi_enc, &dst[dst_pos],
-                                                    group, mpf_bit, sample_clock);
+                put_hd_audio_data_packet(upipe_sdi_enc, upipe_sdi_enc->buffered_audio_pkt[group][sample],
+                                         group, mpf_bit, sample_clock);
             }
+            upipe_sdi_enc->num_buffered_pkts++;
             upipe_sdi_enc->audio_samples_written++;
             upipe_sdi_enc->sample_pos++;
         }
@@ -1147,9 +1171,8 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
         if (sdi_enc_sub->type != SDIENC_SOUND)
             continue;
 
-        struct uref *uref_audio = uref_from_uchain(ulist_pop(&sdi_enc_sub->urefs));
+        struct uref *uref_audio = sdi_enc_sub->uref_audio;
         if (uref_audio) {
-            upipe_verbose_va(upipe, "sub urefs after pop: %zu", --sdi_enc_sub->n);
             const uint8_t channels = sdi_enc_sub->channels;
 
             size_t size = 0;
@@ -1176,6 +1199,10 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
 
             uref_sound_unmap(uref_audio, 0, -1, 1);
             uref_free(uref_audio);
+            sdi_enc_sub->uref_audio = NULL;
+        }
+        else {
+            upipe_warn(upipe, "Video uref received without audio");
         }
     }
 
@@ -1485,7 +1512,15 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         upipe_err(upipe, "Could not figure out SDI offsets");
         return UBASE_ERR_INVALID;
     }
-    upipe_sdi_enc->p = upipe_sdi_enc->f->pict_fmt;
+    const struct sdi_offsets_fmt *f = upipe_sdi_enc->f;
+    upipe_sdi_enc->p = f->pict_fmt;
+
+    upipe_sdi_enc->eav_clock = 0;
+    upipe_sdi_enc->audio_samples_written = 0;
+
+    upipe_sdi_enc->clock_multiplier.num = f->width * f->height * f->fps.num;
+    upipe_sdi_enc->clock_multiplier.den = 48000 * f->fps.den;
+    urational_simplify(&upipe_sdi_enc->clock_multiplier);
 
     if (upipe_sdi_enc->p->active_height == 576) {
         upipe_sdi_enc->sp.scanning         = 625; /* PAL */
@@ -1533,7 +1568,7 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
 #undef u
 
     upipe_sdi_enc->dolby_offset = 0;
-    if (upipe_sdi_enc->f->height == 1125) { /* Full HD */
+    if (f->height == 1125) { /* Full HD */
         static const struct urational pal = { 25, 1 };
         static const struct urational ntsc = { 30000, 1001 };
         if (!urational_cmp(&upipe_sdi_enc->fps, &pal)) {
@@ -1541,7 +1576,6 @@ static int upipe_sdi_enc_set_flow_def(struct upipe *upipe, struct uref *flow_def
         } else if (!urational_cmp(&upipe_sdi_enc->fps, &ntsc)) {
             upipe_sdi_enc->dolby_offset = 32;
         }
-    UBASE_RETURN(uref_pic_flow_get_fps(flow_def, &upipe_sdi_enc->fps))
     }
 
     if (upipe_sdi_enc->input_is_v210) {
@@ -1794,7 +1828,10 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
 
     sdi_crc_setup(upipe_sdi_enc->crc_lut);
 
-    upipe_sdi_enc->uref_audio = NULL;
+    upipe_sdi_enc->num_buffered_pkts = 0;
+    for (int i = 0; i < UPIPE_SDI_MAX_GROUPS; i++)
+        for(int j = 0; j < UPIPE_MAX_AUDIO_PKTS_PER_LINE; j++)
+            upipe_sdi_blank_c(upipe_sdi_enc->buffered_audio_pkt[i][j], UPIPE_SMPTE_299_AUDIO_PKT_LEN);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1809,7 +1846,6 @@ static void upipe_sdi_enc_free(struct upipe *upipe)
     struct upipe_sdi_enc *upipe_sdi_enc = upipe_sdi_enc_from_upipe(upipe);
 
     upipe_throw_dead(upipe);
-    uref_free(upipe_sdi_enc->uref_audio);
     upipe_sdi_enc_clean_output(upipe);
     upipe_sdi_enc_clean_ubuf_mgr(upipe);
     upipe_sdi_enc_clean_urefcount(upipe);
