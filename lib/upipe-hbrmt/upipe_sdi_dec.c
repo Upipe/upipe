@@ -617,6 +617,10 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                 upipe_err_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but predicted at %.1f",
                         line_num, audio_samples, mpf, clock, pf + offset);
 
+            if (clock >= upipe_sdi_dec->f->width)
+                upipe_warn_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but greater than line width %d",
+                        line_num, audio_samples, mpf, clock, upipe_sdi_dec->f->width);
+
             if (audio_samples == 0)
                 upipe_sdi_dec->audio_debug.groups[0].clock_offset = clock;
 
