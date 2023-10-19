@@ -8,6 +8,7 @@ ffi.cdef [[
 
 local void_cb = ffi.typeof("void (*)(void *)")
 local va_list_p = ffi.typeof("va_list[1]")
+local cb = void_cb(function () end)
 
 local is_number = {
     int = true,
@@ -44,8 +45,7 @@ return {
     end,
 
     va_copy = function (va_list, func)
-        local cb = void_cb(func)
+        cb:set(func)
         stdarg.ffi_va_copy(va_start(va_list), cb)
-        cb:free()
     end
 }
