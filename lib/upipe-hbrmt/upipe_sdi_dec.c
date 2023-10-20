@@ -588,44 +588,44 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         clock |= (packet[14] & 0x20) << 7;
         bool mpf = packet[14] & 0x10;
 
-        if (audio_group == 0) {
-            uint64_t audio_samples = upipe_sdi_dec->audio_debug.groups[0].audio_samples;
-            int offset = upipe_sdi_dec->audio_debug.groups[0].clock_offset;
+        uint64_t audio_samples = upipe_sdi_dec->audio_debug.groups[0].audio_samples;
+        int offset = upipe_sdi_dec->audio_debug.groups[0].clock_offset;
 
-            /* Position of audio in video ticks. */
-            struct urational position = {
-                audio_samples * upipe_sdi_dec->audio_debug.clock_rate.num,
-                upipe_sdi_dec->audio_debug.clock_rate.den
-            };
-            /* Subtract video ticks. */
-            position.num -= upipe_sdi_dec->audio_debug.video_ticks * position.den;
-            /* SMPTE 299-2009 6.2.1.3
-             * If mpf is set then from the decoder POV the audio should be
-             * associated with the previous line. Meaning one line too many has
-             * been used above. */
-            if (mpf)
-                position.num += upipe_sdi_dec->f->width * position.den;
-            double pf = (double)position.num / (double)position.den;
+        /* Position of audio in video ticks. */
+        struct urational position = {
+            audio_samples * upipe_sdi_dec->audio_debug.clock_rate.num,
+            upipe_sdi_dec->audio_debug.clock_rate.den
+        };
+        /* Subtract video ticks. */
+        position.num -= upipe_sdi_dec->audio_debug.video_ticks * position.den;
+        /* SMPTE 299-2009 6.2.1.3
+         * If mpf is set then from the decoder POV the audio should be
+         * associated with the previous line. Meaning one line too many has
+         * been used above. */
+        if (mpf)
+            position.num += upipe_sdi_dec->f->width * position.den;
+        double pf = (double)position.num / (double)position.den;
 
-            upipe_verbose_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
-                    line_num, (unsigned)audio_samples, mpf, clock, pf, offset,
-                    clock - pf);
+#if 0
+        upipe_verbose_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
+                line_num, (unsigned)audio_samples, mpf, clock, pf, offset,
+                clock - pf);
+#endif
 
-            /* Position is "clock", position should be "position+offset". */
-            int64_t err = clock * (int64_t)position.den - (position.num + offset * (int64_t)position.den);
-            if (labs(err) > 2*position.den)
-                upipe_err_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but predicted at %.1f",
-                        line_num, audio_samples, mpf, clock, pf + offset);
+        /* Position is "clock", position should be "position+offset". */
+        int64_t err = clock * (int64_t)position.den - (position.num + offset * (int64_t)position.den);
+        if (labs(err) > 2*position.den)
+            upipe_err_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but predicted at %.1f",
+                    line_num, audio_samples, mpf, clock, pf + offset);
 
-            if (clock >= upipe_sdi_dec->f->width)
-                upipe_warn_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but greater than line width %d",
-                        line_num, audio_samples, mpf, clock, upipe_sdi_dec->f->width);
+        if (clock >= upipe_sdi_dec->f->width)
+            upipe_warn_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but greater than line width %d",
+                    line_num, audio_samples, mpf, clock, upipe_sdi_dec->f->width);
 
-            if (audio_samples == 0)
-                upipe_sdi_dec->audio_debug.groups[0].clock_offset = clock;
+        if (audio_samples == 0)
+            upipe_sdi_dec->audio_debug.groups[0].clock_offset = clock;
 
-            upipe_sdi_dec->audio_debug.groups[0].audio_samples += 1;
-        }
+        upipe_sdi_dec->audio_debug.groups[0].audio_samples += 1;
     }
 
     if (ctx->buf_audio)
