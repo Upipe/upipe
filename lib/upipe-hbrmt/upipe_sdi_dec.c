@@ -53,7 +53,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
-#include <math.h>
 
 #include <bitstream/smpte/291.h>
 #include <bitstream/smpte/337.h>
