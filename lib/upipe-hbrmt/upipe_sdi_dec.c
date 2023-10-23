@@ -111,6 +111,20 @@ struct audio_ctx {
     int aes[8];
 };
 
+/* Audio position debugging */
+struct audio_debug {
+    /* Audio to video tick rate */
+    struct urational clock_rate;
+    /* Video ticks */
+    uint64_t video_ticks;
+    struct {
+        /* Audio ticks */
+        uint64_t audio_samples;
+        /* Recorded offset, clock value of first sample */
+        int clock_offset;
+    } groups[UPIPE_SDI_MAX_GROUPS];
+};
+
 /** upipe_sdi_dec structure with sdi_dec parameters */
 struct upipe_sdi_dec {
     /** refcount management structure */
@@ -177,6 +191,8 @@ struct upipe_sdi_dec {
     /* Enable CPU-intensive debugging (CRC) */
     int debug;
 
+    struct audio_debug audio_debug;
+
     /* check DBN sequence for each Type 1 packet */
     uint8_t dbn[0x80];
 
@@ -184,10 +200,6 @@ struct upipe_sdi_dec {
     int aes_detected[8];
 
     int32_t aes_preamble[8][4];
-
-    int64_t eav_clock;
-    /* Per audio group number of samples written */
-    uint64_t audio_samples[UPIPE_SDI_CHANNELS_PER_GROUP];
 
     /** Average errors when getting incomplete audio frames.
      * they might come from a converter using a corrupted SDI source e.g. when switching */
@@ -509,7 +521,6 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
                             struct audio_ctx *ctx)
 {
     struct upipe_sdi_dec *upipe_sdi_dec = upipe_sdi_dec_from_upipe(upipe);
-    const struct sdi_offsets_fmt *f = upipe_sdi_dec->f;
     const struct sdi_picture_fmt *p = upipe_sdi_dec->p;
     uint16_t switching_line_offset = p->field_offset - 1;
 
@@ -576,27 +587,44 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
         clock |= (packet[14] & 0x20) << 7;
         bool mpf = packet[14] & 0x10;
 
-        /* FIXME */
-        if ((line_num >= 9 && line_num <= 9 + 5) || (line_num >= 571 && line_num <= 571 + 5)) {
-        } else
-            mpf = false;
+        uint64_t audio_samples = upipe_sdi_dec->audio_debug.groups[0].audio_samples;
+        int offset = upipe_sdi_dec->audio_debug.groups[0].clock_offset;
 
-        uint64_t audio_clock = upipe_sdi_dec->audio_samples[audio_group] *
-            f->width * f->height * upipe_sdi_dec->f->fps.num /
-            upipe_sdi_dec->f->fps.den / 48000;
+        /* Position of audio in video ticks. */
+        struct urational position = {
+            audio_samples * upipe_sdi_dec->audio_debug.clock_rate.num,
+            upipe_sdi_dec->audio_debug.clock_rate.den
+        };
+        /* Subtract video ticks. */
+        position.num -= upipe_sdi_dec->audio_debug.video_ticks * position.den;
+        /* SMPTE 299-2009 6.2.1.3
+         * If mpf is set then from the decoder POV the audio should be
+         * associated with the previous line. Meaning one line too many has
+         * been used above. */
+        if (mpf)
+            position.num += upipe_sdi_dec->f->width * position.den;
+        double pf = (double)position.num / (double)position.den;
 
-        if (unlikely(upipe_sdi_dec->eav_clock == 0))
-            upipe_sdi_dec->eav_clock -= clock; // initial phase offset
+#if 0
+        upipe_verbose_va(upipe, "line: %d, sample: %u, mpf: %d, clk: %d, calc clk: %.1f, rec offset: %d, meas offset: %.1f",
+                line_num, (unsigned)audio_samples, mpf, clock, pf, offset,
+                clock - pf);
+#endif
 
-        int64_t offset = audio_clock -
-            (upipe_sdi_dec->eav_clock - (mpf ? f->width : 0));
+        /* Position is "clock", position should be "position+offset". */
+        int64_t err = clock * (int64_t)position.den - (position.num + offset * (int64_t)position.den);
+        if (labs(err) > 2*position.den)
+            upipe_err_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but predicted at %.1f",
+                    line_num, audio_samples, mpf, clock, pf + offset);
 
-        if (offset + 1 < clock || offset - 1 > clock) {
-            upipe_sdi_dec->eav_clock -= clock - offset;
-            if (0) upipe_notice_va(upipe,
-                    "audio group %d on line %d: wrong audio phase (mpf %d) CLK %d != %" PRId64 " => %"PRId64"",
-                    audio_group, line_num, mpf, clock, offset, offset - clock);
-        }
+        if (clock >= upipe_sdi_dec->f->width)
+            upipe_warn_va(upipe, "line: %d, sample: %"PRIu64", mpf: %d, audio sample found at %d but greater than line width %d",
+                    line_num, audio_samples, mpf, clock, upipe_sdi_dec->f->width);
+
+        if (audio_samples == 0)
+            upipe_sdi_dec->audio_debug.groups[0].clock_offset = clock;
+
+        upipe_sdi_dec->audio_debug.groups[0].audio_samples += 1;
     }
 
     if (ctx->buf_audio)
@@ -618,7 +646,6 @@ static void extract_hd_audio(struct upipe *upipe, const uint16_t *packet, int li
             }
         }
 
-    upipe_sdi_dec->audio_samples[audio_group]++;
     ctx->group_offset[audio_group]++;
 }
 
@@ -705,7 +732,6 @@ static void extract_sd_audio(struct upipe *upipe, const uint16_t *packet,
                                        audio_group * UPIPE_SDI_CHANNELS_PER_GROUP];
         extract_sd_audio_group(upipe, dst, &src[3*i]);
 
-        upipe_sdi_dec->audio_samples[audio_group]++;
         ctx->group_offset[audio_group]++;
     }
 }
@@ -969,6 +995,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
         upipe_sdi_dec->sdi3g_levelb_second_frame = false;
         upipe_sdi_dec->audio_fix = 0;
         clear_audio_ctx(&upipe_sdi_dec->audio_ctx);
+        upipe_sdi_dec->audio_debug.video_ticks = 0;
+        memset(&upipe_sdi_dec->audio_debug.groups, 0, sizeof upipe_sdi_dec->audio_debug.groups);
     }
 
     /* Find start of frame and discard data before it. */
@@ -1291,6 +1319,8 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             }
         }
 
+        upipe_sdi_dec->audio_debug.video_ticks += upipe_sdi_dec->f->width;
+
         bool active = 0, f2 = 0, special_case = 0;
         /* ACTIVE F1 */
         if (line_num >= p->active_f1.start && line_num <= p->active_f1.end)
@@ -1449,7 +1479,6 @@ static bool upipe_sdi_dec_handle(struct upipe *upipe, struct uref *uref,
             fields[f2][2] += output_stride[2];
             active_lines += 1;
         }
-        upipe_sdi_dec->eav_clock += f->width;
 
         whole_input_size   -= 4 * f->width;
         input_size         -= 4 * f->width;
@@ -1764,6 +1793,15 @@ static int upipe_sdi_dec_set_flow_def(struct upipe *upipe, struct uref *flow_def
 
     upipe_input(upipe, flow_def_dup, NULL);
 
+    /* Update the audio to video tick rate and clear other fields. */
+    upipe_sdi_dec->audio_debug = (struct audio_debug) {
+        .clock_rate = {
+            upipe_sdi_dec->f->width * upipe_sdi_dec->f->height * upipe_sdi_dec->f->fps.num,
+            48000 * upipe_sdi_dec->f->fps.den
+        }
+    };
+    urational_simplify(&upipe_sdi_dec->audio_debug.clock_rate);
+
     return UBASE_ERR_NONE;
 }
 
@@ -1928,12 +1966,11 @@ static struct upipe *_upipe_sdi_dec_alloc(struct upipe_mgr *mgr,
     sdi_crc_setup(upipe_sdi_dec->crc_lut);
 
     upipe_sdi_dec->debug = 0;
-    for (int i = 0; i < UPIPE_SDI_CHANNELS_PER_GROUP; i++)
-        upipe_sdi_dec->audio_samples[i] = 0;
     for (int i = 0; i < 8; i++)
         upipe_sdi_dec->aes_detected[i] = -1;
-    upipe_sdi_dec->eav_clock = 0;
     upipe_sdi_dec->frame_num = 0;
+
+    memset(&upipe_sdi_dec->audio_debug, 0, sizeof upipe_sdi_dec->audio_debug);
 
     for (int i = 0; i < 8; i++)
         for (int j = 0; j < UPIPE_SDI_CHANNELS_PER_GROUP; j++)
