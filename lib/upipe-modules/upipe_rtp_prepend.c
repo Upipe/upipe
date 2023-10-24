@@ -84,7 +84,7 @@ struct upipe_rtp_prepend {
     uint16_t seqnum;
     /** timestamp clockrate */
     uint32_t clockrate;
-    /** timestamp is overwrited by user */
+    /** timestamp is overwritten by user */
     bool clockrate_overwrite;
     /** rtp type */
     uint8_t type;

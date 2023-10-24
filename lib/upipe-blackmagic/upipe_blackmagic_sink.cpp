@@ -328,7 +328,7 @@ struct upipe_bmd_sink {
     /** last frame output */
     upipe_bmd_sink_frame *video_frame;
 
-    /** current timing adjustement */
+    /** current timing adjustment */
     int64_t timing_adjustment;
 
     /** is output acquired */
@@ -923,7 +923,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
     vid_pts += upipe_bmd_sink->pic_subpipe.latency;
 
 #ifdef UPIPE_HAVE_LIBZVBI_H
-    /* interate through input subpipes */
+    /* iterate through input subpipes */
     pthread_mutex_lock(&upipe_bmd_sink->lock);
     struct uchain *uchain = NULL;
     ulist_foreach(&upipe_bmd_sink->inputs, uchain) {
