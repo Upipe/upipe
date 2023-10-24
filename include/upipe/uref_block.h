@@ -267,7 +267,7 @@ static inline int uref_block_iovec_unmap(struct uref *uref,
 }
 
 /** @This allocates a new ubuf of size new_size, and copies part of the old
- * (possibly segemented) ubuf to the new one, switches the ubufs and frees
+ * (possibly segmented) ubuf to the new one, switches the ubufs and frees
  * the old one.
  *
  * @param uref pointer to uref structure

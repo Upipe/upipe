@@ -1909,7 +1909,7 @@ static int upipe_ts_mux_program_probe(struct uprobe *uprobe,
 /** @internal @This returns the next input of the provided program.
  *
  * @param program program to retrieve the next input from
- * @param input the previous input ot NULL
+ * @param input the previous input or NULL
  * @return the next input or NULL
  */
 static struct upipe_ts_mux_input *
@@ -2767,7 +2767,7 @@ static int upipe_ts_mux_probe(struct uprobe *uprobe, struct upipe *inner,
 /** @internal @This returns the next program of the provided mux.
  *
  * @param mux mux to retrieve the next program from
- * @oaram program the previous program or NULL
+ * @param program the previous program or NULL
  * @return the next program in the mux or NULL
  */
 static struct upipe_ts_mux_program *

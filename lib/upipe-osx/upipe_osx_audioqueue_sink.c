@@ -488,7 +488,7 @@ static int upipe_osx_audioqueue_sink_check(struct upipe *upipe)
     }
     upump_start(listener);
 
-    /* creeate queue watcher */
+    /* create queue watcher */
     struct upump *watcher =
         uqueue_upump_alloc_pop(&upipe_osx_audioqueue_sink->uqueue,
                                upipe_osx_audioqueue_sink->upump_mgr,

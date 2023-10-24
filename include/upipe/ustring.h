@@ -678,7 +678,7 @@ static inline struct ustring_digit ustring_to_digit(const struct ustring str)
 struct ustring_hexdigit {
     /** matching part of the string */
     struct ustring str;
-    /** hexdecimal value */
+    /** hexadecimal value */
     uint8_t value;
 };
 

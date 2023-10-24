@@ -340,9 +340,9 @@
 
       @item Clock reference (cr) @item block data @item Represents the date of reception (resp. emission) of a low-level packet. It does not necessarily have a relationship with actual video or audio data. When dealing with live processing, clock references should be set on all packets entering a demux, and on all packets leaving a mux.
 
-      @item Decoding timestamp (dts) @item encoded frame @item Represents the theorical date of decoding of an encoded audio or video frame. It must be set on all frames leaving a demux, and all frames entering a mux.
+      @item Decoding timestamp (dts) @item encoded frame @item Represents the theoretical date of decoding of an encoded audio or video frame. It must be set on all frames leaving a demux, and all frames entering a mux.
 
-      @item Presentation timestamp (pts) @item raw frame @item Represents the theorical date of presentation of an audio or video frame. It must be set on all frames leaving a decoder, and all frames entering an encoder.
+      @item Presentation timestamp (pts) @item raw frame @item Represents the theoretical date of presentation of an audio or video frame. It must be set on all frames leaving a decoder, and all frames entering an encoder.
     @end table
 
     A @ref uref contains only one date type for each date variation. The date type should be cr for block data (input of demux and output of mux), dts for encoded frames (output of demux and input of mux), and pts for raw frames (output of decoder and input of encoder). This is called the "base". Dates are set using @ref uref_clock_set_cr_prog, @ref uref_clock_set_dts_prog, @ref uref_clock_set_pts_prog, etc. Note that each call to uref_clock_set_XXX_prog will overwrite previous values for prog and rebase the prog date. It is possible to set the delay between the dts and pts using @ref uref_clock_set_dts_pts_delay, and between the cr and dts using @ref uref_clock_set_cr_dts_delay (typically the vbv delay). This makes it possible for a demux to set both dts and pts when it is available. @ref uref_clock_rebase_dts_prog may be used by the decoder to rebase the prog date using dts. @ref uref_clock_rebase_cr_sys would typically be used in a mux.

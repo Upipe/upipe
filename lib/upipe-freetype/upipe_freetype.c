@@ -774,7 +774,7 @@ static void upipe_freetype_input(struct upipe *upipe, struct uref *uref,
  * @param r red component
  * @param g green component
  * @param b blue component
- * @param a alpha componenet
+ * @param a alpha component
  * @return an error code
  */
 static int _upipe_freetype_set_background_color(struct upipe *upipe,
@@ -795,7 +795,7 @@ static int _upipe_freetype_set_background_color(struct upipe *upipe,
  * @param r red component
  * @param g green component
  * @param b blue component
- * @param a alpha componenet
+ * @param a alpha component
  * @return an error code
  */
 static int _upipe_freetype_set_foreground_color(struct upipe *upipe,

@@ -618,7 +618,7 @@ static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
     for (size_t i = 0; i < UBASE_ARRAY_SIZE(alpha_plane_names); i++) {
         apn = alpha_plane_names[i];
 
-        /* Check for the existance of the given alpha plane. */
+        /* Check for the existence of the given alpha plane. */
         ret = ubuf_pic_plane_read(src, apn, 0, 0, -1, -1, &alpha_plane);
         /* Continue to the next if it isn't found. */
         if (!ubase_check(ret))
