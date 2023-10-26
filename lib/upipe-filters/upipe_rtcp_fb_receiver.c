@@ -414,7 +414,7 @@ static void upipe_rtcpfb_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn(upipe, "Couldn't read cr_sys");
 
-        if (now - cr_sys < upipe_rtcpfb->latency * UCLOCK_FREQ / 1000)
+        if (now - cr_sys < upipe_rtcpfb->latency)
             return;
 
         upipe_verbose_va(upipe, "Delete seq %" PRIu64 " after %"PRIu64" clocks",
@@ -550,7 +550,7 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb->expected_seqnum = -1;
     upipe_rtcpfb->retrans = 0;
     upipe_rtcpfb->last_seq = UINT_MAX;
-    upipe_rtcpfb->latency = 1000; /* 1 sec */
+    upipe_rtcpfb->latency = UCLOCK_FREQ; /* 1 sec */
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -644,9 +644,8 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
                 return UBASE_ERR_INVALID;
 
             struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
-            upipe_rtcpfb->latency = atoi(v);
-            upipe_dbg_va(upipe, "Set latency to %"PRIu64" msecs",
-                    upipe_rtcpfb->latency);
+            upipe_rtcpfb->latency = atoi(v) * UCLOCK_FREQ / 1000;
+            upipe_dbg_va(upipe, "Set latency to %s msecs", v);
             return UBASE_ERR_NONE;
         }
         case UPIPE_RTCPFB_GET_STATS: {
