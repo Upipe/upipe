@@ -329,7 +329,7 @@ static void upipe_srt_sender_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn(upipe, "Couldn't read cr_sys");
 
-        if (now - cr_sys < upipe_srt_sender->latency * UCLOCK_FREQ / 1000)
+        if (now - cr_sys < upipe_srt_sender->latency)
             return;
 
         upipe_verbose_va(upipe, "Delete seq %" PRIu64 " after %"PRIu64" clocks",
@@ -502,7 +502,7 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender_init_ubuf_mgr(upipe);
     upipe_srt_sender_init_uref_mgr(upipe);
     ulist_init(&upipe_srt_sender->queue);
-    upipe_srt_sender->latency = 1000; /* 1 sec */
+    upipe_srt_sender->latency = UCLOCK_FREQ; /* 1 sec */
     upipe_srt_sender->socket_id = 0;
     upipe_srt_sender->seqnum = 0;
     upipe_srt_sender->syn_cookie = 1;
