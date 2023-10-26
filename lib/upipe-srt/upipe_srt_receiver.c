@@ -879,11 +879,11 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
                 upipe_err(upipe, "Latency already set");
                 return UBASE_ERR_UNHANDLED;
             }
-            unsigned latency = atoi(v);
-            upipe_srt_receiver->latency = latency * UCLOCK_FREQ / 1000;
-            upipe_dbg_va(upipe, "Set latency to %u msecs", latency);
+            unsigned latency_ms = atoi(v);
+            upipe_srt_receiver->latency = latency_ms * UCLOCK_FREQ / 1000;
+            upipe_dbg_va(upipe, "Set latency to %u msecs", latency_ms);
 
-            upipe_srt_receiver->n_acks = (latency + 9) / 10;
+            upipe_srt_receiver->n_acks = (latency_ms + 9) / 10;
             upipe_srt_receiver->acks = malloc(sizeof(*upipe_srt_receiver->acks) * upipe_srt_receiver->n_acks);
             if (!upipe_srt_receiver->acks)
                 return UBASE_ERR_ALLOC;
