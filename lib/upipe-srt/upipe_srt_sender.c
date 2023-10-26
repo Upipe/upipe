@@ -381,9 +381,9 @@ static int upipe_srt_sender_check(struct upipe *upipe, struct uref *flow_format)
             upump_alloc_timer(upipe_srt_sender->upump_mgr,
                               upipe_srt_sender_timer, upipe, upipe->refcount,
                               UCLOCK_FREQ, UCLOCK_FREQ);
+        upipe_srt_sender_set_upump_timer(upipe, upump);
         upump_start(upump);
 
-        upipe_srt_sender_set_upump_timer(upipe, upump);
     }
 
     return UBASE_ERR_NONE;
