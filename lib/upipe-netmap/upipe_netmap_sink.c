@@ -2043,7 +2043,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
                 upipe_netmap_sink->gap_fakes_current--;
             } else {
-                setup_gap_fakes(upipe_netmap_sink, progressive);
+                if (!upipe_netmap_sink->gap_fakes_current)
+                    setup_gap_fakes(upipe_netmap_sink, progressive);
 
                 if (worker_rfc4175(upipe_netmap_sink, dst, len, ptr)) {
                     for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
