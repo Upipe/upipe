@@ -2025,8 +2025,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         if (rfc4175) {
             /* At the beginning of a frame or field fill the "gap" with empty packets */
-            if ((upipe_netmap_sink->line == 0 ||
-                (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2)) && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
+            const bool first_field_or_frame = (upipe_netmap_sink->line == 0 || (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2));
+            if (first_field_or_frame && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
 
                 for (size_t i = 0; i < 2; i++) {
                     struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
