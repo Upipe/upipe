@@ -332,6 +332,8 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     upipe_h264f->last_frame_num = -1;
     upipe_h264f->max_dec_frame_buffering = UINT32_MAX;
     upipe_h264f->pic_struct = -1;
+    upipe_h264f->bf = false;
+    upipe_h264f->idr_pic_id = -1;
     upipe_h264f->dpb_output_delay = UINT64_MAX;
     upipe_h264f->duration = 0;
     upipe_h264f->got_discontinuity = false;
