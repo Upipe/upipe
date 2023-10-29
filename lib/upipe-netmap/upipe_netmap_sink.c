@@ -115,6 +115,11 @@ struct upipe_netmap_intf {
     in_addr_t dst_ip;
     uint8_t dst_mac[6];
 
+    /** Ancillary Source */
+    uint16_t ancillary_dst_port;
+    in_addr_t ancillary_dst_ip;
+    uint8_t ancillary_dst_mac[6];
+
     int vlan_id;
 
     /** Ring */
@@ -130,10 +135,10 @@ struct upipe_netmap_intf {
     struct ifreq ifr;
 
     /** packet headers */
-    // TODO: rfc
     uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t ancillary_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
     uint8_t fake_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    int header_len;
+    int header_len; /* Same for all types of header */
 
     /** if interface is up */
     bool up;
@@ -229,7 +234,10 @@ struct upipe_netmap_sink {
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
     uint8_t audio_rtp_header[RTP_HEADER_SIZE];
-    uint8_t rtp_pt_video, rtp_pt_audio;
+    uint8_t ancillary_rtp_header[RTP_HEADER_SIZE];
+    uint8_t rtp_pt_video;
+    uint8_t rtp_pt_audio;
+    uint8_t rtp_pt_ancillary;
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
@@ -820,8 +828,10 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     memset(upipe_netmap_sink->rtp_header, 0, sizeof upipe_netmap_sink->rtp_header);
     memset(upipe_netmap_sink->audio_rtp_header, 0, sizeof upipe_netmap_sink->audio_rtp_header);
+    memset(upipe_netmap_sink->ancillary_rtp_header, 0, sizeof upipe_netmap_sink->ancillary_rtp_header);
     upipe_netmap_sink->rtp_pt_video = 96;
     upipe_netmap_sink->rtp_pt_audio = 97;
+    upipe_netmap_sink->rtp_pt_ancillary = 98;
 
     /*
      * Audio subpipe.
@@ -3341,6 +3351,97 @@ make_header:
     aes67_flow[1].populated = true;
     audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
     audio_subpipe->need_reconfig = true;
+    return ret;
+}
+
+static int ancillary_set_flow_destination(struct upipe * upipe, const char *path_1, const char *path_2)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_intf *intf = upipe_netmap_sink->intf;
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+
+    int ret = UBASE_ERR_NONE;
+
+    for (int i = 0; i < 2; i++) {
+        const uint8_t *src_mac, *dst_mac;
+        uint32_t src_ip, dst_ip;
+
+        src_mac = intf[i].src_mac;
+        src_ip = intf[i].src_ip;
+
+        char *path = strdup((i==0) ? path_1 : path_2);
+        if (!path) {
+            ret = UBASE_ERR_ALLOC;
+            dst_mac = src_mac;
+            dst_ip = intf[i].ancillary_dst_ip = src_ip;
+            goto make_header;
+        }
+
+        /* Parse the path. */
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                                          (struct sockaddr_storage *)&sin)) {
+            free(path);
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = intf[i].ancillary_dst_ip = src_ip;
+            intf[i].ancillary_dst_port = ntohs(sin.sin_port);
+            goto make_header;
+        }
+        free(path);
+
+        /* A zero-length IP address (path string starting with a colon) will
+         * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
+         * port number. */
+        if (sin.sin_addr.s_addr == 0) {
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            goto make_header;
+        }
+
+        /* Set MAC address. */
+        dst_ip = ntohl(sin.sin_addr.s_addr);
+
+        /* If a multicast IP address, fill a multicast MAC address. */
+        if (IN_MULTICAST(dst_ip)) {
+            intf[i].ancillary_dst_mac[0] = 0x01;
+            intf[i].ancillary_dst_mac[1] = 0x00;
+            intf[i].ancillary_dst_mac[2] = 0x5e;
+            intf[i].ancillary_dst_mac[3] = (dst_ip >> 16) & 0x7f;
+            intf[i].ancillary_dst_mac[4] = (dst_ip >>  8) & 0xff;
+            intf[i].ancillary_dst_mac[5] = (dst_ip      ) & 0xff;
+        }
+
+        /* Otherwise query ARP for the destination address. */
+        else {
+            /* TODO */
+        }
+
+        intf[i].ancillary_dst_ip = sin.sin_addr.s_addr;
+        intf[i].ancillary_dst_port = ntohs(sin.sin_port);
+        dst_mac = intf[i].ancillary_dst_mac;
+
+make_header:
+
+        /* Write ethernet header. */
+        ethernet_set_dstaddr(intf[i].ancillary_header, dst_mac);
+        ethernet_set_srcaddr(intf[i].ancillary_header, src_mac);
+        if (intf[i].vlan_id < 0) {
+            ethernet_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_IP);
+        }
+        /* VLANs */
+        else {
+            ethernet_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_VLAN);
+            ethernet_vlan_set_priority(intf[i].ancillary_header, 0);
+            ethernet_vlan_set_cfi(intf[i].ancillary_header, 0);
+            ethernet_vlan_set_id(intf[i].ancillary_header, intf[i].vlan_id);
+            ethernet_vlan_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_IP);
+        }
+
+        /* Ancillary packets are variable size so we can't populate IP/UDP headers*/
+    }
+
     return ret;
 }
 
