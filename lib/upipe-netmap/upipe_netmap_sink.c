@@ -98,6 +98,8 @@
 #define VENDOR_ID_MELLANOX 0x15b3
 #define DEVICE_ID_CONNECTX6DX 0x101d
 
+#define HEADER_ETH_IP_UDP_LEN (ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
+
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
@@ -135,9 +137,9 @@ struct upipe_netmap_intf {
     struct ifreq ifr;
 
     /** packet headers */
-    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    uint8_t ancillary_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    uint8_t fake_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[HEADER_ETH_IP_UDP_LEN];
+    uint8_t ancillary_header[HEADER_ETH_IP_UDP_LEN];
+    uint8_t fake_header[HEADER_ETH_IP_UDP_LEN];
     int header_len; /* Same for all types of header */
 
     /** if interface is up */
@@ -163,7 +165,7 @@ struct aes67_flow {
     /* Ethernet details for the destination. */
     struct sockaddr_ll sll;
     /* Raw Ethernet, IP, and UDP headers. */
-    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[HEADER_ETH_IP_UDP_LEN];
     int header_len;
     /* Flow has been populated and packets should be sent. */
     bool populated;
