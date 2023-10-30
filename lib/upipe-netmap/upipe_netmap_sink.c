@@ -2287,8 +2287,6 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 /* XXX
  * circular variable store
  * https://app.asana.com/0/1141488647259340/1201642161098561
- * 2110 (rf4175) packet size decisions
- * https://app.asana.com/0/1141488647259340/1201586998881877
  */
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
@@ -2300,23 +2298,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             upipe_netmap_sink->payload = payload;
 
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
+            uint64_t actual_packets_per_frame = upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes;
 
-            uint64_t packets = upipe_netmap_sink->packets_per_frame;
-            bool progressive = upipe_netmap_sink->progressive;
-            if (!progressive && upipe_netmap_sink->hsize == 720) {
-                if (upipe_netmap_sink->vsize == 486) {
-                    packets *= 525;
-                    packets /= 487;
-                } else if (upipe_netmap_sink->vsize == 576) {
-                    packets *= 625;
-                    packets /= 576;
-                }
-            } else {
-                    packets *= 1125;
-                    packets /= 1080;
-            }
-
-            upipe_netmap_sink->rate = 8 * (packets * (network_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
+            upipe_netmap_sink->rate = 8 * (actual_packets_per_frame * (network_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
             const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
@@ -2329,7 +2313,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
              * between these two is calculated with the rational below.  Need to
              * account for the gap fakes too. */
             struct urational rational = {
-                (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes) * upipe_netmap_sink->fps.num,
+                (actual_packets_per_frame) * upipe_netmap_sink->fps.num,
                 (48000 / audio_subpipe->output_samples) * upipe_netmap_sink->fps.den
             };
             urational_simplify(&rational);
