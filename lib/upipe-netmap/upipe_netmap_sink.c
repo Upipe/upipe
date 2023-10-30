@@ -2942,6 +2942,9 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
     return UBASE_ERR_INVALID;
 }
 
+static int ancillary_set_destination(struct upipe * upipe,
+        const char *path_1, const char *path_2);
+
 /** @internal @This processes control commands on a netmap sink pipe.
  *
  * @param upipe description structure of the pipe
@@ -3009,12 +3012,11 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             return upipe_netmap_set_option(upipe, option, value);
         }
 
-        case UPIPE_NETMAP_SINK_ANCILLARY_SET_FLOW_DESTINATION: {
+        case UPIPE_NETMAP_SINK_ANCILLARY_SET_DESTINATION: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_SIGNATURE)
-            int flow = va_arg(args, int);
             const char *path_1 = va_arg(args, const char *);
             const char *path_2 = va_arg(args, const char *);
-            return ancillary_set_flow_destination(upipe, flow, path_1, path_2);
+            return ancillary_set_destination(upipe, path_1, path_2);
         }
 
         default:
@@ -3442,7 +3444,7 @@ make_header:
     return ret;
 }
 
-static int ancillary_set_flow_destination(struct upipe * upipe, const char *path_1, const char *path_2)
+static int ancillary_set_destination(struct upipe * upipe, const char *path_1, const char *path_2)
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     struct upipe_netmap_intf *intf = upipe_netmap_sink->intf;
