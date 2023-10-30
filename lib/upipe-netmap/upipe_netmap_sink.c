@@ -880,7 +880,7 @@ static void upipe_netmap_update_timestamp_cache(struct upipe_netmap_sink *upipe_
 }
 
 static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
-        uint8_t marker, uint8_t pt, bool update, bool f2)
+        uint8_t marker, uint8_t pt, uint64_t seqnum, bool update, bool f2)
 {
     uint64_t *buf64 = (uint64_t*)buf;
     uint32_t *ssrc = (uint32_t*)(buf+8);
@@ -904,11 +904,11 @@ static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_s
         }
 
 #if 0
-        rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
+        rtp_set_seqnum(buf, seqnum & UINT16_MAX);
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
 #endif
         *buf64 = bswap64((UINT64_C(0x80) << 56) | ((uint64_t)marker << 55) | ((uint64_t)pt << 48) |
-                         ((uint64_t)(upipe_netmap_sink->seqnum & UINT16_MAX) << 32) | (uint64_t)(timestamp & UINT32_MAX));
+                         ((uint64_t)(seqnum & UINT16_MAX) << 32) | (uint64_t)(timestamp & UINT32_MAX));
     }
     else {
         *buf64 = bswap64((UINT64_C(0x80) << 56) | ((uint64_t)marker << 55) | ((uint64_t)pt << 48));
@@ -1088,7 +1088,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const uint16_t data_len1 = upipe_netmap_sink->payload;
 
     upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-            marker, upipe_netmap_sink->rtp_pt_video, true, field);
+            marker, upipe_netmap_sink->rtp_pt_video, upipe_netmap_sink->seqnum, true, field);
     upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
                               field, upipe_netmap_sink->line, continuation, upipe_netmap_sink->pixel_offset);
 
@@ -2529,7 +2529,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
         upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-                false, 98, false, false);
+                false, 98, upipe_netmap_sink->seqnum, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
             /* RTP Headers done in worker_rfc4175 */
