@@ -34,7 +34,7 @@ enum upipe_netmap_sink_command {
  * @return an error code
  */
 static inline int upipe_netmap_sink_ancillary_set_destination(struct upipe *upipe,
-        int flow, const char *path_1, const char *path_2)
+                                                              const char *path_1, const char *path_2)
 {
     return upipe_control(upipe, UPIPE_NETMAP_SINK_ANCILLARY_SET_DESTINATION,
             UPIPE_NETMAP_SINK_SIGNATURE, flow, path_1, path_2);
