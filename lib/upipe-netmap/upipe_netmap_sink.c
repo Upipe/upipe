@@ -2939,6 +2939,19 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
         return UBASE_ERR_NONE;
     }
 
+    if (!strcmp(option, "rtp-pt-ancillary")) {
+        int type = atoi(value);
+        if (type < 0 || type > 127) {
+            upipe_err_va(upipe, "rtp-pt-ancillary value (%d) out of range 0..127", type);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_netmap_sink->rtp_pt_ancillary = type;
+        /* FIXME: remove this after cleaning up how headers are handled.  IP
+         * details have (had) a similar issue about not updating. */
+        rtp_set_type(upipe_netmap_sink->ancillary_rtp_header, type);
+        return UBASE_ERR_NONE;
+    }
+
     upipe_err_va(upipe, "Unknown option %s", option);
     return UBASE_ERR_INVALID;
 }
