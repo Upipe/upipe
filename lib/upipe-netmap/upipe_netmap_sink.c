@@ -1057,6 +1057,7 @@ static inline void setup_gap_fakes(struct upipe_netmap_sink *upipe_netmap_sink, 
     upipe_netmap_sink->gap_fakes_current = upipe_netmap_sink->gap_fakes;
     if (!progressive)
         upipe_netmap_sink->gap_fakes_current /= 2;
+    upipe_netmap_sink->write_ancillary = true;
 }
 
 /* returns 1 if uref exhausted */
