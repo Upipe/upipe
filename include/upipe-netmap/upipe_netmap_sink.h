@@ -19,7 +19,26 @@ enum upipe_netmap_sink_command {
 
     /** returns the audio subpipe (struct upipe **) */
     UPIPE_NETMAP_SINK_GET_AUDIO_SUB,
+
+    /* int, const char*, const char* */
+    UPIPE_NETMAP_SINK_ANCILLARY_SET_FLOW_DESTINATION
 };
+
+/** @This sets the destination details for the given flow.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow which flow this represents
+ * @param path_1 destination IP and port for the first path.
+ * @param path_2 destination IP and port for the second path. Can be NULL if
+ * second path is not used.
+ * @return an error code
+ */
+static inline int upipe_netmap_sink_ancillary_set_flow_destination(struct upipe *upipe,
+        int flow, const char *path_1, const char *path_2)
+{
+    return upipe_control(upipe, UPIPE_NETMAP_SINK_ANCILLARY_SET_FLOW_DESTINATION,
+            UPIPE_NETMAP_SINK_SIGNATURE, flow, path_1, path_2);
+}
 
 /** @This returns the audio subpipe. The refcount is not incremented so you
  * have to use it if you want to keep the pointer.

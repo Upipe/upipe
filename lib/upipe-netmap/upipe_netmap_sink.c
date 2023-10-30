@@ -62,6 +62,7 @@
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
 #include <bitstream/ietf/rfc4175.h>
+#include <bitstream/ietf/rfc8331.h>
 #include <bitstream/smpte/2022_6_hbrmt.h>
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
@@ -118,8 +119,8 @@ struct upipe_netmap_intf {
     uint8_t dst_mac[6];
 
     /** Ancillary Source */
-    uint16_t ancillary_dst_port;
     in_addr_t ancillary_dst_ip;
+    uint16_t ancillary_dst_port;
     uint8_t ancillary_dst_mac[6];
 
     int vlan_id;
@@ -243,6 +244,7 @@ struct upipe_netmap_sink {
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
+    bool write_ancillary;
     uint64_t phase_delay;
 
     /* Cached timestamps for RFC4175 */
@@ -254,6 +256,8 @@ struct upipe_netmap_sink {
 
     /** sequence number **/
     uint64_t seqnum;
+    /** ancillary sequence number **/
+    uint64_t ancillary_seqnum;
     /* Number of frames since 1970. */
     uint64_t frame_count;
 
@@ -682,6 +686,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->preroll = true;
     upipe_netmap_sink->packed_bytes = 0;
     upipe_netmap_sink->seqnum = 0;
+    upipe_netmap_sink->ancillary_seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
     upipe_netmap_sink->phase_delay = 0;
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
@@ -750,6 +755,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 0;
     upipe_netmap_sink->gap_fakes_current = 0;
+    upipe_netmap_sink->write_ancillary = false;
     upipe_netmap_sink->tx_rate_factor = 1;
 
     upipe_netmap_sink->uri = NULL;
@@ -1304,6 +1310,72 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     }
 
     return pixels * 4;
+}
+
+static void write_ancillary(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **dst, uint16_t **len, uint64_t **ptr)
+{
+    const bool progressive = upipe_netmap_sink->progressive;
+    const bool copy = dst[1] != NULL && dst[0] != NULL;
+    const int idx = (dst[0] != NULL) ? 0 : 1;
+    const bool field = progressive ? 0 : upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
+    const bool marker = 1;
+
+    const uint16_t header_size = upipe_netmap_sink->intf[0].header_len;
+    const uint16_t payload_size = RTP_HEADER_SIZE + RFC_8331_HEADER_LEN;
+    const uint16_t eth_frame_len = header_size + payload_size;
+
+    uint8_t rfc_8331_header[RFC_8331_HEADER_LEN];
+
+    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->ancillary_rtp_header,
+        marker, upipe_netmap_sink->rtp_pt_ancillary, upipe_netmap_sink->ancillary_seqnum, true, field);
+  
+    /* RFC 8331 Headers */
+    const uint8_t f = progressive ? RFC_8331_F_PROGRESSIVE : field ? RFC_8331_F_FIELD_2 : RFC_8331_F_FIELD_1;
+    rfc8331_set_extended_sequence_number(rfc_8331_header, (uint16_t)((upipe_netmap_sink->ancillary_seqnum >> 16) & UINT16_MAX));
+    rfc8331_set_length(rfc_8331_header, 0);
+    rfc8331_set_anc_count(rfc_8331_header, 0);
+    rfc8331_set_f(rfc_8331_header, f);
+
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (unlikely(!intf->d || !intf->up))
+            continue;
+
+        uint8_t *buf = intf->ancillary_header;
+        buf = ethernet_payload(buf);
+
+        /* Write IP and UDP headers. src_port set to destination port */
+        upipe_udp_raw_fill_headers(buf, intf->src_ip, intf->ancillary_dst_ip,
+                intf->ancillary_dst_port /* actually src_port */, intf->ancillary_dst_port,
+                10 /* TTL */, 0 /* TOS */,
+                payload_size);
+
+        /* Ethernet/IP Header */
+        memcpy(dst[i], intf->ancillary_header, header_size);
+        dst[i] += header_size;
+
+        /* RTP HEADER */
+        memcpy(dst[i], upipe_netmap_sink->ancillary_rtp_header, RTP_HEADER_SIZE);
+        dst[i] += RTP_HEADER_SIZE;
+
+        /* RFC 8331 Header */
+        memcpy(dst[i], rfc_8331_header, RFC_8331_HEADER_LEN);
+        dst[i] += RFC_8331_HEADER_LEN;
+    }
+
+    upipe_netmap_sink->ancillary_seqnum++;
+    upipe_netmap_sink->ancillary_seqnum &= UINT32_MAX;
+
+    upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
+
+    /* write packet size */
+    if (likely(copy)) {
+        *len[0] = *len[1] = eth_frame_len;
+        *ptr[0] = *ptr[1] = 0;
+    } else if (len[idx]) {
+        *len[idx] = eth_frame_len;
+        *ptr[idx] = 0;
+    }
 }
 
 static float pts_to_time(uint64_t pts)
@@ -2039,20 +2111,26 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             /* At the beginning of a frame or field fill the "gap" with empty packets */
             const bool first_field_or_frame = (upipe_netmap_sink->line == 0 || (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2));
             if (first_field_or_frame && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
-
-                for (size_t i = 0; i < 2; i++) {
-                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                    if (unlikely(!intf->d || !intf->up))
-                        continue;
-                    /* Do not use make_fake_packet() here because
-                     * advance_ring_state() is called above at the start of the
-                     * video handling section. */
-                    memset(dst[i], 0, pkt_len);
-                    memcpy(dst[i], intf->fake_header, intf->header_len);
-                    *len[i] = pkt_len;
-                    *ptr[i] = 0;
+                if (upipe_netmap_sink->write_ancillary) {
+                    write_ancillary(upipe_netmap_sink, dst, len, ptr);
+                    upipe_netmap_sink->write_ancillary = false;
+                    /* upipe_netmap_sink->bits incremented in write_ancillary() as packet sizes are variable */
                 }
-                upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
+                else {
+                    for (size_t i = 0; i < 2; i++) {
+                        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                        if (unlikely(!intf->d || !intf->up))
+                            continue;
+                        /* Do not use make_fake_packet() here because
+                        * advance_ring_state() is called above at the start of the
+                        * video handling section. */
+                        memset(dst[i], 0, pkt_len);
+                        memcpy(dst[i], intf->fake_header, intf->header_len);
+                        *len[i] = pkt_len;
+                        *ptr[i] = 0;
+                    }
+                    upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
+                }
                 upipe_netmap_sink->gap_fakes_current--;
             } else {
                 if (!upipe_netmap_sink->gap_fakes_current)
@@ -2929,6 +3007,14 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             const char *option = va_arg(args, const char *);
             const char *value  = va_arg(args, const char *);
             return upipe_netmap_set_option(upipe, option, value);
+        }
+
+        case UPIPE_NETMAP_SINK_ANCILLARY_SET_FLOW_DESTINATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_SIGNATURE)
+            int flow = va_arg(args, int);
+            const char *path_1 = va_arg(args, const char *);
+            const char *path_2 = va_arg(args, const char *);
+            return ancillary_set_flow_destination(upipe, flow, path_1, path_2);
         }
 
         default:
