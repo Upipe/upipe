@@ -1096,7 +1096,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 uint8_t tmp[16];
                 sdi_encode_scte104_null(tmp);
                 sdi_write_scte104(tmp, sizeof(tmp), vanc_start, 2);
-                sdi_calc_parity_checksum(vanc_start);
+                sdi_calc_parity_checksum(vanc_start, 2);
                 upipe_sdi_enc->write_scte104_null = false;
             }
         }
