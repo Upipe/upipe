@@ -36,14 +36,14 @@ static const bool parity_tab[256] =
     P6(0), P6(1), P6(1), P6(0)
 };
 
-void sdi_calc_parity_checksum(uint16_t *buf)
+void sdi_calc_parity_checksum(uint16_t *buf, uint8_t gap)
 {
     uint16_t checksum = 0;
-    uint16_t dc = buf[2*DC_POS];
+    uint16_t dc = buf[gap*DC_POS];
 
     /* +3 = did + sdid + dc itself */
     for (uint16_t i = 0; i < dc+3; i++) {
-        uint16_t *b = &buf[2*(3+i)];
+        uint16_t *b = &buf[gap*(3+i)];
         uint8_t parity = parity_tab[*b & 0xff];
         *b |= (!parity << 9) | (parity << 8);
 
@@ -53,7 +53,7 @@ void sdi_calc_parity_checksum(uint16_t *buf)
     checksum &= 0x1ff;
     checksum |= (!(checksum >> 8)) << 9;
 
-    buf[2*(ANC_START_LEN+dc)] = checksum;
+    buf[gap*(ANC_START_LEN+dc)] = checksum;
 }
 
 /* Writes 8-bit black to buffer consisting of y line, then interleaved uv line */
@@ -255,7 +255,7 @@ void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t
 
     buf[2*DC_POS] = idx - ANC_START_LEN;
 
-    sdi_calc_parity_checksum(buf);
+    sdi_calc_parity_checksum(buf, 2);
 }
 
 void sdi_encode_scte104_null(uint8_t *buf)
