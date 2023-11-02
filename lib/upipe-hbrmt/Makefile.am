@@ -27,6 +27,7 @@ libupipe_hbrmt_la_SOURCES += \
     rfc4175_dec.h \
     rfc4175_enc.asm \
     rfc4175_enc.h \
+    sdi_crc.asm \
     sdidec.asm \
     sdienc.asm
 endif

@@ -15,6 +15,7 @@ checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     sdi_input.c \
     uyvy_input.c \
     v210_input.c \
+    sdi_crc.c \
     $(NULL)
 
 if HAVE_BITSTREAM
@@ -45,6 +46,7 @@ if HAVE_BITSTREAM
 checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
+    $(top_builddir)/lib/upipe-hbrmt/sdi_crc.o \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
     $(top_builddir)/lib/upipe-pciesdi/levelb.o \
