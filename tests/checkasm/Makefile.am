@@ -2,7 +2,11 @@ check_PROGRAMS = checkasm
 
 TESTS = checkasm
 
-checkasm_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/include -I$(top_builddir) -I$(top_builddir)/include $(AVUTIL_CFLAGS)
+checkasm_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/include \
+       -I$(top_builddir) -I$(top_builddir)/include \
+       $(AVUTIL_CFLAGS) \
+       $(BITSTREAM_CFLAGS)
+
 checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(top_builddir)/lib/upipe-v210/libupipe_v210_la-v210dec.o \
     $(top_builddir)/lib/upipe-v210/libupipe_v210_la-v210enc.o \
