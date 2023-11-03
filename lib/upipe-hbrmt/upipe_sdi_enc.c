@@ -32,6 +32,7 @@
 
 #include "sdienc.h"
 #include "sdi.h"
+#include "x86/cpu_feature_check.h"
 
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
@@ -1830,7 +1831,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx2;
         upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_avx2;
 
-        if (__builtin_cpu_supports("pclmul"))
+        if (has_pclmul_support())
             upipe_sdi_enc->compute_crc = assembly_wrap;
     }
 #endif
