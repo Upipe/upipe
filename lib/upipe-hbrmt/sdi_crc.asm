@@ -34,12 +34,12 @@ INIT_YMM avx2
 ; a, b, constant, tmp
 %macro REDUCE128 4
     pclmulqdq %4, %1, %3, 0x00
-    pclmulqdq %1, %3, 0x11
-    pxor %1, %2
-    pxor %1, %4
+    pclmulqdq     %1, %3, 0x11
+    pxor      %1, %2
+    pxor      %1, %4
 %endmacro
 
-%macro END_1 3 ; accumulator, temp, constant
+%macro END_1 3 ; acc, temp, const
     pclmulqdq %2, %1, %3, 0x00
     pclmulqdq %1, %1, %3, 0x11
     pxor      %1, %2
@@ -57,68 +57,65 @@ INIT_YMM avx2
     pxor      %1, %2
 %endmacro
 
-cglobal compute_sdi_crc, 4, 5, 16, crcc, crcy, src, len, offset
+cglobal compute_sdi_crc, 4, 5, 12, crcc, crcy, src, len, offset
     shl lenq, 2
     xor offsetd, offsetd
-    mova m15, [mult]
-    VBROADCASTI128 m14, [shuf_lo_even]
-    VBROADCASTI128 m13, [shuf_hi_even]
-    VBROADCASTI128 m12, [shuf_lo_odd]
-    VBROADCASTI128 m11, [shuf_hi_odd]
+    mova           m4, [mult]
+    VBROADCASTI128 m5, [shuf_lo_even]
+    VBROADCASTI128 m6, [shuf_hi_even]
+    VBROADCASTI128 m7, [shuf_lo_odd]
+    VBROADCASTI128 m8, [shuf_hi_odd]
 
-    mova xm10, [sdi_crc_k3_k4]
-    pxor xm9, xm9 ; crc "accumulator"
-    pxor xm8, xm8
+    mova xm9, [sdi_crc_k3_k4]
+    pxor xm10, xm10 ; crc "accumulator"
+    pxor xm11, xm11
 
     .loop:
-        VBROADCASTI128 m0, [srcq+offsetq]
+        VBROADCASTI128 m0, [srcq+offsetq]    ; broadcast into hi and lo dqwords
         VBROADCASTI128 m1, [srcq+offsetq+16]
         VBROADCASTI128 m2, [srcq+offsetq+32]
 
-        pmaddwd m0, m15 ; chroma | luma
-        pmaddwd m1, m15 ; chroma | luma
-        pmaddwd m2, m15 ; chroma | luma
+        pmaddwd m0, m4 ; chroma | luma
+        pmaddwd m1, m4 ; chroma | luma
+        pmaddwd m2, m4 ; chroma | luma
 
         packusdw m0, m1
         packusdw m2, m2
         palignr  m2, m2, m0, 12 ; prepend last 4 bytes of m0 onto m2
 
-        pshufb m3, m0, m14
-        pshufb m4, m0, m12
-        pshufb m5, m2, m13
-        pshufb m6, m2, m11
+        pshufb m3, m0, m5
+        pshufb     m0, m7
+        pshufb m1, m2, m6
+        pshufb     m2, m8
 
-        por m0, m3, m4
-        por m1, m5, m6
+        por m0, m3
+        por m1, m2
 
         palignr m0, m1, m0, 8 ; data is in center 120 bits
 
-        ; movu         [dstcq], xm0
-        ; vextracti128 [dstyq], ym0, 1
-
         vextracti128 xm1, ym0, 1
-        REDUCE128 xm9, xm0, xm10, xm2
-        REDUCE128 xm8, xm1, xm10, xm3
+        REDUCE128 xm10, xm0, xm9, xm2
+        REDUCE128 xm11, xm1, xm9, xm3
 
         add offsetq, 48
         cmp offsetq, lenq
     jl .loop
 
-    mova xm15, [sdi_crc_k5_k6]
-    mova xm14, [sdi_crc_mu]
-    mova xm13, [sdi_crc_p]
+    mova xm4, [sdi_crc_k5_k6]
+    mova xm5, [sdi_crc_mu]
+    mova xm6, [sdi_crc_p]
 
-    END_1 xm9, xm0, xm15
-    END_1 xm8, xm2, xm15
+    END_1 xm10, xm0, xm4
+    END_1 xm11, xm2, xm4
 
-    END_2 xm9, xm0, xm1, xm14
-    END_2 xm8, xm2, xm3, xm14
-    END_3 xm9, xm0, xm14
-    END_3 xm8, xm2, xm14
+    END_2 xm10, xm0, xm1, xm5
+    END_2 xm11, xm2, xm3, xm5
+    END_3 xm10, xm0, xm5
+    END_3 xm11, xm2, xm5
 
-    pclmulqdq  xm9, xm13, 0x00
-    pclmulqdq  xm8, xm13, 0x00
+    pclmulqdq  xm10, xm6, 0x00
+    pclmulqdq  xm11, xm6, 0x00
 
-    movd      [crccq], xm9
-    movd      [crcyq], xm8
+    movd      [crccq], xm10
+    movd      [crcyq], xm11
 RET
