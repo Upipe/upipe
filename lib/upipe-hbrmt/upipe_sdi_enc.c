@@ -1829,7 +1829,9 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
         upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx2;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx2;
         upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_avx2;
-        upipe_sdi_enc->compute_crc       = assembly_wrap;
+
+        if (__builtin_cpu_supports("pclmul"))
+            upipe_sdi_enc->compute_crc = assembly_wrap;
     }
 #endif
 #endif
