@@ -62,7 +62,7 @@
 #include <bitstream/ietf/rfc4175.h>
 #include <bitstream/ietf/rtp.h>
 
-#include "x86/avx512.h"
+#include "x86/cpu_feature_check.h"
 
 /** @hidden */
 static int upipe_netmap_source_check(struct upipe *upipe, struct uref *flow_format);

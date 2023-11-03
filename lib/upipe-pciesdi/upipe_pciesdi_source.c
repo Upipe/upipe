@@ -67,7 +67,7 @@
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "../upipe-hbrmt/sdidec.h"
 
-#include "x86/avx512.h"
+#include "x86/cpu_feature_check.h"
 
 enum upipe_pciesdi_src_err {
     /** No RX signal or signal is not locked. */

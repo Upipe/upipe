@@ -71,7 +71,7 @@
 #include "../upipe-hbrmt/sdienc.h"
 #include "../upipe-hbrmt/rfc4175_enc.h"
 #include "../upipe-modules/upipe_udp.h"
-#include "x86/avx512.h"
+#include "x86/cpu_feature_check.h"
 
 #include <math.h>
 
