@@ -59,7 +59,7 @@
 #include "../upipe-hbrmt/sdienc.h"
 #include "../upipe-hbrmt/upipe_hbrmt_common.h"
 #include "config.h"
-#include "x86/avx512.h"
+#include "x86/cpu_feature_check.h"
 
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {

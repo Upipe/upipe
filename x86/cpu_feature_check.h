@@ -9,6 +9,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/*
+ * AVX512 and AVX512ICL
+ */
+
 /* GCC bug 85100 says that the AVX512 detection can be incorrect if OS support
  * is disabled (or possibly not present) so just use the built-in function for
  * versions which have that fixed. */
@@ -90,8 +94,8 @@ static inline bool has_avx512icl_support(void)
     return false;
 }
 
-
 #undef X
+#undef cpuid
 
 #else
 
@@ -101,6 +105,50 @@ static inline bool has_avx512_support(void)
 }
 
 static inline bool has_avx512icl_support(void)
+{
+    return false;
+}
+
+#endif
+
+/*
+ * PCLMULQDQ
+ */
+
+#if __GNUC__ >= 6
+
+static inline bool has_pclmul_support(void)
+{
+    return __builtin_cpu_supports("pclmul");
+}
+
+#elif defined(__x86_64__)
+
+#define cpuid(level, count, a, b, c, d)            \
+  __asm__ __volatile__ ("cpuid\n\t"                \
+          : "=a" (a), "=b" (b), "=c" (c), "=d" (d) \
+          : "0" (level), "2" (count))
+#define X(reg, mask) (((reg) & (mask)) == (mask))
+
+static inline bool has_pclmul_support(void)
+{
+    uint32_t eax, ebx, ecx, edx;
+    cpuid(0, 0, eax, ebx, ecx, edx);
+    const unsigned max_leaf = eax;
+    if (max_leaf >= 1) {
+        cpuid(1, 0, eax, ebx, ecx, edx);
+        if (X(ecx, 0x2))
+            return true;
+    }
+    return false;
+}
+
+#undef X
+#undef cpuid
+
+#else
+
+static inline bool has_pclmul_support(void)
 {
     return false;
 }

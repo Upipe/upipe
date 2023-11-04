@@ -84,6 +84,7 @@ void checkasm_check_levelb_input(void);
 void checkasm_check_sdi_input(void);
 void checkasm_check_uyvy_input(void);
 void checkasm_check_v210_input(void);
+void checkasm_check_sdi_crc(void);
 
 struct CheckasmPerf;
 

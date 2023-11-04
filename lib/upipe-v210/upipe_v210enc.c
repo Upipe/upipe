@@ -51,7 +51,7 @@
 #include <upipe-v210/upipe_v210enc.h>
 
 #include "v210enc.h"
-#include "x86/avx512.h"
+#include "x86/cpu_feature_check.h"
 
 #define UPIPE_V210_MAX_PLANES 3
 

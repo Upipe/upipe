@@ -2,7 +2,11 @@ check_PROGRAMS = checkasm
 
 TESTS = checkasm
 
-checkasm_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/include -I$(top_builddir) -I$(top_builddir)/include $(AVUTIL_CFLAGS)
+checkasm_CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/include \
+       -I$(top_builddir) -I$(top_builddir)/include \
+       $(AVUTIL_CFLAGS) \
+       $(BITSTREAM_CFLAGS)
+
 checkasm_LDADD = $(LDADD) $(AVUTIL_LIBS) \
     $(top_builddir)/lib/upipe-v210/libupipe_v210_la-v210dec.o \
     $(top_builddir)/lib/upipe-v210/libupipe_v210_la-v210enc.o \
@@ -15,6 +19,7 @@ checkasm_SOURCES = checkasm.c checkasm.h timer.h \
     sdi_input.c \
     uyvy_input.c \
     v210_input.c \
+    sdi_crc.c \
     $(NULL)
 
 if HAVE_BITSTREAM
@@ -45,6 +50,7 @@ if HAVE_BITSTREAM
 checkasm_LDADD += \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_dec.o \
     $(top_builddir)/lib/upipe-hbrmt/rfc4175_enc.o \
+    $(top_builddir)/lib/upipe-hbrmt/sdi_crc.o \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/sdienc.o \
     $(top_builddir)/lib/upipe-pciesdi/levelb.o \

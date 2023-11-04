@@ -81,6 +81,7 @@ static const struct {
     { "sdi_input", checkasm_check_sdi_input },
     { "uyvy_input", checkasm_check_uyvy_input },
     { "v210_input", checkasm_check_v210_input },
+    { "sdi_crc", checkasm_check_sdi_crc },
     { NULL, NULL }
 };
 

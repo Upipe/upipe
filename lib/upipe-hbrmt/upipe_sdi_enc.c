@@ -32,6 +32,7 @@
 
 #include "sdienc.h"
 #include "sdi.h"
+#include "x86/cpu_feature_check.h"
 
 #define UPIPE_SDI_MAX_PLANES 3
 #define UPIPE_SDI_MAX_CHANNELS 16
@@ -53,6 +54,21 @@ enum subpipe_type {
     SDIENC_SCTE104,
     SDIENC_VANC,
 };
+
+void upipe_compute_sdi_crc_avx2(uint32_t *crc_c, uint32_t *crc_y, const uint16_t *src, uintptr_t pixels);
+
+static void assembly_wrap(uint32_t *sdi_crc_lut, uint32_t *crc_c, uint32_t *crc_y, const uint16_t *src, uintptr_t pixels)
+{
+    uintptr_t remainder = pixels % 12;
+    upipe_compute_sdi_crc_avx2(crc_c, crc_y, src, pixels-remainder);
+    if (remainder) {
+        src += 2*(pixels-remainder);
+        for (uintptr_t i = 0; i < remainder; i++) {
+            sdi_crc_update(sdi_crc_lut, crc_c, src[2*i+0]);
+            sdi_crc_update(sdi_crc_lut, crc_y, src[2*i+1]);
+        }
+    }
+}
 
 /** input subpipe */
 struct upipe_sdi_enc_sub {
@@ -100,6 +116,9 @@ struct upipe_sdi_enc {
 
     /** Converts v210 to UYVY */
     void (*v210_to_uyvy)(const uint32_t *src, uint16_t *uyvy, uintptr_t width);
+
+    /** Computes both the chroma and luma CRCs */
+    void (*compute_crc)(uint32_t *sdi_crc_lut, uint32_t *crc_c, uint32_t *crc_y, const uint16_t *src, uintptr_t pixels);
 
     /** refcount management structure */
     struct urefcount urefcount;
@@ -1118,7 +1137,10 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
     /* Update CRCs */
     if (upipe_sdi_enc->crc) {
-        for (int i = 0; i < 2*input_hsize; i+=16) {
+        if (upipe_sdi_enc->compute_crc)
+            upipe_sdi_enc->compute_crc(upipe_sdi_enc->crc_lut[0], &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, active_start, input_hsize);
+
+        else for (int i = 0; i < 2*input_hsize; i+=16) {
             const uint16_t *crc_src = &active_start[i];
             sdi_crc_update_blk(upipe_sdi_enc->crc_lut, &upipe_sdi_enc->crc_c, &upipe_sdi_enc->crc_y, crc_src);
         }
@@ -1780,6 +1802,7 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
     upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_c;
     upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_c;
     upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_c;
+    upipe_sdi_enc->compute_crc       = NULL;
 
 #if defined(HAVE_X86ASM)
 #if defined(__i686__) || defined(__x86_64__)
@@ -1807,6 +1830,9 @@ static struct upipe *_upipe_sdi_enc_alloc(struct upipe_mgr *mgr,
         upipe_sdi_enc->planar_to_uyvy_8  = upipe_planar_to_uyvy_8_avx2;
         upipe_sdi_enc->planar_to_uyvy_10 = upipe_planar_to_uyvy_10_avx2;
         upipe_sdi_enc->v210_to_uyvy      = upipe_v210_to_uyvy_avx2;
+
+        if (has_pclmul_support())
+            upipe_sdi_enc->compute_crc = assembly_wrap;
     }
 #endif
 #endif

@@ -16,7 +16,7 @@ libupipe_hbrmt_la_SOURCES = upipe_pack10bit.c \
     rfc4175.c \
     $(NULL)
 
-libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir)/include $(ZVBI_CFLAGS)
+libupipe_hbrmt_la_CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/include -I$(top_srcdir) -I$(top_srcdir)/include $(ZVBI_CFLAGS)
 libupipe_hbrmt_la_CFLAGS = $(AM_CFLAGS) $(AVUTIL_CFLAGS) $(BITSTREAM_CFLAGS) -I$(top_srcdir)/lib/upipe-blackmagic
 libupipe_hbrmt_la_LIBADD = $(top_builddir)/lib/upipe/libupipe.la $(ZVBI_LIBS)
 libupipe_hbrmt_la_LDFLAGS = -no-undefined
@@ -27,6 +27,7 @@ libupipe_hbrmt_la_SOURCES += \
     rfc4175_dec.h \
     rfc4175_enc.asm \
     rfc4175_enc.h \
+    sdi_crc.asm \
     sdidec.asm \
     sdienc.asm
 endif
