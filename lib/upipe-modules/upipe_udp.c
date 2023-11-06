@@ -49,9 +49,6 @@
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
 
-#include <linux/if_packet.h>
-#include <linux/if_ether.h>
-
 /** union sockaddru: wrapper to avoid strict-aliasing issues */
 union sockaddru
 {
@@ -59,7 +56,6 @@ union sockaddru
     struct sockaddr so;
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
-    struct sockaddr_ll sll;
 };
 
 /* Compute the checksum of the given ip header. */
@@ -359,7 +355,7 @@ static char *config_stropt(char *psz_string)
 int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                           uint16_t bind_port, uint16_t connect_port,
                           unsigned int *weight, bool *use_tcp,
-                          bool *use_raw, uint8_t *raw_header, int *ifindex)
+                          bool *use_raw, uint8_t *raw_header)
 {
     union sockaddru bind_addr, connect_addr;
     int fd = -1, i;
@@ -373,10 +369,9 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     int tos = 0;
     bool b_tcp;
     bool b_raw;
-    bool mmap = false;
     int family;
     socklen_t sockaddr_len;
-    char *miface = NULL;
+    in_addr_t miface = 0;
 #if !defined(__APPLE__) && !defined(__native_client__)
     char *ifname = NULL;
 #endif
@@ -487,9 +482,9 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             } else if (IS_OPTION("fd=")) {
                 fd = strtol(ARG_OPTION("fd="), NULL, 0);
             } else if (IS_OPTION("miface=")) {
-                miface = config_stropt(ARG_OPTION("miface="));
-            } else if (IS_OPTION("mmap")) {
-                mmap = true;
+                char *option = config_stropt(ARG_OPTION("miface="));
+                miface = inet_addr(option);
+                free(option);
             } else {
                 upipe_warn_va(upipe, "unrecognized option %s", token2);
             }
@@ -539,6 +534,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 ntohs(connect_addr.sin.sin_port), ttl, tos, 0);
     }
 
+
     if (fd == -1) {
         /* Socket configuration */
         int sock_type = SOCK_DGRAM;
@@ -546,18 +542,12 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         if (*use_raw) sock_type = SOCK_RAW;
         int sock_proto = (*use_raw ? IPPROTO_RAW : 0);
 
-        if (mmap) {
-            family = AF_PACKET;
-            sock_type = SOCK_DGRAM;
-            sock_proto = 0;
-        }
-
         if ((fd = socket(family, sock_type, sock_proto)) < 0) {
             upipe_err_va(upipe, "unable to open socket (%m)");
             return -1;
         }
         #if !defined(__APPLE__) && !defined(__native_client__)
-        if (!mmap && *use_raw) {
+        if (*use_raw) {
             int hincl = 1;
             if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &hincl, sizeof(hincl)) < 0) {
                 upipe_err_va(upipe, "unable to set IP_HDRINCL");
@@ -568,22 +558,12 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         #endif
 
         if (miface) {
-            int index = if_nametoindex(miface);
-            free(miface);
-            if (index == 0) {
-                upipe_err_va(upipe, "couldn't get interface name (%m)");
+            if (setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &miface, sizeof(miface))) {
+                upipe_err_va(upipe, "couldn't set multicast interface name (%m)");
+                upipe_udp_print_socket(upipe, "socket definition:", &bind_addr,
+                        &connect_addr);
                 close(fd);
                 return -1;
-            }
-            *ifindex = index;
-
-            if (!mmap) {
-                const int on = 1;
-                if (setsockopt(fd, IPPROTO_IP, IP_PKTINFO, &on, sizeof on) == -1) {
-                    upipe_err_va(upipe, "unable to set socket (%m)");
-                    close(fd);
-                    return -1;
-                }
             }
         }
 
@@ -731,51 +711,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
         }
     }
 
-    if (mmap) {
-        int val;
-
-        /* Drop/discard/ignore malformed packets. */
-#if 0
-        val = 1;
-        if (setsockopt(fd, SOL_PACKET, PACKET_LOSS, &val, sizeof val)) {
-            upipe_err_va(upipe, "couldn't set PACKET_LOSS: %m");
-        }
-#endif
-
-        /* Default but try anyway. */
-        val = TPACKET_V1;
-        if (setsockopt(fd, SOL_PACKET, PACKET_VERSION, &val, sizeof val)) {
-            upipe_err_va(upipe, "couldn't set PACKET_VERSION: %m");
-        }
-
-        sockaddr_len = sizeof bind_addr.sll;
-        bind_addr.sll.sll_family = AF_PACKET;
-        bind_addr.sll.sll_protocol = htons(ETH_P_IP);
-        bind_addr.sll.sll_ifindex = *ifindex;
-        bind_addr.sll.sll_halen = ETH_ALEN;
-
-        if (bind(fd, &bind_addr.so, sockaddr_len) < 0) {
-            upipe_err_va(upipe, "couldn't bind: %m");
-            upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
-            close(fd);
-            return -1;
-        }
-
-        struct tpacket_req req = {
-            .tp_block_size = MMAP_BLOCK_SIZE, // getpagesize()
-            .tp_block_nr   = MMAP_BLOCK_NUM,
-            .tp_frame_size = MMAP_FRAME_SIZE, // TPACKET_ALIGNMENT
-            .tp_frame_nr   = MMAP_FRAME_NUM,
-        };
-        if (setsockopt(fd, SOL_PACKET, PACKET_TX_RING, (void *)&req, sizeof req))
-            upipe_err_va(upipe, "couldn't set PACKET_TX_RING (%m)");
-
-        upipe_dbg_va(upipe, "tp_block_size: %u, tp_block_nr %u, tp_frame_size: %u, tp_frame_nr: %u",
-                req.tp_block_size, req.tp_block_nr, req.tp_frame_size, req.tp_frame_nr);
-
-    }
-
-    else if (connect_addr.ss.ss_family != AF_UNSPEC) {
+    if (connect_addr.ss.ss_family != AF_UNSPEC) {
         if (connect(fd, &connect_addr.so, sockaddr_len) < 0) {
             upipe_err_va(upipe, "cannot connect socket (%m)");
             upipe_udp_print_socket(upipe, "socket definition:", &bind_addr, &connect_addr);
