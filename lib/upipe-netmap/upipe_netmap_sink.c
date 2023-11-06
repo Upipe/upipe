@@ -107,6 +107,18 @@ static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p);
 
+/* Destination details for all flows, eventually. */
+struct destination {
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+    /* Ethernet details for the destination. */
+    struct sockaddr_ll sll;
+    /* Raw Ethernet, optional vlan, IP, and UDP headers. */
+    uint8_t header[HEADER_ETH_IP_UDP_LEN];
+    /* length (vlan or not) */
+    uint8_t header_len;
+};
+
 struct upipe_netmap_intf {
     /** Source */
     uint16_t src_port;
@@ -161,13 +173,7 @@ struct audio_packet_state {
 };
 
 struct aes67_flow {
-    /* IP details for the destination. */
-    struct sockaddr_in sin;
-    /* Ethernet details for the destination. */
-    struct sockaddr_ll sll;
-    /* Raw Ethernet, IP, and UDP headers. */
-    uint8_t header[HEADER_ETH_IP_UDP_LEN];
-    int header_len;
+    struct destination dest;
     /* Flow has been populated and packets should be sent. */
     bool populated;
 };
@@ -1957,7 +1963,7 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                 memset(audio_subpipe->audio_data, 0, sizeof audio_subpipe->audio_data);
             }
 
-            uint16_t packet_size = audio_subpipe->flows[0][0].header_len + audio_subpipe->payload_size;
+            uint16_t packet_size = audio_subpipe->flows[0][0].dest.header_len + audio_subpipe->payload_size;
             for (int flow = 0; flow < audio_subpipe->num_flows; flow++) {
                 int channel_offset = flow * audio_subpipe->output_channels;
 
@@ -1971,8 +1977,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
                     struct aes67_flow *aes67_flow = &audio_subpipe->flows[flow][i];
 
                         /* Copy headers. */
-                        memcpy(dst, aes67_flow->header, aes67_flow->header_len);
-                        dst += aes67_flow->header_len;
+                        memcpy(dst, aes67_flow->dest.header, aes67_flow->dest.header_len);
+                        dst += aes67_flow->dest.header_len;
                         memcpy(dst, upipe_netmap_sink->audio_rtp_header, RTP_HEADER_SIZE);
                         dst += RTP_HEADER_SIZE;
                         /* Copy payload. */
@@ -2304,7 +2310,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
             const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
-            const uint64_t audio_bitrate = 8 * (audio_subpipe->flows[0][0].header_len + audio_subpipe->payload_size + 4/*CRC*/) * audio_pps;
+            const uint64_t audio_bitrate = 8 * (audio_subpipe->flows[0][0].dest.header_len + audio_subpipe->payload_size + 4/*CRC*/) * audio_pps;
             upipe_dbg_va(upipe, "audio bitrate %"PRIu64" video bitrate %"PRIu64" \n", audio_bitrate, upipe_netmap_sink->rate);
             upipe_netmap_sink->rate += audio_bitrate * upipe_netmap_sink->fps.den;
 
@@ -3323,8 +3329,8 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         aes67_flow[0].populated = false;
         aes67_flow[1].populated = false;
         audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
-        memset(aes67_flow[0].header, 0, sizeof aes67_flow[0].header);
-        memset(aes67_flow[1].header, 0, sizeof aes67_flow[1].header);
+        memset(aes67_flow[0].dest.header, 0, sizeof aes67_flow[0].dest.header);
+        memset(aes67_flow[1].dest.header, 0, sizeof aes67_flow[1].dest.header);
         return UBASE_ERR_NONE;
     }
 
@@ -3353,7 +3359,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
  */
         /* Parse the path. */
         if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                    (struct sockaddr_storage *)&aes67_flow[i].sin)) {
+                    (struct sockaddr_storage *)&aes67_flow[i].dest.sin)) {
             free(path);
             ret = UBASE_ERR_INVALID;
             dst_mac = src_mac;
@@ -3365,20 +3371,20 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         /* A zero-length IP address (path string starting with a colon) will
          * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
          * port number. */
-        if (aes67_flow[i].sin.sin_addr.s_addr == 0) {
+        if (aes67_flow[i].dest.sin.sin_addr.s_addr == 0) {
             ret = UBASE_ERR_INVALID;
             dst_mac = src_mac;
             dst_ip = src_ip;
-            src_port = dst_port = ntohs(aes67_flow[i].sin.sin_port);
+            src_port = dst_port = ntohs(aes67_flow[i].dest.sin.sin_port);
             goto make_header;
         }
 
         upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u", flow, i,
-                inet_ntoa(aes67_flow[i].sin.sin_addr),
-                ntohs(aes67_flow[i].sin.sin_port));
+                inet_ntoa(aes67_flow[i].dest.sin.sin_addr),
+                ntohs(aes67_flow[i].dest.sin.sin_port));
 
         /* Set ethernet details and the inferface index. */
-        aes67_flow[i].sll = (struct sockaddr_ll) {
+        aes67_flow[i].dest.sll = (struct sockaddr_ll) {
             .sll_family = AF_PACKET,
             .sll_protocol = htons(ETHERNET_TYPE_IP),
             /* TODO: get ifindex and socket if we want to do ARP. */
@@ -3387,16 +3393,16 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         };
 
         /* Set MAC address. */
-        dst_ip = ntohl(aes67_flow[i].sin.sin_addr.s_addr);
+        dst_ip = ntohl(aes67_flow[i].dest.sin.sin_addr.s_addr);
 
         /* If a multicast IP address, fill a multicast MAC address. */
         if (IN_MULTICAST(dst_ip)) {
-            aes67_flow[i].sll.sll_addr[0] = 0x01;
-            aes67_flow[i].sll.sll_addr[1] = 0x00;
-            aes67_flow[i].sll.sll_addr[2] = 0x5e;
-            aes67_flow[i].sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
-            aes67_flow[i].sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
-            aes67_flow[i].sll.sll_addr[5] = (dst_ip      ) & 0xff;
+            aes67_flow[i].dest.sll.sll_addr[0] = 0x01;
+            aes67_flow[i].dest.sll.sll_addr[1] = 0x00;
+            aes67_flow[i].dest.sll.sll_addr[2] = 0x5e;
+            aes67_flow[i].dest.sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
+            aes67_flow[i].dest.sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
+            aes67_flow[i].dest.sll.sll_addr[5] = (dst_ip      ) & 0xff;
         }
 
         /* Otherwise query ARP for the destination address. */
@@ -3404,14 +3410,14 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
             /* TODO */
         }
 
-        dst_mac = aes67_flow[i].sll.sll_addr;
-        dst_ip = aes67_flow[i].sin.sin_addr.s_addr;
-        src_port = dst_port = ntohs(aes67_flow[i].sin.sin_port);
+        dst_mac = aes67_flow[i].dest.sll.sll_addr;
+        dst_ip = aes67_flow[i].dest.sin.sin_addr.s_addr;
+        src_port = dst_port = ntohs(aes67_flow[i].dest.sin.sin_port);
 
 make_header:
 
-        aes67_flow[i].header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-        uint8_t *buf = aes67_flow[i].header;
+        aes67_flow[i].dest.header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
+        uint8_t *buf = aes67_flow[i].dest.header;
         /* Write ethernet header. */
         ethernet_set_dstaddr(buf, dst_mac);
         ethernet_set_srcaddr(buf, src_mac);
@@ -3425,7 +3431,7 @@ make_header:
             ethernet_vlan_set_cfi(buf, 0);
             ethernet_vlan_set_id(buf, intf[i].vlan_id);
             ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
-            aes67_flow[i].header_len += ETHERNET_VLAN_LEN;
+            aes67_flow[i].dest.header_len += ETHERNET_VLAN_LEN;
         }
 
         buf = ethernet_payload(buf);
