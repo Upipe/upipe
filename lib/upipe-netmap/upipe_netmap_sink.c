@@ -73,6 +73,7 @@
 #include "../upipe-hbrmt/rfc4175_enc.h"
 #include "../upipe-modules/upipe_udp.h"
 #include "x86/avx512.h"
+#include "utils.h"
 
 #include <math.h>
 
@@ -99,25 +100,11 @@
 #define VENDOR_ID_MELLANOX 0x15b3
 #define DEVICE_ID_CONNECTX6DX 0x101d
 
-#define HEADER_ETH_IP_UDP_LEN (ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
-
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
 static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
                                  struct upump **upump_p);
-
-/* Destination details for all flows, eventually. */
-struct destination {
-    /* IP details for the destination. */
-    struct sockaddr_in sin;
-    /* Ethernet details for the destination. */
-    struct sockaddr_ll sll;
-    /* Raw Ethernet, optional vlan, IP, and UDP headers. */
-    uint8_t header[HEADER_ETH_IP_UDP_LEN];
-    /* length (vlan or not) */
-    uint8_t header_len;
-};
 
 struct upipe_netmap_intf {
     /** Source */
