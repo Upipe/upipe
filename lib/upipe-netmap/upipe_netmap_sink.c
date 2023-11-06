@@ -3321,111 +3321,29 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         return UBASE_ERR_NONE;
     }
 
-    int ret = UBASE_ERR_NONE;
-
-    for (int i = 0; i < 2; i++) {
-        const uint8_t *src_mac, *dst_mac;
-        uint32_t src_ip, dst_ip;
-        uint16_t src_port, dst_port;
-
-        src_mac = intf[i].src_mac;
-        src_ip = intf[i].src_ip;
-        src_port = dst_port = 0;
-
-        char *path = strdup((i==0) ? path_1 : path_2);
-        if (!path) {
-            ret = UBASE_ERR_ALLOC;
-            dst_mac = src_mac;
-            dst_ip = src_ip;
-            goto make_header;
-        }
-
 /* XXX
  * make audio and video use same parser
  * https://app.asana.com/0/1141488647259340/1201639915089998
  */
-        /* Parse the path. */
-        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                    (struct sockaddr_storage *)&aes67_flow[i].dest.sin)) {
-            free(path);
-            ret = UBASE_ERR_INVALID;
-            dst_mac = src_mac;
-            dst_ip = src_ip;
-            goto make_header;
-        }
-        free(path);
 
-        /* A zero-length IP address (path string starting with a colon) will
-         * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
-         * port number. */
-        if (aes67_flow[i].dest.sin.sin_addr.s_addr == 0) {
-            ret = UBASE_ERR_INVALID;
-            dst_mac = src_mac;
-            dst_ip = src_ip;
-            src_port = dst_port = ntohs(aes67_flow[i].dest.sin.sin_port);
-            goto make_header;
-        }
+    int ret = parse_destinations(upipe, &aes67_flow[0].dest, &aes67_flow[1].dest,
+            path_1, path_2);
+    if (!ubase_check(ret)) {
+        upipe_err_va(upipe, "error parsing '%s' and '%s': %s (%d)",
+                path_1, path_2, ubase_err_str(ret), ret);
+        /* TODO: change/reset something on error? */
+        return ret;
+    }
 
-        upipe_dbg_va(upipe, "flow %d path %d destination set to %s:%u", flow, i,
-                inet_ntoa(aes67_flow[i].dest.sin.sin_addr),
-                ntohs(aes67_flow[i].dest.sin.sin_port));
-
-        /* Set ethernet details and the inferface index. */
-        aes67_flow[i].dest.sll = (struct sockaddr_ll) {
-            .sll_family = AF_PACKET,
-            .sll_protocol = htons(ETHERNET_TYPE_IP),
-            /* TODO: get ifindex and socket if we want to do ARP. */
-            //.sll_ifindex = upipe_aes67_sink->sll[0].sll_ifindex,
-            .sll_halen = ETHERNET_ADDR_LEN,
-        };
-
-        /* Set MAC address. */
-        dst_ip = ntohl(aes67_flow[i].dest.sin.sin_addr.s_addr);
-
-        /* If a multicast IP address, fill a multicast MAC address. */
-        if (IN_MULTICAST(dst_ip)) {
-            aes67_flow[i].dest.sll.sll_addr[0] = 0x01;
-            aes67_flow[i].dest.sll.sll_addr[1] = 0x00;
-            aes67_flow[i].dest.sll.sll_addr[2] = 0x5e;
-            aes67_flow[i].dest.sll.sll_addr[3] = (dst_ip >> 16) & 0x7f;
-            aes67_flow[i].dest.sll.sll_addr[4] = (dst_ip >>  8) & 0xff;
-            aes67_flow[i].dest.sll.sll_addr[5] = (dst_ip      ) & 0xff;
-        }
-
-        /* Otherwise query ARP for the destination address. */
-        else {
-            /* TODO */
-        }
-
-        dst_mac = aes67_flow[i].dest.sll.sll_addr;
-        dst_ip = aes67_flow[i].dest.sin.sin_addr.s_addr;
-        src_port = dst_port = ntohs(aes67_flow[i].dest.sin.sin_port);
-
-make_header:
-
-        aes67_flow[i].dest.header_len = ETHERNET_HEADER_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE;
-        uint8_t *buf = aes67_flow[i].dest.header;
-        /* Write ethernet header. */
-        ethernet_set_dstaddr(buf, dst_mac);
-        ethernet_set_srcaddr(buf, src_mac);
-        if (intf[i].vlan_id < 0) {
-            ethernet_set_lentype(buf, ETHERNET_TYPE_IP);
-        }
-        /* VLANs */
-        else {
-            ethernet_set_lentype(buf, ETHERNET_TYPE_VLAN);
-            ethernet_vlan_set_priority(buf, 0);
-            ethernet_vlan_set_cfi(buf, 0);
-            ethernet_vlan_set_id(buf, intf[i].vlan_id);
-            ethernet_vlan_set_lentype(buf, ETHERNET_TYPE_IP);
-            aes67_flow[i].dest.header_len += ETHERNET_VLAN_LEN;
-        }
-
-        buf = ethernet_payload(buf);
-        /* Write IP and UDP headers. */
-        upipe_udp_raw_fill_headers(buf, src_ip, dst_ip, src_port, dst_port,
-                10 /* TTL */, 0 /* TOS */,
-                audio_subpipe->payload_size);
+    for (int i = 0; i < 2; i++) {
+        /* TODO: Better name for the struct. */
+        struct destination source = { .sin = {
+            .sin_addr.s_addr = intf[i].src_ip,
+            .sin_port = aes67_flow[i].dest.sin.sin_port,
+        } };
+        memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
+        make_header(aes67_flow[i].dest.header, &source, &aes67_flow[i].dest,
+                intf[i].vlan_id, audio_subpipe->payload_size);
     }
 
     aes67_flow[0].populated = true;
