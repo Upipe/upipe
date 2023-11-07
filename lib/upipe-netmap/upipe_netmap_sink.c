@@ -383,14 +383,14 @@ static inline void audio_copy_samples_to_packet(uint8_t *dst, const uint8_t *src
         int output_channels, int output_samples, int channel_offset);
 
 /* get MAC and/or IP address of specified interface */
-static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
+static bool source_addr(const char *intf, struct destination *source)
 {
     struct ifaddrs *ifaphead;
     if (getifaddrs(&ifaphead) != 0)
         return false;
 
-    bool got_mac = !mac;
-    bool got_ip = !ip;
+    bool got_mac = false;
+    bool got_ip = false;
 
     for (struct ifaddrs *ifap = ifaphead; ifap; ifap = ifap->ifa_next) {
         if (!ifap->ifa_addr)
@@ -401,18 +401,12 @@ static bool source_addr(const char *intf, uint8_t *mac, in_addr_t *ip)
 
         switch (ifap->ifa_addr->sa_family) {
         case AF_PACKET: /* interface mac address */
-            if (mac) {
-                struct sockaddr_ll *sll = (struct sockaddr_ll *)ifap->ifa_addr;
-                memcpy(mac, sll->sll_addr, 6);
-                got_mac = true;
-            }
+            source->sll = *(struct sockaddr_ll *)ifap->ifa_addr;
+            got_mac = true;
             break;
         case AF_INET:
-            if (ip) {
-                struct sockaddr_in *sin = (struct sockaddr_in *)ifap->ifa_addr;
-                *ip = sin->sin_addr.s_addr;
-                got_ip = true;
-            }
+            source->sin = *(struct sockaddr_in *)ifap->ifa_addr;
+            got_ip = true;
             break;
         }
     }
@@ -544,14 +538,13 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
     *netmap_suffix = '\0';
 
     /* Get the IP and MAC addressed for the (vlan) interface. */
-    if (!source_addr(intf_addr, &intf->src_mac[0],
-                &intf->src_ip)) {
+    if (!source_addr(intf_addr, &intf->source)) {
         upipe_err_va(upipe, "Could not read interface address for '%s'", intf_addr);
         ret = UBASE_ERR_INVALID;
         goto error;
     }
-    intf->source.sin.sin_addr.s_addr = intf->src_ip;
-    memcpy(intf->source.sll.sll_addr, intf->src_mac, ETHERNET_ADDR_LEN);
+    intf->src_ip = intf->source.sin.sin_addr.s_addr;
+    memcpy(intf->src_mac, intf->source.sll.sll_addr, ETHERNET_ADDR_LEN);
 
     /* Find the first '.' for the base interface name. */
     char *dot = strchr(netmap_device, '.');
