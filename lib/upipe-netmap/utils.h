@@ -13,10 +13,6 @@ struct destination {
     struct sockaddr_in sin;
     /* Ethernet details for the destination. */
     struct sockaddr_ll sll;
-    /* Raw Ethernet, optional vlan, IP, and UDP headers. */
-    uint8_t header[HEADER_ETH_IP_UDP_LEN];
-    /* length (vlan or not) */
-    uint8_t header_len;
 };
 
 /* Parse a pair of strings represnting IP:port into the given structures.
