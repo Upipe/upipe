@@ -112,6 +112,9 @@ struct upipe_netmap_intf {
     in_addr_t src_ip;
     uint8_t src_mac[6];
 
+    /* TODO: Better name for the struct. */
+    struct destination source;
+
     /** Destination */
     uint16_t dst_port;
     in_addr_t dst_ip;
@@ -547,6 +550,8 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         ret = UBASE_ERR_INVALID;
         goto error;
     }
+    intf->source.sin.sin_addr.s_addr = intf->src_ip;
+    memcpy(intf->source.sll.sll_addr, intf->src_mac, ETHERNET_ADDR_LEN);
 
     /* Find the first '.' for the base interface name. */
     char *dot = strchr(netmap_device, '.');
@@ -1336,13 +1341,8 @@ static void write_ancillary(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t
         if (unlikely(!intf->d || !intf->up))
             continue;
 
-        /* TODO: Better name for the struct. */
-        struct destination source = { .sin = {
-            .sin_addr.s_addr = intf[i].src_ip,
-        } };
-        memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
         /* TODO: improve this by not doing the ethernet header everytime? */
-        make_header(intf[i].ancillary_header, &source, &intf[i].ancillary_dest,
+        make_header(intf[i].ancillary_header, &intf[i].source, &intf[i].ancillary_dest,
                 intf[i].vlan_id, payload_size);
 
         /* Ethernet/IP Header */
@@ -3337,12 +3337,7 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
     }
 
     for (int i = 0; i < 2; i++) {
-        /* TODO: Better name for the struct. */
-        struct destination source = { .sin = {
-            .sin_addr.s_addr = intf[i].src_ip,
-        } };
-        memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
-        make_header(aes67_flow[i].header, &source, &aes67_flow[i].dest,
+        make_header(aes67_flow[i].header, &intf[i].source, &aes67_flow[i].dest,
                 intf[i].vlan_id, audio_subpipe->payload_size);
     }
 
@@ -3368,12 +3363,7 @@ static int ancillary_set_destination(struct upipe * upipe, const char *path_1, c
     }
 
     for (int i = 0; i < 2; i++) {
-        /* TODO: Better name for the struct. */
-        struct destination source = { .sin = {
-            .sin_addr.s_addr = intf[i].src_ip,
-        } };
-        memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
-        make_header(intf[i].ancillary_header, &source, &intf[i].ancillary_dest,
+        make_header(intf[i].ancillary_header, &intf[i].source, &intf[i].ancillary_dest,
                 intf[i].vlan_id, 123 /* fake */);
         /* Ancillary packets are variable size so we can't populate IP/UDP headers*/
     }
