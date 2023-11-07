@@ -86,6 +86,6 @@ void make_header(uint8_t buf[HEADER_ETH_IP_UDP_LEN],
     buf = ethernet_payload(buf);
     /* Write IP and UDP headers. */
     upipe_udp_raw_fill_headers(buf, src->sin.sin_addr.s_addr, dst->sin.sin_addr.s_addr,
-            ntohs(src->sin.sin_port), ntohs(dst->sin.sin_port),
+            ntohs(dst->sin.sin_port), ntohs(dst->sin.sin_port),
             10 /* TTL */, 0 /* TOS */, payload_size);
 }

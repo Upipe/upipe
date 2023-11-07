@@ -1339,7 +1339,6 @@ static void write_ancillary(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t
         /* TODO: Better name for the struct. */
         struct destination source = { .sin = {
             .sin_addr.s_addr = intf[i].src_ip,
-            .sin_port = intf[i].ancillary_dest.sin.sin_port,
         } };
         memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
         /* TODO: improve this by not doing the ethernet header everytime? */
@@ -3341,7 +3340,6 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         /* TODO: Better name for the struct. */
         struct destination source = { .sin = {
             .sin_addr.s_addr = intf[i].src_ip,
-            .sin_port = aes67_flow[i].dest.sin.sin_port,
         } };
         memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
         make_header(aes67_flow[i].header, &source, &aes67_flow[i].dest,
@@ -3373,7 +3371,6 @@ static int ancillary_set_destination(struct upipe * upipe, const char *path_1, c
         /* TODO: Better name for the struct. */
         struct destination source = { .sin = {
             .sin_addr.s_addr = intf[i].src_ip,
-            .sin_port = intf[i].ancillary_dest.sin.sin_port,
         } };
         memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
         make_header(intf[i].ancillary_header, &source, &intf[i].ancillary_dest,
