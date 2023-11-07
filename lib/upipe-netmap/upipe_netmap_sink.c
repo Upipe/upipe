@@ -117,10 +117,7 @@ struct upipe_netmap_intf {
     in_addr_t dst_ip;
     uint8_t dst_mac[6];
 
-    /** Ancillary Source */
-    in_addr_t ancillary_dst_ip;
-    uint16_t ancillary_dst_port;
-    uint8_t ancillary_dst_mac[6];
+    struct destination ancillary_dest;
 
     int vlan_id;
 
@@ -1339,14 +1336,15 @@ static void write_ancillary(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t
         if (unlikely(!intf->d || !intf->up))
             continue;
 
-        uint8_t *buf = intf->ancillary_header;
-        buf = ethernet_payload(buf);
-
-        /* Write IP and UDP headers. src_port set to destination port */
-        upipe_udp_raw_fill_headers(buf, intf->src_ip, intf->ancillary_dst_ip,
-                intf->ancillary_dst_port /* actually src_port */, intf->ancillary_dst_port,
-                10 /* TTL */, 0 /* TOS */,
-                payload_size);
+        /* TODO: Better name for the struct. */
+        struct destination source = { .sin = {
+            .sin_addr.s_addr = intf[i].src_ip,
+            .sin_port = intf[i].ancillary_dest.sin.sin_port,
+        } };
+        memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
+        /* TODO: improve this by not doing the ethernet header everytime? */
+        make_header(intf[i].ancillary_header, &source, &intf[i].ancillary_dest,
+                intf[i].vlan_id, payload_size);
 
         /* Ethernet/IP Header */
         memcpy(dst[i], intf->ancillary_header, header_size);
@@ -3361,87 +3359,25 @@ static int ancillary_set_destination(struct upipe * upipe, const char *path_1, c
 {
     struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
     struct upipe_netmap_intf *intf = upipe_netmap_sink->intf;
-    /* IP details for the destination. */
-    struct sockaddr_in sin;
 
-    int ret = UBASE_ERR_NONE;
+    int ret = parse_destinations(upipe, &intf[0].ancillary_dest, &intf[1].ancillary_dest,
+            path_1, path_2);
+    if (!ubase_check(ret)) {
+        upipe_err_va(upipe, "error parsing '%s' and '%s': %s (%d)",
+                path_1, path_2, ubase_err_str(ret), ret);
+        /* TODO: change/reset something on error? */
+        return ret;
+    }
 
     for (int i = 0; i < 2; i++) {
-        const uint8_t *src_mac, *dst_mac;
-        uint32_t src_ip, dst_ip;
-
-        src_mac = intf[i].src_mac;
-        src_ip = intf[i].src_ip;
-
-        char *path = strdup((i==0) ? path_1 : path_2);
-        if (!path) {
-            ret = UBASE_ERR_ALLOC;
-            dst_mac = src_mac;
-            dst_ip = intf[i].ancillary_dst_ip = src_ip;
-            goto make_header;
-        }
-
-        /* Parse the path. */
-        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
-                                          (struct sockaddr_storage *)&sin)) {
-            free(path);
-            ret = UBASE_ERR_INVALID;
-            dst_mac = src_mac;
-            dst_ip = intf[i].ancillary_dst_ip = src_ip;
-            intf[i].ancillary_dst_port = ntohs(sin.sin_port);
-            goto make_header;
-        }
-        free(path);
-
-        /* A zero-length IP address (path string starting with a colon) will
-         * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
-         * port number. */
-        if (sin.sin_addr.s_addr == 0) {
-            ret = UBASE_ERR_INVALID;
-            dst_mac = src_mac;
-            dst_ip = src_ip;
-            goto make_header;
-        }
-
-        /* Set MAC address. */
-        dst_ip = ntohl(sin.sin_addr.s_addr);
-
-        /* If a multicast IP address, fill a multicast MAC address. */
-        if (IN_MULTICAST(dst_ip)) {
-            intf[i].ancillary_dst_mac[0] = 0x01;
-            intf[i].ancillary_dst_mac[1] = 0x00;
-            intf[i].ancillary_dst_mac[2] = 0x5e;
-            intf[i].ancillary_dst_mac[3] = (dst_ip >> 16) & 0x7f;
-            intf[i].ancillary_dst_mac[4] = (dst_ip >>  8) & 0xff;
-            intf[i].ancillary_dst_mac[5] = (dst_ip      ) & 0xff;
-        }
-
-        /* Otherwise query ARP for the destination address. */
-        else {
-            /* TODO */
-        }
-
-        intf[i].ancillary_dst_ip = sin.sin_addr.s_addr;
-        intf[i].ancillary_dst_port = ntohs(sin.sin_port);
-        dst_mac = intf[i].ancillary_dst_mac;
-
-make_header:
-
-        /* Write ethernet header. */
-        ethernet_set_dstaddr(intf[i].ancillary_header, dst_mac);
-        ethernet_set_srcaddr(intf[i].ancillary_header, src_mac);
-        if (intf[i].vlan_id < 0) {
-            ethernet_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_IP);
-        }
-        /* VLANs */
-        else {
-            ethernet_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_VLAN);
-            ethernet_vlan_set_priority(intf[i].ancillary_header, 0);
-            ethernet_vlan_set_cfi(intf[i].ancillary_header, 0);
-            ethernet_vlan_set_id(intf[i].ancillary_header, intf[i].vlan_id);
-            ethernet_vlan_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_IP);
-        }
-
+        /* TODO: Better name for the struct. */
+        struct destination source = { .sin = {
+            .sin_addr.s_addr = intf[i].src_ip,
+            .sin_port = intf[i].ancillary_dest.sin.sin_port,
+        } };
+        memcpy(source.sll.sll_addr, intf[i].src_mac, ETHERNET_ADDR_LEN);
+        make_header(intf[i].ancillary_header, &source, &intf[i].ancillary_dest,
+                intf[i].vlan_id, 123 /* fake */);
         /* Ancillary packets are variable size so we can't populate IP/UDP headers*/
     }
 
