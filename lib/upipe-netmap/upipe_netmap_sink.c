@@ -1335,8 +1335,8 @@ static void write_ancillary(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t
             continue;
 
         /* TODO: improve this by not doing the ethernet header everytime? */
-        make_header(intf[i].ancillary_header, &intf[i].source, &intf[i].ancillary_dest,
-                intf[i].vlan_id, payload_size);
+        make_header(intf->ancillary_header, &intf->source, &intf->ancillary_dest,
+                intf->vlan_id, payload_size);
 
         /* Ethernet/IP Header */
         memcpy(dst[i], intf->ancillary_header, header_size);
