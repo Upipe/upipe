@@ -3320,15 +3320,26 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
 
     int ret = parse_destinations(upipe, &aes67_flow[0].dest, &aes67_flow[1].dest,
             path_1, path_2);
+    const struct destination *dst[2] = { &aes67_flow[0].dest, &aes67_flow[1].dest };
     if (!ubase_check(ret)) {
+        /* The master_enable=false setting passes ":port" which return an error
+         * in parsing so it needs special handling. */
+        if (path_1[0] == ':' && path_2[0] == ':') {
+            dst[0] = &intf[0].source;
+            dst[1] = &intf[1].source;
+            ret = UBASE_ERR_NONE;
+        }
+
+        else {
         upipe_err_va(upipe, "error parsing '%s' and '%s': %s (%d)",
                 path_1, path_2, ubase_err_str(ret), ret);
         /* TODO: change/reset something on error? */
         return ret;
+        }
     }
 
     for (int i = 0; i < 2; i++) {
-        make_header(aes67_flow[i].header, &intf[i].source, &aes67_flow[i].dest,
+        make_header(aes67_flow[i].header, &intf[i].source, dst[i],
                 intf[i].vlan_id, audio_subpipe->payload_size);
     }
 
