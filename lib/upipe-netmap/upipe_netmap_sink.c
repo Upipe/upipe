@@ -3359,14 +3359,13 @@ static int ancillary_set_destination(struct upipe * upipe, const char *path_1, c
 
     int ret = parse_destinations(upipe, &intf[0].ancillary_dest, &intf[1].ancillary_dest,
             path_1, path_2);
-    const struct destination *dst[2] = { &intf[0].ancillary_dest, &intf[1].ancillary_dest };
     if (!ubase_check(ret)) {
         /* The master_enable=false setting passes ":port" which return an error
          * in parsing so it needs special handling.
          * TODO: deduplicate this. */
         if (path_1[0] == ':' && path_2[0] == ':') {
-            dst[0] = &intf[0].source;
-            dst[1] = &intf[1].source;
+            intf[0].ancillary_dest = intf[0].source;
+            intf[1].ancillary_dest = intf[1].source;
             ret = UBASE_ERR_NONE;
         }
 
@@ -3379,7 +3378,7 @@ static int ancillary_set_destination(struct upipe * upipe, const char *path_1, c
     }
 
     for (int i = 0; i < 2; i++) {
-        make_header(intf[i].ancillary_header, &intf[i].source, dst[i],
+        make_header(intf[i].ancillary_header, &intf[i].source, &intf[i].ancillary_dest,
                 intf[i].vlan_id, 123 /* fake */);
         /* Ancillary packets are variable size so we can't populate IP/UDP headers*/
     }
