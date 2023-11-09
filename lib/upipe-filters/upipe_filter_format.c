@@ -103,6 +103,8 @@ struct upipe_ffmt {
     struct uref *flow_def_input;
     /** flow definition wanted on the output */
     struct uref *flow_def_wanted;
+    /** flow definition requested */
+    struct uref *flow_def_requested;
     /** list of input bin requests */
     struct uchain input_request_list;
     /** list of output bin requests */
@@ -204,6 +206,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
         upipe_ffmt_to_urefcount_real(upipe_ffmt);
     upipe_ffmt->flow_def_input = NULL;
     upipe_ffmt->flow_def_wanted = flow_def;
+    upipe_ffmt->flow_def_requested = NULL;
     upipe_ffmt->sws_flags = 0;
     upipe_ffmt->hw_type = NULL;
     upipe_ffmt->hw_device = NULL;
@@ -232,7 +235,9 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
             return true;
         }
         uref_free(upipe_ffmt->flow_def_input);
+        uref_free(upipe_ffmt->flow_def_requested);
         upipe_ffmt->flow_def_input = uref_dup(uref);
+        upipe_ffmt->flow_def_requested = NULL;
         if (unlikely(upipe_ffmt->flow_def_input == NULL)) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -257,8 +262,15 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    if (upipe_ffmt->first_inner == NULL)
+    if (upipe_ffmt->first_inner == NULL) {
+        if (!upipe_ffmt->flow_def_input ||
+            upipe_ffmt->flow_def_requested) {
+            upipe_warn_va(upipe, "dropping...");
+            uref_free(uref);
+            return true;
+        }
         return false;
+    }
 
     upipe_ffmt_bin_input(upipe, uref, upump_p);
     return true;
@@ -564,7 +576,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_ffmt_store_bin_input(upipe, upipe_use(input));
         }
     }
-    uref_free(flow_def_dup);
+    upipe_ffmt->flow_def_requested = flow_def_dup;
 
     int err = upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
     uref_free(flow_def);
@@ -572,7 +584,6 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
     if (!ubase_check(err)) {
         upipe_ffmt_store_bin_input(upipe, NULL);
         upipe_ffmt_store_bin_output(upipe, NULL);
-        return err;
     }
 
     bool was_buffered = !upipe_ffmt_check_input(upipe);
@@ -583,7 +594,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
          * used in @ref upipe_ffmt_input. */
         upipe_release(upipe);
     }
-    return UBASE_ERR_NONE;
+    return err;
 }
 
 /** @internal @This sets the input flow definition.
@@ -782,6 +793,7 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
     upipe_ffmt_clean_flow_format(upipe);
     uref_free(upipe_ffmt->flow_def_input);
     uref_free(upipe_ffmt->flow_def_wanted);
+    uref_free(upipe_ffmt->flow_def_requested);
     uprobe_clean(&upipe_ffmt->proxy_probe);
     upipe_ffmt_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
