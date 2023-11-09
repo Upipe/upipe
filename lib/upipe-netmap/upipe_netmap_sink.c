@@ -3331,10 +3331,10 @@ static int audio_set_flow_destination(struct upipe * upipe, int flow,
         }
 
         else {
-        upipe_err_va(upipe, "error parsing '%s' and '%s': %s (%d)",
-                path_1, path_2, ubase_err_str(ret), ret);
-        /* TODO: change/reset something on error? */
-        return ret;
+            upipe_err_va(upipe, "error parsing '%s' and '%s': %s (%d)",
+                    path_1, path_2, ubase_err_str(ret), ret);
+            /* TODO: change/reset something on error? */
+            return ret;
         }
     }
 
