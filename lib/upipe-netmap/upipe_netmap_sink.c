@@ -541,6 +541,8 @@ static int upipe_netmap_sink_open_intf(struct upipe *upipe,
         ret = UBASE_ERR_INVALID;
         goto error;
     }
+    intf->src_port = (intf->ring_idx+1) * 1000;
+    intf->source.sin.sin_port = htons(intf->src_port);
     intf->src_ip = intf->source.sin.sin_addr.s_addr;
     memcpy(intf->src_mac, intf->source.sll.sll_addr, ETHERNET_ADDR_LEN);
 
@@ -2679,7 +2681,6 @@ static int upipe_netmap_sink_ip_params(struct upipe *upipe,
         goto error;
     }
 
-    intf->src_port = (intf->ring_idx+1) * 1000;
     intf->dst_port = intf->src_port;
 
     char *port = strchr(ip, ':'); // TODO: ipv6
