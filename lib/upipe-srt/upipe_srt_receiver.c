@@ -126,6 +126,12 @@ struct upipe_srt_receiver {
     /** last time a NACK was sent */
     uint64_t last_nack[65536];
 
+    /** number of packets in the buffer */
+    uint64_t packets;
+
+    /** number of bytes in the buffer*/
+    uint64_t bytes;
+
     uint32_t ack_num;
     uint64_t last_ack;
     struct ack_entry *acks;
@@ -134,6 +140,7 @@ struct upipe_srt_receiver {
     size_t ack_widx;
 
     uint64_t rtt;
+    uint64_t rtt_variance;
 
     uint8_t salt[16];
     uint8_t sek[2][32];
@@ -471,12 +478,15 @@ next:
                 if (last_received != UINT64_MAX)
                     last_seq = last_received;
                 srt_set_ack_last_ack_seq(out_cif, last_seq);
-                srt_set_ack_rtt(out_cif, 1000);
-                srt_set_ack_rtt_variance(out_cif, 100);
-                srt_set_ack_avail_bufsize(out_cif, 100);
-                srt_set_ack_packets_receiving_rate(out_cif, 100);
-                srt_set_ack_estimated_link_capacity(out_cif, 1000);
-                srt_set_ack_receiving_rate(out_cif, 100000);
+                srt_set_ack_rtt(out_cif, upipe_srt_receiver->rtt * 1000000 / UCLOCK_FREQ);
+                srt_set_ack_rtt_variance(out_cif, upipe_srt_receiver->rtt_variance * 1000000 / UCLOCK_FREQ);
+                uint64_t t = upipe_srt_receiver->latency;
+
+                uint64_t packets_per_sec = upipe_srt_receiver->packets * UCLOCK_FREQ / t;
+                srt_set_ack_packets_receiving_rate(out_cif, packets_per_sec);
+                srt_set_ack_avail_bufsize(out_cif, packets_per_sec * upipe_srt_receiver->latency / UCLOCK_FREQ);
+                srt_set_ack_estimated_link_capacity(out_cif, 10 * packets_per_sec); /* ? */
+                srt_set_ack_receiving_rate(out_cif, upipe_srt_receiver->bytes * UCLOCK_FREQ / t);
 
                 uref_block_unmap(uref, 0);
                 upipe_srt_receiver->last_ack = now;
@@ -548,6 +558,11 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         upipe_srt_receiver->last_output_seqnum = seqnum;
 
         ulist_delete(uchain);
+        upipe_srt_receiver->packets--;
+        size_t size;
+        if (unlikely(!ubase_check(uref_block_size(uref, &size))))
+            size = 0;
+        upipe_srt_receiver->bytes -= size;
         upipe_srt_receiver_output(upipe, uref, NULL); // XXX: use timer upump ?
 
         static uint64_t old;
@@ -696,7 +711,8 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
 
     ulist_init(&upipe_srt_receiver->queue);
     memset(upipe_srt_receiver->last_nack, 0, sizeof(upipe_srt_receiver->last_nack));
-    upipe_srt_receiver->rtt = 0;
+    upipe_srt_receiver->rtt = 100 * UCLOCK_FREQ / 1000;
+    upipe_srt_receiver->rtt_variance = 50 * UCLOCK_FREQ / 1000;
     upipe_srt_receiver->expected_seqnum = UINT64_MAX;
 
     upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
@@ -715,6 +731,9 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
     upipe_srt_receiver->dups = 0;
 
     upipe_srt_receiver->latency = 0;
+
+    upipe_srt_receiver->packets = 0;
+    upipe_srt_receiver->bytes = 0;
 
     upipe_srt_receiver->sek_len = 0;
 
@@ -1042,20 +1061,28 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+
+    uint64_t now = uclock_now(upipe_srt_receiver->uclock);
+
     if (srt_get_packet_control(buf)) {
         if (srt_get_control_packet_type(buf) == SRT_CONTROL_TYPE_ACKACK)  {
             uint32_t ack_num = srt_get_control_packet_type_specific(buf);
-            uint64_t now = uclock_now(upipe_srt_receiver->uclock);
             uint64_t rtt = upipe_srt_receiver_ackack(upipe, ack_num, now);
             upipe_verbose_va(upipe, "RTT %.2f", (float) rtt / 27000.);
             if (rtt) {
-                if (upipe_srt_receiver->rtt) {
-                    upipe_srt_receiver->rtt *= 7;
-                    upipe_srt_receiver->rtt += rtt;
-                    upipe_srt_receiver->rtt /= 8;
+                uint64_t var = 0;
+                if (rtt > upipe_srt_receiver->rtt) {
+                    var = rtt - upipe_srt_receiver->rtt;
                 } else {
-                    upipe_srt_receiver->rtt = rtt;
+                    var = upipe_srt_receiver->rtt - rtt;
                 }
+                upipe_srt_receiver->rtt *= 7;
+                upipe_srt_receiver->rtt += rtt;
+                upipe_srt_receiver->rtt /= 8;
+
+                upipe_srt_receiver->rtt_variance *= 3;
+                upipe_srt_receiver->rtt_variance += var;
+                upipe_srt_receiver->rtt_variance /= 4;
             }
         }
 
@@ -1163,6 +1190,9 @@ error:
     if (diff < 0x80000000U) { // seqnum > last seq, insert at the end
         /* packet is from the future */
         upipe_srt_receiver->buffered++;
+
+        upipe_srt_receiver->packets++;
+        upipe_srt_receiver->bytes += total_size + SRT_HEADER_SIZE;
         ulist_add(&upipe_srt_receiver->queue, uref_to_uchain(uref));
         upipe_srt_receiver->last_nack[seqnum & 0xffff] = 0;
 
