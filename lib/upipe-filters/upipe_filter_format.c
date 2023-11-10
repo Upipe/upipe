@@ -127,6 +127,16 @@ struct upipe_ffmt {
 
     /** swscale flags */
     int sws_flags;
+    /** deinterlace_vaapi mode option */
+    const char *deinterlace_vaapi_mode;
+    /** scale_vaapi mode option */
+    const char *scale_vaapi_mode;
+    /** vpp_qsv deinterlace option */
+    const char *vpp_qsv_deinterlace;
+    /** vpp_qsv scale_mode option */
+    const char *vpp_qsv_scale_mode;
+    /** ni_quadra_scale filterblit option */
+    const char *ni_quadra_scale_filterblit;
 
     /** avfilter hw config type */
     char *hw_type;
@@ -208,6 +218,11 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt->flow_def_wanted = flow_def;
     upipe_ffmt->flow_def_requested = NULL;
     upipe_ffmt->sws_flags = 0;
+    upipe_ffmt->deinterlace_vaapi_mode = NULL;
+    upipe_ffmt->scale_vaapi_mode = NULL;
+    upipe_ffmt->vpp_qsv_deinterlace = NULL;
+    upipe_ffmt->vpp_qsv_scale_mode = NULL;
+    upipe_ffmt->ni_quadra_scale_filterblit = NULL;
     upipe_ffmt->hw_type = NULL;
     upipe_ffmt->hw_device = NULL;
     upipe_throw_ready(upipe);
@@ -376,16 +391,30 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool pic_vaapi_out = !strcmp(surface_type_out, "av.vaapi");
         bool pic_qsv_in = !strcmp(surface_type_in, "av.qsv");
         bool pic_qsv_out = !strcmp(surface_type_out, "av.qsv");
-        bool hw_in = pic_vaapi_in || pic_qsv_in;
-        bool hw_out = pic_vaapi_out || pic_qsv_out;
+        bool pic_quadra_in = !strcmp(surface_type_in, "av.ni_quadra");
+        bool pic_quadra_out = !strcmp(surface_type_out, "av.ni_quadra");
+        bool hw_in = pic_vaapi_in || pic_qsv_in || pic_quadra_in;
+        bool hw_out = pic_vaapi_out || pic_qsv_out || pic_quadra_out;
         bool hw = hw_in || hw_out;
+        int bit_depth_in = 0;
+        int bit_depth_out = 0;
+        uref_pic_flow_get_bit_depth(flow_def, &bit_depth_in);
+        uref_pic_flow_get_bit_depth(flow_def_dup, &bit_depth_out);
         bool need_hw_transfer = (hw_in && !hw_out) || (!hw_in && hw_out);
         bool need_derive = pic_vaapi_in && pic_qsv_out;
+        bool need_tonemap = ubase_check(uref_pic_flow_check_hdr10(flow_def)) &&
+            ubase_check(uref_pic_flow_check_sdr(flow_def_dup));
         bool need_avfilter = ffmt_mgr->avfilter_mgr && hw &&
             (need_deint || need_scale || need_format || need_hw_transfer ||
              need_derive || need_range);
 
         if (need_avfilter) {
+            const char *range_in =
+                ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
+                "full" : "limited";
+            const char *range_out =
+                ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
+                "full" : "limited";
             if (need_format) {
                 const char *pix_fmt_in = "unknown";
                 const char *pix_fmt_out = "unknown";
@@ -414,18 +443,15 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                                 " → %" PRIu64 "x%" PRIu64,
                                 hsize_in, vsize_in, hsize_out, vsize_out);
             }
-            if (need_range) {
-                const char *from =
-                    ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
-                    "full" : "limited";
-                const char *to =
-                    ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
-                    "full" : "limited";
+            if (need_range)
                 upipe_notice_va(upipe, "need range conversion %s → %s",
-                                from, to);
-            }
+                                range_in, range_out);
             if (need_derive)
                 upipe_notice(upipe, "need hw surface mapping vaapi → qsv");
+            if (need_deint)
+                upipe_notice(upipe, "need deinterlace");
+            if (need_tonemap)
+                upipe_notice(upipe, "need tonemap hdr10 → sdr");
 
             uint64_t hsize = 0, vsize = 0;
             uref_pic_flow_get_hsize(flow_def_dup, &hsize);
@@ -438,43 +464,160 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
                                              flow_def_dup, &pix_fmt_sw, true);
 
+            int val;
+
+            const char *color_matrix = NULL;
+            UBASE_RETURN(uref_pic_flow_get_matrix_coefficients_val(
+                    flow_def_dup, &val))
+            if (val != 2)
+                UBASE_RETURN(upipe_avfilt_mgr_get_color_space_name(
+                        ffmt_mgr->avfilter_mgr, val, &color_matrix))
+
+            const char *color_primaries = NULL;
+            UBASE_RETURN(uref_pic_flow_get_colour_primaries_val(
+                    flow_def_dup, &val))
+            if (val != 2)
+                UBASE_RETURN(upipe_avfilt_mgr_get_color_primaries_name(
+                        ffmt_mgr->avfilter_mgr, val, &color_primaries))
+
+            const char *color_transfer = NULL;
+            UBASE_RETURN(uref_pic_flow_get_transfer_characteristics_val(
+                    flow_def_dup, &val))
+            if (val != 2)
+                UBASE_RETURN(upipe_avfilt_mgr_get_color_transfer_name(
+                        ffmt_mgr->avfilter_mgr, val, &color_transfer))
+
+            bool in_10bit = bit_depth_in == 10;
+            bool out_10bit = bit_depth_out == 10;
+            const char *pix_fmt_semiplanar_in = in_10bit ? "p010le" : "nv12";
+            const char *pix_fmt_semiplanar_out = out_10bit ? "p010le" : "nv12";
+
             char filters[512];
             int pos = 0;
+            int opt;
 
-#define str_cat(fmt, ...) pos += sprintf(filters + pos, fmt, ##__VA_ARGS__)
+#define add_filter(Name) \
+            pos += (opt = 0, snprintf(filters + pos, sizeof(filters) - pos, \
+                                      "%s%s", pos ? "," : "", Name))
 
-            if (!hw_in)
-                str_cat("scale,format=nv12,hwupload,");
-            if (need_deint)
-                str_cat("deinterlace_vaapi=auto=1,");
-            if (need_scale || need_format || need_range) {
-                str_cat("scale_vaapi=");
-                if (need_scale)
-                    str_cat("w=%"PRIu64":h=%"PRIu64, hsize, vsize);
-                if (need_format) {
-                    if (need_scale)
-                        str_cat(":");
-                    str_cat("format=%s", pix_fmt_sw);
+#define add_option(Fmt, ...) \
+            pos += snprintf(filters + pos, sizeof(filters) - pos, \
+                            "%s" Fmt, opt++ ? ":" : "=", ##__VA_ARGS__)
+
+            if (!hw_in) {
+                if (pic_quadra_out) {
+                    if (need_deint) {
+                        add_filter("yadif");
+                        add_option("deint=interlaced");
+                    }
+                } else {
+                    add_filter("scale");
+                    add_option("interl=-1");
+                    add_filter("format");
+                    add_option("%s", pix_fmt_semiplanar_in);
                 }
-                if (need_range) {
-                    if (need_scale || need_format)
-                        str_cat(":");
-                    str_cat("out_range=%s",
-                            ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
-                            "full" : "limited");
+                add_filter("hwupload");
+            }
+            if (pic_qsv_in || pic_qsv_out) {
+                if (pic_vaapi_in) {
+                    add_filter("hwmap");
+                    add_option("derive_device=qsv");
+                    add_filter("format");
+                    add_option("qsv");
                 }
-                str_cat(",");
+                add_filter("vpp_qsv");
+                if (need_deint)
+                    add_option("deinterlace=%s",
+                               upipe_ffmt->vpp_qsv_deinterlace ?: "advanced");
+                if (need_scale) {
+                    add_option("width=%"PRIu64, hsize);
+                    add_option("height=%"PRIu64, vsize);
+                }
+                add_option("scale_mode=%s",
+                           upipe_ffmt->vpp_qsv_scale_mode ?: "hq");
+                if (need_format)
+                    add_option("format=%s", pix_fmt_sw);
+                if (need_range)
+                    add_option("out_range=%s", range_out);
+                if (color_matrix)
+                    add_option("out_color_matrix=%s", color_matrix);
+                if (color_primaries)
+                    add_option("out_color_primaries=%s", color_primaries);
+                if (color_transfer)
+                    add_option("out_color_transfer=%s", color_transfer);
+                add_option("tonemap=%d", need_tonemap ? 1 : 0);
+                add_option("async_depth=0");
+            } else {
+                if (need_deint && !pic_quadra_out) {
+                    add_filter("deinterlace_vaapi");
+                    add_option("auto=1");
+                    if (upipe_ffmt->deinterlace_vaapi_mode)
+                        add_option("mode=%s",
+                                   upipe_ffmt->deinterlace_vaapi_mode);
+                }
+                if (need_scale || need_format || need_range) {
+                    if (pic_quadra_out) {
+                        add_filter("ni_quadra_scale");
+                        if (need_scale)
+                            add_option("size=%"PRIu64"x%"PRIu64, hsize, vsize);
+                        if (upipe_ffmt->ni_quadra_scale_filterblit)
+                            add_option("filterblit=%s",
+                                       upipe_ffmt->ni_quadra_scale_filterblit);
+                        else
+                            add_option("autoselect=1");
+                    } else {
+                        add_filter("scale_vaapi");
+                        add_option("mode=%s",
+                                   upipe_ffmt->scale_vaapi_mode ?: "hq");
+                        if (need_scale) {
+                            add_option("w=%"PRIu64, hsize);
+                            add_option("h=%"PRIu64, vsize);
+                        }
+                        if (need_range)
+                            add_option("out_range=%s", range_out);
+                        if (color_primaries)
+                            add_option("out_color_primaries=%s",
+                                       color_primaries);
+                        if (color_transfer)
+                            add_option("out_color_transfer=%s",
+                                       color_transfer);
+                    }
+                    if (color_matrix)
+                        add_option("out_color_matrix=%s", color_matrix);
+                    if (need_format)
+                        add_option("format=%s", pix_fmt_sw);
+                }
+                if (need_tonemap && (pic_vaapi_in || pic_vaapi_out)) {
+                    add_filter("tonemap_vaapi");
+                    add_option("format=%s", pix_fmt_sw);
+                    if (color_matrix)
+                        add_option("matrix=%s", color_matrix);
+                    if (color_primaries)
+                        add_option("primaries=%s", color_primaries);
+                    if (color_transfer)
+                        add_option("transfer=%s", color_transfer);
+                }
             }
             if (!hw_out) {
-                str_cat("hwmap=mode=read+direct,format=nv12,");
-                if (pix_fmt != NULL && strcmp(pix_fmt, "nv12"))
-                    str_cat("scale,format=%s,", pix_fmt);
-            } else if (pic_qsv_out && (need_deint || need_scale || pic_vaapi_in))
-                str_cat("hwmap=derive_device=qsv,format=qsv");
-#undef str_cat
+                add_filter("hwmap");
+                add_option("mode=read+direct");
+                add_filter("format");
+                add_option("%s", pix_fmt_semiplanar_out);
+                if (pix_fmt != NULL && strcmp(pix_fmt, pix_fmt_semiplanar_out)) {
+                    add_filter("scale");
+                    add_option("interl=-1");
+                    add_filter("format");
+                    add_option("%s", pix_fmt);
+                }
+            }
 
-            if (filters[pos - 1] == ',')
-                filters[pos - 1] = '\0';
+#undef add_filter
+#undef add_option
+
+            if (pos >= sizeof(filters)) {
+                upipe_err(upipe, "filtergraph too long");
+                return UBASE_ERR_INVALID;
+            }
 
             struct upipe *avfilt = upipe_void_alloc(
                 ffmt_mgr->avfilter_mgr,
@@ -625,6 +768,60 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         upipe_release(upipe);
     }
     return err;
+}
+
+/** @internal @This sets the filters options.
+ *
+ * @param upipe description structure of the pipe
+ * @param option option name (filter name/option)
+ * @param value value or NULL to use the default value
+ * @return an error code
+ */
+static int upipe_ffmt_set_option(struct upipe *upipe,
+                                 const char *option,
+                                 const char *value)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+
+    if (!strcmp(option, "deinterlace_vaapi/mode"))
+        // default bob weave motion_adaptive motion_compensated
+        upipe_ffmt->deinterlace_vaapi_mode = value;
+    else if (!strcmp(option, "scale_vaapi/mode"))
+        // default fast hq nl_anamorphic
+        upipe_ffmt->scale_vaapi_mode = value;
+    else if (!strcmp(option, "vpp_qsv/deinterlace"))
+        // bob advanced
+        upipe_ffmt->vpp_qsv_deinterlace = value;
+    else if (!strcmp(option, "vpp_qsv/scale_mode"))
+        // auto low_power hq compute vd ve
+        upipe_ffmt->vpp_qsv_scale_mode = value;
+    else if (!strcmp(option, "ni_quadra_scale/filterblit"))
+        // 0 1 2
+        upipe_ffmt->ni_quadra_scale_filterblit = value;
+    else if (!strcmp(option, "deinterlace-preset")) {
+        if (!strcmp(value, "fast")) {
+            upipe_ffmt->deinterlace_vaapi_mode = "bob";
+            upipe_ffmt->vpp_qsv_deinterlace = "bob";
+        } else if (!strcmp(value, "hq")) {
+            upipe_ffmt->deinterlace_vaapi_mode = "motion_compensated";
+            upipe_ffmt->vpp_qsv_deinterlace = "advanced";
+        } else
+            return UBASE_ERR_INVALID;
+    } else if (!strcmp(option, "scale-preset")) {
+        if (!strcmp(value, "fast")) {
+            upipe_ffmt->scale_vaapi_mode = "fast";
+            upipe_ffmt->vpp_qsv_scale_mode = "low_power";
+            upipe_ffmt->ni_quadra_scale_filterblit = "0";
+        } else if (!strcmp(value, "hq")) {
+            upipe_ffmt->scale_vaapi_mode = "hq";
+            upipe_ffmt->vpp_qsv_scale_mode = "hq";
+            upipe_ffmt->ni_quadra_scale_filterblit = NULL;
+        } else
+            return UBASE_ERR_INVALID;
+    } else
+        return UBASE_ERR_INVALID;
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the input flow definition.
@@ -784,6 +981,11 @@ static int upipe_ffmt_control(struct upipe *upipe, int command, va_list args)
             break;
         }
 
+        case UPIPE_SET_OPTION: {
+            const char *option = va_arg(args, const char *);
+            const char *value = va_arg(args, const char *);
+            return upipe_ffmt_set_option(upipe, option, value);
+        }
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ffmt_set_flow_def(upipe, flow_def);
