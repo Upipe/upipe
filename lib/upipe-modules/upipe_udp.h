@@ -32,6 +32,8 @@
 /** @hidden */
 #define _UPIPE_UDP_H_
 
+#include "config.h"
+
 #include <stdint.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -45,7 +47,7 @@
 #define UDP_HEADER_SIZE 8
 #define RAW_HEADER_SIZE (IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
 
-#ifndef UPIPE_HAVE_BITSTREAM_COMMON_H
+#ifndef HAVE_BITSTREAM_COMMON_H
 
 static inline void ip_set_version(uint8_t *p_ip, uint8_t version)
 {
