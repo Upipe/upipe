@@ -158,11 +158,11 @@ static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
                     latency + FRAME_SIZE * UCLOCK_FREQ / in_rate);
         }
 
+        AVChannelLayout ch_layout;
+        av_channel_layout_default(&ch_layout, in_chan);
         av_opt_set_int(upipe_swr->swr, "in_sample_fmt", in_fmt, 0);
         av_opt_set_int(upipe_swr->swr, "used_channel_count", 0, 0);
-        av_opt_set_int(upipe_swr->swr, "in_channel_count", in_chan, 0);
-        av_opt_set_int(upipe_swr->swr, "in_channel_layout",
-                       av_get_default_channel_layout(in_chan), 0);
+        av_opt_set_chlayout(upipe_swr->swr, "in_chlayout", &ch_layout, 0);
         av_opt_set_int(upipe_swr->swr, "in_sample_rate", in_rate, 0);
 
         /* set missing output options */
@@ -170,13 +170,13 @@ static bool upipe_swr_handle(struct upipe *upipe, struct uref *uref,
             av_opt_set_int(upipe_swr->swr, "out_sample_fmt", in_fmt, 0);
         }
         if (upipe_swr->out_chan == 0) {
-            av_opt_set_int(upipe_swr->swr, "out_channel_count", in_chan, 0);
-            av_opt_set_int(upipe_swr->swr, "out_channel_layout",
-                           av_get_default_channel_layout(in_chan), 0);
+            av_opt_set_chlayout(upipe_swr->swr, "out_chlayout", &ch_layout, 0);
         }
         if (upipe_swr->out_rate == 0) {
             av_opt_set_int(upipe_swr->swr, "out_sample_rate", in_rate, 0);
         }
+
+        av_channel_layout_uninit(&ch_layout);
 
         /* reinit swresample context */
         if (swr_init(upipe_swr->swr) < 0) {
@@ -464,12 +464,14 @@ static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
     }
 
     /* default channel layout for given channel number */
-    int64_t out_layout = av_get_default_channel_layout(upipe_swr->out_chan);
-
-    upipe_swr->swr = swr_alloc_set_opts(NULL,
-                out_layout, upipe_swr->out_fmt, upipe_swr->out_rate,
-                out_layout, upipe_swr->out_fmt, upipe_swr->out_rate,
+    AVChannelLayout ch_layout;
+    av_channel_layout_default(&ch_layout, upipe_swr->out_chan);
+    upipe_swr->swr = NULL;
+    swr_alloc_set_opts2(&upipe_swr->swr,
+                &ch_layout, upipe_swr->out_fmt, upipe_swr->out_rate,
+                &ch_layout, upipe_swr->out_fmt, upipe_swr->out_rate,
                 0, NULL);
+    av_channel_layout_uninit(&ch_layout);
 
     if (unlikely(!upipe_swr->swr)) {
         uref_free(flow_def);

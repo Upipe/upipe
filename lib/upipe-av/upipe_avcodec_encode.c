@@ -972,14 +972,13 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
     AVCodecContext *context = upipe_avcenc->context;
     AVFrame *frame = upipe_avcenc->frame;
 
-    int size = av_samples_get_buffer_size(NULL, context->channels,
+    int size = av_samples_get_buffer_size(NULL, context->ch_layout.nb_channels,
                                           context->frame_size,
                                           context->sample_fmt, 0);
 
     frame->nb_samples = context->frame_size;
     frame->format = context->sample_fmt;
-    frame->channel_layout = context->channel_layout;
-    frame->channels = context->channels;
+    av_channel_layout_copy(&frame->ch_layout, &context->ch_layout);
 
     /* TODO replace with umem */
     uint8_t *buf = malloc(size + AV_INPUT_BUFFER_PADDING_SIZE);
@@ -988,7 +987,7 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
         return;
     }
 
-    avcodec_fill_audio_frame(frame, context->channels,
+    avcodec_fill_audio_frame(frame, context->ch_layout.nb_channels,
                              context->sample_fmt, buf, size, 0);
 
     struct uref *main_uref = NULL;
@@ -999,7 +998,8 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
             /* end of stream, finish with silence */
             av_samples_set_silence(frame->data, offset,
                                    context->frame_size - offset,
-                                   context->channels, context->sample_fmt);
+                                   context->ch_layout.nb_channels,
+                                   context->sample_fmt);
             break;
         }
 
@@ -1024,7 +1024,8 @@ static void upipe_avcenc_encode_audio(struct upipe *upipe,
         /* cast buffers because av_samples_copy is badly prototyped */
         int err = av_samples_copy(frame->data, (uint8_t **)buffers,
                                   offset, 0, extracted,
-                                  context->channels, context->sample_fmt);
+                                  context->ch_layout.nb_channels,
+                                  context->sample_fmt);
         UBASE_ERROR(upipe, uref_sound_unmap(uref, 0, extracted,
                                             AV_NUM_DATA_POINTERS))
         if (err < 0)
@@ -1585,21 +1586,23 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
-        const uint64_t *channel_layouts = context->codec->channel_layouts;
-        if (channel_layouts) {
-            while (*channel_layouts != 0) {
-                if (av_get_channel_layout_nb_channels(*channel_layouts) == channels)
-                    break;
-                channel_layouts++;
-            }
-            if (*channel_layouts == 0) {
-                upipe_err_va(upipe, "unsupported channel layout %"PRIu8, channels);
-                uref_free(flow_def_check);
-                return UBASE_ERR_INVALID;
-            }
-            context->channel_layout = *channel_layouts;
+        const AVChannelLayout *ch_layouts = context->codec->ch_layouts;
+        if (!ch_layouts) {
+            upipe_err_va(upipe, "codec has no channel layout");
+            uref_free(flow_def_check);
+            return UBASE_ERR_INVALID;
         }
-        context->channels = channels;
+        while (ch_layouts->nb_channels != 0) {
+            if (ch_layouts->nb_channels == channels)
+                break;
+            ch_layouts++;
+        }
+        if (ch_layouts->nb_channels == 0) {
+            upipe_err_va(upipe, "unsupported channel layout %"PRIu8, channels);
+            uref_free(flow_def_check);
+            return UBASE_ERR_INVALID;
+        }
+        av_channel_layout_copy(&context->ch_layout, ch_layouts);
 
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
     }
@@ -1759,31 +1762,30 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
             }
         }
 
-        const uint64_t *channel_layouts = codec->channel_layouts;
-        if (channel_layouts != NULL) {
-            int i;
-            int closest = -1;
+        const AVChannelLayout *ch_layouts = codec->ch_layouts;
+        if (ch_layouts != NULL) {
+            const AVChannelLayout *selected_layout = NULL;
             uint64_t diff_channels = UINT64_MAX; /* arbitrarily big */
-            for (i = 0; av_get_channel_layout_nb_channels(channel_layouts[i]);
-                 i++) {
-                uint8_t this_channels =
-                    av_get_channel_layout_nb_channels(channel_layouts[i]);
-                if (this_channels == channels)
+            while (ch_layouts->nb_channels) {
+                uint8_t this_channels = ch_layouts->nb_channels;
+                if (this_channels == channels) {
+                    selected_layout = ch_layouts;
                     break;
+                }
+
                 uint8_t this_diff_channels = this_channels > channels ?
                                              this_channels - channels :
                                              channels - this_channels;
                 if (this_diff_channels < diff_channels) {
                     diff_channels = this_diff_channels;
-                    closest = i;
+                    selected_layout = ch_layouts;
                 }
+                ch_layouts++;
             }
-            if (av_get_channel_layout_nb_channels(channel_layouts[i]) == 0) {
-                if (closest == -1)
-                    goto upipe_avcenc_provide_flow_format_err;
-                channels =
-                    av_get_channel_layout_nb_channels(channel_layouts[closest]);
-            }
+
+            if (selected_layout == NULL)
+                goto upipe_avcenc_provide_flow_format_err;
+            channels = selected_layout->nb_channels;
         }
         uref_sound_flow_clear_format(flow_format);
         uref_sound_flow_set_planes(flow_format, 0);

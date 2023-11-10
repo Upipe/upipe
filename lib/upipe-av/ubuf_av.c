@@ -207,15 +207,16 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
                 return NULL;
             }
             uint8_t planes = 1;
+            int nb_channels = frame->ch_layout.nb_channels;
             if (ubuf_av->sound.flow_format->planar)
-                planes = frame->channels;
+                planes = nb_channels;
             ubuf_av->sound.channels = calloc(planes + 1, sizeof (char *));
             if (unlikely(!ubuf_av->sound.channels)) {
                 ubuf_av_free(ubuf);
                 return NULL;
             }
             const char *channels_desc = UPIPE_AV_SAMPLEFMT_CHANNELS;
-            if (unlikely(frame->channels >= strlen(channels_desc))) {
+            if (unlikely(nb_channels >= strlen(channels_desc))) {
                 ubuf_av_free(ubuf);
                 return NULL;
             }
@@ -230,9 +231,9 @@ static struct ubuf *ubuf_av_alloc(struct ubuf_mgr *mgr,
                 }
             }
             else {
-                char tmp[frame->channels + 1];
-                memcpy(tmp, channels_desc, frame->channels);
-                tmp[frame->channels] = '\0';
+                char tmp[nb_channels + 1];
+                memcpy(tmp, channels_desc, nb_channels);
+                tmp[nb_channels] = '\0';
                 ubuf_av->sound.channels[0] = strdup(tmp);
                 if (unlikely(!ubuf_av->sound.channels[0])) {
                     ubuf_av_free(ubuf);
@@ -650,7 +651,7 @@ static int ubuf_sound_av_sample_size(struct ubuf *ubuf,
     uint8_t sample_size = ubuf_sound_av->flow_format->sample_size;
 
     if (!ubuf_sound_av->flow_format->planar)
-        sample_size *= ubuf_av->frame->channels;
+        sample_size *= ubuf_av->frame->ch_layout.nb_channels;
     if (sample_size_p)
         *sample_size_p = sample_size;
     return UBASE_ERR_NONE;
@@ -740,7 +741,8 @@ static int ubuf_sound_av_resize(struct ubuf *ubuf, int offset, int new_size)
         return UBASE_ERR_INVALID;
 
     av_samples_copy(frame->extended_data, frame->extended_data,
-                    0, offset, new_size, frame->channels, frame->format);
+                    0, offset, new_size, frame->ch_layout.nb_channels,
+                    frame->format);
     frame->nb_samples = new_size;
 
     return UBASE_ERR_NONE;
