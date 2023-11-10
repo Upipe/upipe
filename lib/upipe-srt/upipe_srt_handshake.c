@@ -74,6 +74,7 @@ struct upipe_srt_handshake {
 
     struct upump_mgr *upump_mgr;
     struct upump *upump_timer;
+    struct upump *upump_timeout;
     struct uclock *uclock;
     struct urequest uclock_request;
 
@@ -146,6 +147,7 @@ UPIPE_HELPER_VOID(upipe_srt_handshake)
 UPIPE_HELPER_OUTPUT(upipe_srt_handshake, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UPUMP_MGR(upipe_srt_handshake, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_timer, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_timeout, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_srt_handshake, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
 UPIPE_HELPER_UREF_MGR(upipe_srt_handshake, uref_mgr, uref_mgr_request,
@@ -379,6 +381,16 @@ static struct uref *upipe_srt_handshake_alloc_hs(struct upipe *upipe, int ext_si
     return uref;
 }
 
+static void upipe_srt_handshake_timeout(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+
+    upipe_err(upipe, "Connection timed out");
+
+    upipe_srt_handshake->expect_conclusion = false;
+}
+
 static void upipe_srt_handshake_timer(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
@@ -512,6 +524,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_handshake_init_upump_mgr(upipe);
     upipe_srt_handshake_init_upump_timer(upipe);
+    upipe_srt_handshake_init_upump_timeout(upipe);
     upipe_srt_handshake_init_uclock(upipe);
     upipe_srt_handshake_require_uclock(upipe);
 
@@ -689,6 +702,7 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_srt_handshake_set_upump_timer(upipe, NULL);
+            upipe_srt_handshake_set_upump_timeout(upipe, NULL);
             return upipe_srt_handshake_attach_upump_mgr(upipe);
 
         case UPIPE_SET_FLOW_DEF: {
@@ -796,6 +810,7 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     upipe_srt_handshake->expect_conclusion = false;
+    upipe_srt_handshake_set_upump_timeout(upipe, NULL);
 
     struct uref *flow_def;
     if (ubase_check(upipe_srt_handshake_get_flow_def(upipe, &flow_def))) {
@@ -942,16 +957,32 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     uint32_t syn_cookie = srt_get_handshake_syn_cookie(cif);
     uint32_t dst_socket_id = srt_get_packet_dst_socket_id(buf);
 
-    if (!upipe_srt_handshake->listener) {
-        if (upipe_srt_handshake->expect_conclusion) {
-            upipe_srt_handshake_set_upump_timer(upipe, NULL);
-            upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
+    if (!upipe_srt_handshake->upump_timeout) {
+        /* connection has to succeed within 3 seconds */
+        struct upump *upump =
+            upump_alloc_timer(upipe_srt_handshake->upump_mgr,
+                              upipe_srt_handshake_timeout,
+                              upipe, upipe->refcount,
+                              3 * UCLOCK_FREQ, 0);
+        upump_start(upump);
+        upipe_srt_handshake_set_upump_timeout(upipe, upump);
+    }
 
-            if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
-                upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
-                upipe_srt_handshake->expect_conclusion = false;
+    if (!upipe_srt_handshake->listener) {
+        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
+            upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+            upipe_srt_handshake->expect_conclusion = false;
+            return NULL;
+        }
+
+        if (upipe_srt_handshake->expect_conclusion) {
+            if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
+                upipe_err_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
                 return NULL;
             }
+
+            upipe_srt_handshake_set_upump_timer(upipe, NULL);
+            upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
 
             /* At least HSREQ is expected */
             size -= SRT_HEADER_SIZE + SRT_HANDSHAKE_CIF_SIZE;
@@ -993,14 +1024,12 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
         /* */
 
-        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
-            upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+        if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
+            upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
             return NULL;
         }
 
-        if (version != SRT_HANDSHAKE_VERSION || dst_socket_id != upipe_srt_handshake->socket_id
-                || hs_type != SRT_HANDSHAKE_TYPE_INDUCTION
-           ) {
+        if (version != SRT_HANDSHAKE_VERSION || dst_socket_id != upipe_srt_handshake->socket_id) {
             upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
                     dst_socket_id, upipe_srt_handshake->socket_id);
             return NULL;
@@ -1133,9 +1162,13 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     }
 
     if (!upipe_srt_handshake->expect_conclusion) {
-        if (version != SRT_HANDSHAKE_VERSION_MIN || encryption != SRT_HANDSHAKE_CIPHER_NONE
-                || extension != SRT_HANDSHAKE_EXT_KMREQ
-                || hs_type != SRT_HANDSHAKE_TYPE_INDUCTION ||
+        if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
+            upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
+            return NULL;
+        }
+
+        if (version != SRT_HANDSHAKE_VERSION_MIN || encryption != SRT_HANDSHAKE_CIPHER_NONE ||
+                extension != SRT_HANDSHAKE_EXT_KMREQ ||
                 syn_cookie != 0 || dst_socket_id != 0) {
             upipe_err_va(upipe, "Malformed first handshake syn %u dst_id %u", syn_cookie, dst_socket_id);
             return NULL;
@@ -1159,8 +1192,18 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         uref_block_unmap(uref, 0);
         return uref;
     } else {
+        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
+            upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+            upipe_srt_handshake->expect_conclusion = false;
+            return NULL;
+        }
+
+        if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
+            upipe_err_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
+            return NULL;
+        }
+
         if (version != SRT_HANDSHAKE_VERSION
-                || hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION
                 || syn_cookie != upipe_srt_handshake->syn_cookie
                 || dst_socket_id != 0) {
             upipe_err(upipe, "Malformed conclusion handshake");
@@ -1405,6 +1448,7 @@ static void upipe_srt_handshake_free(struct upipe *upipe)
 
     upipe_srt_handshake_clean_output(upipe);
     upipe_srt_handshake_clean_upump_timer(upipe);
+    upipe_srt_handshake_clean_upump_timeout(upipe);
     upipe_srt_handshake_clean_upump_mgr(upipe);
     upipe_srt_handshake_clean_uclock(upipe);
     upipe_srt_handshake_clean_ubuf_mgr(upipe);
