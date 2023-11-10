@@ -287,7 +287,7 @@ static void upipe_srt_handshake_output_shutdown(struct upipe *upipe)
     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
 
     struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
-            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE);
+            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 4 /* wtf */);
     if (!uref)
         return;
     uint8_t *out;
@@ -302,6 +302,8 @@ static void upipe_srt_handshake_output_shutdown(struct upipe *upipe)
     srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
     srt_set_control_packet_type(out, SRT_CONTROL_TYPE_SHUTDOWN);
     srt_set_control_packet_subtype(out, 0);
+    uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
+    memset(extra, 0, 4);
 
     uref_block_unmap(uref, 0);
     upipe_srt_handshake_output_output(upipe, uref,
