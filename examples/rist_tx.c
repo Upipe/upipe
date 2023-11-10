@@ -96,6 +96,7 @@ static char *password;
 static enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
 static struct uprobe uprobe_udp_srt;
+static struct uprobe uprobe_hs;
 static struct uprobe *logger;
 
 static bool restart;
@@ -125,6 +126,22 @@ static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 }
 
 static void stop(struct upump *upump);
+
+/** definition of our uprobe */
+static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
+{
+    switch (event) {
+    case UPROBE_SOURCE_END:
+        upipe_warn(upipe, "Remote shutdown");
+        restart = true;
+        struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
+                NULL, UCLOCK_FREQ, 0);
+        upump_start(u);
+        return uprobe_throw_next(uprobe, upipe, event, args);
+    }
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
 
 /** definition of our uprobe */
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
@@ -186,13 +203,14 @@ static int start(void)
         return EXIT_FAILURE;
 
     uprobe_init(&uprobe_udp_srt, catch_udp, uprobe_use(logger));
+    uprobe_init(&uprobe_hs, catch_hs, uprobe_use(logger));
     upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr,
             uprobe_pfx_alloc(&uprobe_udp_srt, loglevel, "udp source srt"));
     upipe_attach_uclock(upipe_udpsrc_srt);
 
     struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc();
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srt handshake"));
+            uprobe_pfx_alloc(uprobe_use(&uprobe_hs), loglevel, "srt handshake"));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
     upipe_srt_handshake_set_password(upipe_srt_handshake, password);
 
@@ -366,6 +384,7 @@ int main(int argc, char *argv[])
      * release everything */
     uprobe_release(logger);
     uprobe_clean(&uprobe_udp_srt);
+    uprobe_clean(&uprobe_hs);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
