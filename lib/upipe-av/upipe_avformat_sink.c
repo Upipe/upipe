@@ -401,7 +401,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         stream->r_frame_rate.den = fps.den;
     } else {
         codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
-        codecpar->channels = channels;
+        codecpar->ch_layout.nb_channels = channels;
         codecpar->sample_rate = rate;
         stream->time_base = (AVRational){ 1, codecpar->sample_rate };
         codecpar->frame_size = samples;

@@ -751,7 +751,8 @@ static struct uref *alloc_raw_audio_def(struct upipe *upipe,
         return NULL;
 
     struct uref *flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, def, codecpar->channels,
+        uref_sound_flow_alloc_def(uref_mgr, def,
+                                  codecpar->ch_layout.nb_channels,
                                   codecpar->bits_per_coded_sample / 8);
     if (unlikely(flow_def == NULL))
         return NULL;
@@ -760,7 +761,7 @@ static struct uref *alloc_raw_audio_def(struct upipe *upipe,
     if (codecpar->block_align)
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def,
                     codecpar->block_align / (codecpar->bits_per_coded_sample / 8) /
-                    codecpar->channels))
+                    codecpar->ch_layout.nb_channels))
     return flow_def;
 }
 
@@ -788,7 +789,8 @@ static struct uref *alloc_audio_def(struct upipe *upipe,
         UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def,
                     (codecpar->bit_rate + 7) / 8))
 
-    UBASE_FATAL(upipe, uref_sound_flow_set_channels(flow_def, codecpar->channels))
+    UBASE_FATAL(upipe, uref_sound_flow_set_channels(
+            flow_def, codecpar->ch_layout.nb_channels))
     UBASE_FATAL(upipe, uref_sound_flow_set_rate(flow_def, codecpar->sample_rate))
     if (codecpar->frame_size) {
         UBASE_FATAL(upipe, uref_sound_flow_set_samples(flow_def,

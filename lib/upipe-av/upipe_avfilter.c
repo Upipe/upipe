@@ -70,15 +70,68 @@ enum uprobe_avfilt_sub_event  {
     UPROBE_AVFILT_SUB_UPDATE,
 };
 
-/** @internal @This enumerates the supported media types. */
-enum upipe_avfilt_sub_media_type {
-    /** unknown */
-    UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN,
-    /** video */
-    UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO,
-    /** audio */
-    UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO,
+/** @internal @This describes a media. */
+struct upipe_avfilt_media {
+    /** media type */
+    enum AVMediaType type;
+    union {
+        /** video */
+        struct upipe_avfilt_media_video {
+            /** format */
+            enum AVPixelFormat pix_fmt;
+            /** input width */
+            uint64_t width;
+            /** input height */
+            uint64_t height;
+            /** chroma map */
+            const char *chroma_map[UPIPE_AV_MAX_PLANES];
+            /** framerate */
+            struct urational fps;
+            /** sample aspect ratio */
+            struct urational sar;
+            /** interlaced? */
+            bool interlaced;
+        } video;
+
+        /** audio */
+        struct upipe_avfilt_media_audio{
+            /** sample format */
+            enum AVSampleFormat sample_fmt;
+            /** channel layout */
+            AVChannelLayout ch_layout;
+            /** sample rate */
+            uint64_t sample_rate;
+        } audio;
+    };
 };
+
+/** @internal @This initializes a media structure.
+ *
+ * @param media structure to initialize
+ */
+static void upipe_avfilt_media_init(struct upipe_avfilt_media *media)
+{
+    if (media)
+        media->type = AVMEDIA_TYPE_UNKNOWN;
+}
+
+/** @internal @This cleans a media structure.
+ *
+ * @param media structure to clean
+ */
+static void upipe_avfilt_media_clean(struct upipe_avfilt_media *media)
+{
+    if (media) {
+        switch (media->type) {
+            case AVMEDIA_TYPE_AUDIO:
+                av_channel_layout_uninit(&media->audio.ch_layout);
+                break;
+            default:
+                break;
+        }
+        media->type = AVMEDIA_TYPE_UNKNOWN;
+    }
+}
 
 /** @This is the sub pipe private structure of the avfilter pipe. */
 struct upipe_avfilt_sub {
@@ -131,39 +184,8 @@ struct upipe_avfilt_sub {
     /** latency */
     uint64_t latency;
 
-    /** media type configured at allocation */
-    enum upipe_avfilt_sub_media_type media_type;
-    /** media type private fields */
-    union {
-        /** video */
-        struct {
-            /** format */
-            enum AVPixelFormat pix_fmt;
-            /** input width */
-            uint64_t width;
-            /** input height */
-            uint64_t height;
-            /** chroma map */
-            const char *chroma_map[UPIPE_AV_MAX_PLANES];
-            /** framerate */
-            struct urational fps;
-            /** sample aspect ratio */
-            struct urational sar;
-            /** interlaced? */
-            bool interlaced;
-        } video;
-        /** audio */
-        struct {
-            /** sample format */
-            enum AVSampleFormat sample_fmt;
-            /** number of channels */
-            uint8_t channels;
-            /** channel layout */
-            uint64_t channel_layout;
-            /** sample rate */
-            uint64_t sample_rate;
-        } audio;
-    };
+    /** media configured at allocation */
+    struct upipe_avfilt_media media;
 };
 
 /** @hidden */
@@ -229,37 +251,8 @@ struct upipe_avfilt {
     /** uref from input */
     struct uref *uref;
 
-    /** media type private fields */
-    union {
-        /** video */
-        struct {
-            /** format */
-            enum AVPixelFormat pix_fmt;
-            /** input width */
-            uint64_t width;
-            /** input height */
-            uint64_t height;
-            /** chroma map */
-            const char *chroma_map[UPIPE_AV_MAX_PLANES];
-            /** framerate */
-            struct urational fps;
-            /** sample aspect ratio */
-            struct urational sar;
-            /** interlaced? */
-            bool interlaced;
-        } video;
-        /** audio */
-        struct {
-            /** sample format */
-            enum AVSampleFormat sample_fmt;
-            /** number of channels */
-            uint8_t channels;
-            /** channel layout */
-            uint64_t channel_layout;
-            /** sample rate */
-            uint64_t sample_rate;
-        } audio;
-    };
+    /** media private fields */
+    struct upipe_avfilt_media media;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -369,6 +362,9 @@ static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
     if (unlikely(!upipe_avfilt_sub->flow_def))
         return false;
 
+    if (media_type != upipe_avfilt_sub->media.type)
+        return false;
+
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO: {
             enum AVPixelFormat pix_fmt =
@@ -389,12 +385,14 @@ static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
                         upipe_avfilt_sub->buffer_ctx));
             bool interlaced = frame->interlaced_frame;
 
-            if (upipe_avfilt_sub->video.pix_fmt == pix_fmt &&
-                upipe_avfilt_sub->video.width == width &&
-                upipe_avfilt_sub->video.height == height &&
-                !urational_cmp(&upipe_avfilt_sub->video.fps, &fps) &&
-                !urational_cmp(&upipe_avfilt_sub->video.sar, &sar) &&
-                upipe_avfilt_sub->video.interlaced == interlaced)
+            struct upipe_avfilt_media_video *video =
+                &upipe_avfilt_sub->media.video;
+            if (video->pix_fmt == pix_fmt &&
+                video->width == width &&
+                video->height == height &&
+                !urational_cmp(&video->fps, &fps) &&
+                !urational_cmp(&video->sar, &sar) &&
+                video->interlaced == interlaced)
                 return true;
             return false;
         }
@@ -402,19 +400,22 @@ static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
         case AVMEDIA_TYPE_AUDIO: {
             enum AVSampleFormat sample_fmt =
                 av_buffersink_get_format(upipe_avfilt_sub->buffer_ctx);
-            int channels =
-                av_buffersink_get_channels(upipe_avfilt_sub->buffer_ctx);
-            uint64_t channel_layout =
-                av_buffersink_get_channel_layout(upipe_avfilt_sub->buffer_ctx);
+
+            AVChannelLayout ch_layout;
+            av_buffersink_get_ch_layout(upipe_avfilt_sub->buffer_ctx,
+                                        &ch_layout);
             int sample_rate =
                 av_buffersink_get_sample_rate(upipe_avfilt_sub->buffer_ctx);
 
-            if (upipe_avfilt_sub->audio.sample_fmt == sample_fmt &&
-                upipe_avfilt_sub->audio.channels == channels &&
-                upipe_avfilt_sub->audio.channel_layout == channel_layout &&
-                upipe_avfilt_sub->audio.sample_rate == sample_rate)
-                return true;
-            return false;
+            bool changed = true;
+            struct upipe_avfilt_media_audio *audio =
+                &upipe_avfilt_sub->media.audio;
+            if (audio->sample_fmt == sample_fmt &&
+                !av_channel_layout_compare(&audio->ch_layout, &ch_layout) &&
+                audio->sample_rate == sample_rate)
+                changed = false;
+            av_channel_layout_uninit(&ch_layout);
+            return !changed;
         }
 
         default:
@@ -438,6 +439,8 @@ static int upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
 
     enum AVMediaType media_type =
         av_buffersink_get_type(upipe_avfilt_sub->buffer_ctx);
+
+    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
 
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO: {
@@ -466,32 +469,34 @@ static int upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
             if (!interlaced)
                 UBASE_RETURN(uref_pic_set_progressive(flow_def));
 
-            upipe_avfilt_sub->video.pix_fmt =
-                upipe_av_pixfmt_from_flow_def(
-                    flow_def, NULL, upipe_avfilt_sub->video.chroma_map);
-            upipe_avfilt_sub->video.width = width;
-            upipe_avfilt_sub->video.height = height;
-            upipe_avfilt_sub->video.fps = urational(fps);
-            upipe_avfilt_sub->video.sar = urational(sar);
-            upipe_avfilt_sub->video.interlaced = interlaced;
+            struct upipe_avfilt_media_video *video =
+                &upipe_avfilt_sub->media.video;
+            video->pix_fmt = upipe_av_pixfmt_from_flow_def(
+                flow_def, NULL, video->chroma_map);
+            video->width = width;
+            video->height = height;
+            video->fps = urational(fps);
+            video->sar = urational(sar);
+            video->interlaced = interlaced;
             return UBASE_ERR_NONE;
         }
 
         case AVMEDIA_TYPE_AUDIO: {
             enum AVSampleFormat sample_fmt =
                 av_buffersink_get_format(upipe_avfilt_sub->buffer_ctx);
-            int channels =
-                av_buffersink_get_channels(upipe_avfilt_sub->buffer_ctx);
-            uint64_t channel_layout =
-                av_buffersink_get_channel_layout(upipe_avfilt_sub->buffer_ctx);
             int sample_rate =
                 av_buffersink_get_sample_rate(upipe_avfilt_sub->buffer_ctx);
-            upipe_avfilt_sub->audio.sample_fmt = sample_fmt;
-            upipe_avfilt_sub->audio.channels = channels;
-            upipe_avfilt_sub->audio.channel_layout = channel_layout;
-            upipe_avfilt_sub->audio.sample_rate = sample_rate;
-            return upipe_av_samplefmt_to_flow_def(flow_def, sample_fmt,
-                                                  channels);
+
+            struct upipe_avfilt_media_audio *audio =
+                &upipe_avfilt_sub->media.audio;
+            audio->sample_fmt = sample_fmt;
+            audio->sample_rate = sample_rate;
+            av_buffersink_get_ch_layout(upipe_avfilt_sub->buffer_ctx,
+                                        &audio->ch_layout);
+            //FIXME: use ch_layout for this function
+            return upipe_av_samplefmt_to_flow_def(
+                flow_def, sample_fmt,
+                audio->ch_layout.nb_channels);
         }
 
         default:
@@ -553,18 +558,18 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
         return NULL;
     }
 
-    enum upipe_avfilt_sub_media_type type;
+    enum AVMediaType media_type = AVMEDIA_TYPE_UNKNOWN;
 
     struct ubuf *ubuf = NULL;
     if (ubase_check(uref_flow_match_def(
                 upipe_avfilt_sub->flow_def, UREF_PIC_FLOW_DEF))) {
         ubuf = ubuf_pic_av_alloc(upipe_avfilt_sub->ubuf_mgr, frame);
-        type = UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO;
+        media_type = AVMEDIA_TYPE_VIDEO;
     }
     else if (ubase_check(uref_flow_match_def(
                 upipe_avfilt_sub->flow_def, UREF_SOUND_FLOW_DEF))) {
         ubuf = ubuf_sound_av_alloc(upipe_avfilt_sub->ubuf_mgr, frame);
-        type = UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO;
+        media_type = AVMEDIA_TYPE_AUDIO;
     }
     else {
         upipe_warn(upipe, "unsupported flow format");
@@ -635,8 +640,8 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
         uref_clock_set_pts_sys(uref, pts_sys);
 
     uint64_t duration = 0;
-    switch (type) {
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO:
+    switch (media_type) {
+        case AVMEDIA_TYPE_VIDEO:
             duration = frame->pkt_duration;
             UBASE_ERROR(upipe, uref_pic_set_number(
                     uref, frame->coded_picture_number))
@@ -650,12 +655,12 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
                 UBASE_ERROR(upipe, uref_pic_set_key(uref))
 
             break;
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO:
+        case AVMEDIA_TYPE_AUDIO:
             duration = frame->nb_samples * UCLOCK_FREQ / frame->sample_rate;
             break;
 
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN:
-            upipe_err(upipe, "unknown media type");
+        default:
+            upipe_err(upipe, "unsupported media type");
             break;
     }
     upipe_avfilt_sub->last_duration = duration;
@@ -809,15 +814,15 @@ static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
         return UBASE_ERR_INVALID;
 
     const char *name = NULL;
-    switch (upipe_avfilt_sub->media_type) {
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO:
+    switch (upipe_avfilt_sub->media.type) {
+        case AVMEDIA_TYPE_VIDEO:
             name = "buffer";
             break;
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO:
+        case AVMEDIA_TYPE_AUDIO:
             name = "abuffer";
             break;
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN:
-            upipe_err(upipe, "unknown media type");
+        default:
+            upipe_err(upipe, "unsupported media type");
             return UBASE_ERR_INVALID;
     }
 
@@ -843,26 +848,32 @@ static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
         }
         p->time_base.num = 1;
         p->time_base.den = UCLOCK_FREQ;
-        switch (upipe_avfilt_sub->media_type) {
-            case UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO:
-                p->format = upipe_avfilt_sub->video.pix_fmt;
-                p->width = upipe_avfilt_sub->video.width;
-                p->height = upipe_avfilt_sub->video.height;
-                if (upipe_avfilt_sub->video.sar.num) {
-                    p->sample_aspect_ratio.num = upipe_avfilt_sub->video.sar.num;
-                    p->sample_aspect_ratio.den = upipe_avfilt_sub->video.sar.den;
+        switch (upipe_avfilt_sub->media.type) {
+            case AVMEDIA_TYPE_VIDEO: {
+                struct upipe_avfilt_media_video *video =
+                    &upipe_avfilt_sub->media.video;
+                p->format = video->pix_fmt;
+                p->width = video->width;
+                p->height = video->height;
+                if (video->sar.num) {
+                    p->sample_aspect_ratio.num = video->sar.num;
+                    p->sample_aspect_ratio.den = video->sar.den;
                 }
-                if (upipe_avfilt_sub->video.fps.num) {
-                    p->frame_rate.num = upipe_avfilt_sub->video.fps.num;
-                    p->frame_rate.den = upipe_avfilt_sub->video.fps.den;
+                if (video->fps.num) {
+                    p->frame_rate.num = video->fps.num;
+                    p->frame_rate.den = video->fps.den;
                 }
                 break;
-            case UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO:
-                p->format = upipe_avfilt_sub->audio.sample_fmt;
-                p->sample_rate = upipe_avfilt_sub->audio.sample_rate;
-                p->channel_layout = upipe_avfilt_sub->audio.channel_layout;
+            }
+            case AVMEDIA_TYPE_AUDIO: {
+                struct upipe_avfilt_media_audio *audio =
+                    &upipe_avfilt_sub->media.audio;
+                p->format = audio->sample_fmt;
+                p->sample_rate = audio->sample_rate;
+                av_channel_layout_copy(&p->ch_layout, &audio->ch_layout);
                 break;
-            case UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN:
+            }
+            default:
                 break;
         }
 
@@ -926,7 +937,7 @@ static struct upipe *upipe_avfilt_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_sub->last_duration = 0;
     upipe_avfilt_sub->buffer_ctx = NULL;
     upipe_avfilt_sub->warn_not_configured = true;
-    upipe_avfilt_sub->media_type = UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN;
+    upipe_avfilt_media_init(&upipe_avfilt_sub->media);
     upipe_avfilt_sub->latency = 0;
     ulist_init(&upipe_avfilt_sub->urefs);
 
@@ -962,6 +973,7 @@ static void upipe_avfilt_sub_free(struct upipe *upipe)
 
     uref_free(upipe_avfilt_sub->flow_def_alloc);
     ubuf_mgr_release(upipe_avfilt_sub->ubuf_mgr);
+    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
     upipe_avfilt_sub_clean_upump(upipe);
     upipe_avfilt_sub_clean_upump_mgr(upipe);
     upipe_avfilt_sub_clean_uclock(upipe);
@@ -987,25 +999,26 @@ static int upipe_avfilt_sub_avframe_from_uref_pic(struct upipe *upipe,
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
 
-    size_t hsize, vsize;
-    if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
-                 hsize != upipe_avfilt_sub->video.width ||
-                 vsize != upipe_avfilt_sub->video.height))
+    if (upipe_avfilt_sub->media.type != AVMEDIA_TYPE_VIDEO)
         goto inval;
 
-    for (int i = 0; i < UPIPE_AV_MAX_PLANES &&
-         upipe_avfilt_sub->video.chroma_map[i] != NULL; i++) {
+    struct upipe_avfilt_media_video *video = &upipe_avfilt_sub->media.video;
+
+    size_t hsize, vsize;
+    if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
+                 hsize != video->width || vsize != video->height))
+        goto inval;
+
+    for (int i = 0; i < UPIPE_AV_MAX_PLANES && video->chroma_map[i]; i++) {
         const uint8_t *data;
         size_t stride;
         uint8_t vsub;
         if (unlikely(
                 !ubase_check(
-                    uref_pic_plane_read(uref,
-                                        upipe_avfilt_sub->video.chroma_map[i],
+                    uref_pic_plane_read(uref, video->chroma_map[i],
                                         0, 0, -1, -1, &data)) ||
                 !ubase_check(
-                    uref_pic_plane_size(uref,
-                                        upipe_avfilt_sub->video.chroma_map[i],
+                    uref_pic_plane_size(uref, video->chroma_map[i],
                                         &stride, NULL, &vsub, NULL))))
             goto inval;
         frame->data[i] = (uint8_t *)data;
@@ -1015,8 +1028,7 @@ static int upipe_avfilt_sub_avframe_from_uref_pic(struct upipe *upipe,
                                          buffer_free_pic_cb, uref,
                                          AV_BUFFER_FLAG_READONLY);
         if (frame->buf[i] == NULL) {
-            uref_pic_plane_unmap(uref, upipe_avfilt_sub->video.chroma_map[i],
-                                 0, 0, -1, -1);
+            uref_pic_plane_unmap(uref, video->chroma_map[i], 0, 0, -1, -1);
             goto inval;
         }
 
@@ -1028,7 +1040,7 @@ static int upipe_avfilt_sub_avframe_from_uref_pic(struct upipe *upipe,
     frame->width = hsize;
     frame->height = vsize;
     frame->key_frame = ubase_check(uref_pic_get_key(uref));
-    frame->format = upipe_avfilt_sub->video.pix_fmt;
+    frame->format = video->pix_fmt;
     frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
     frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
 
@@ -1073,6 +1085,11 @@ static int upipe_avfilt_sub_avframe_from_uref_sound(struct upipe *upipe,
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
 
+    if (upipe_avfilt_sub->media.type != AVMEDIA_TYPE_AUDIO)
+        return UBASE_ERR_INVALID;
+
+    struct upipe_avfilt_media_audio *audio = &upipe_avfilt_sub->media.audio;
+
     size_t size;
     uint8_t sample_size;
     UBASE_RETURN(uref_sound_size(uref, &size, &sample_size));
@@ -1108,10 +1125,9 @@ static int upipe_avfilt_sub_avframe_from_uref_sound(struct upipe *upipe,
 
     frame->extended_data = frame->data;
     frame->nb_samples = size;
-    frame->format = upipe_avfilt_sub->audio.sample_fmt;
-    frame->sample_rate = upipe_avfilt_sub->audio.sample_rate;
-    frame->channel_layout = upipe_avfilt_sub->audio.channel_layout;
-    frame->channels = upipe_avfilt_sub->audio.channels;
+    frame->format = audio->sample_fmt;
+    frame->sample_rate = audio->sample_rate;
+    av_channel_layout_copy(&frame->ch_layout, &audio->ch_layout);
 
     upipe_verbose_va(upipe, " input frame pts=%f duration=%f",
                      (double) pts / UCLOCK_FREQ,
@@ -1243,23 +1259,23 @@ static int upipe_avfilt_sub_set_flow_def_pic(struct upipe *upipe,
     uref_pic_flow_get_sar(flow_def, &sar);
     uref_pic_flow_get_fps(flow_def, &fps);
 
+    struct upipe_avfilt_media_video *video = &upipe_avfilt_sub->media.video;
     if (upipe_avfilt->filter_graph &&
-        upipe_avfilt_sub->media_type == UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO &&
-        upipe_avfilt_sub->video.pix_fmt == pix_fmt &&
-        upipe_avfilt_sub->video.width == width &&
-        upipe_avfilt_sub->video.height == height &&
-        !urational_cmp(&upipe_avfilt_sub->video.sar, &sar) &&
-        !urational_cmp(&upipe_avfilt_sub->video.fps, &fps))
+        upipe_avfilt_sub->media.type == AVMEDIA_TYPE_VIDEO &&
+        video->pix_fmt == pix_fmt &&
+        video->width == width && video->height == height &&
+        !urational_cmp(&video->sar, &sar) && !urational_cmp(&video->fps, &fps))
         return UBASE_ERR_NONE;
 
 
-    upipe_avfilt_sub->media_type = UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO;
-    memcpy(upipe_avfilt_sub->video.chroma_map, chroma_map, sizeof (chroma_map));
-    upipe_avfilt_sub->video.pix_fmt = pix_fmt;
-    upipe_avfilt_sub->video.width = width;
-    upipe_avfilt_sub->video.height = height;
-    upipe_avfilt_sub->video.sar = sar;
-    upipe_avfilt_sub->video.fps = fps;
+    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
+    upipe_avfilt_sub->media.type = AVMEDIA_TYPE_VIDEO;
+    memcpy(video->chroma_map, chroma_map, sizeof (chroma_map));
+    video->pix_fmt = pix_fmt;
+    video->width = width;
+    video->height = height;
+    video->sar = sar;
+    video->fps = fps;
 
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
     upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
@@ -1281,7 +1297,7 @@ static int upipe_avfilt_sub_set_flow_def_sound(struct upipe *upipe,
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
     uint8_t channels = 0;
-    uint64_t channel_layout;
+    AVChannelLayout ch_layout;
     uint64_t sample_rate;
     enum AVSampleFormat sample_fmt;
 
@@ -1289,32 +1305,33 @@ static int upipe_avfilt_sub_set_flow_def_sound(struct upipe *upipe,
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &sample_rate));
     switch (channels) {
         case 1:
-            channel_layout = AV_CH_LAYOUT_MONO;
+            av_channel_layout_from_mask(&ch_layout, AV_CH_LAYOUT_MONO);
             break;
         case 2:
-            channel_layout = AV_CH_LAYOUT_STEREO;
+            av_channel_layout_from_mask(&ch_layout, AV_CH_LAYOUT_STEREO);
             break;
         case 5:
-            channel_layout = AV_CH_LAYOUT_5POINT1_BACK;
+            av_channel_layout_from_mask(&ch_layout, AV_CH_LAYOUT_5POINT1_BACK);
             break;
         default:
             upipe_warn(upipe, "unsupported channel layout");
             return UBASE_ERR_INVALID;
     }
 
+    struct upipe_avfilt_media_audio *audio = &upipe_avfilt_sub->media.audio;
     if (upipe_avfilt->filter_graph &&
-        upipe_avfilt_sub->media_type == UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO &&
-        upipe_avfilt_sub->audio.sample_fmt == sample_fmt &&
-        upipe_avfilt_sub->audio.channels == channels &&
-        upipe_avfilt_sub->audio.channel_layout == channel_layout &&
-        upipe_avfilt_sub->audio.sample_rate == sample_rate)
+        upipe_avfilt_sub->media.type == AVMEDIA_TYPE_AUDIO &&
+        audio->sample_fmt == sample_fmt && audio->sample_rate == sample_rate &&
+        !av_channel_layout_compare(&audio->ch_layout, &ch_layout)) {
+        av_channel_layout_uninit(&ch_layout);
         return UBASE_ERR_NONE;
+    }
 
-    upipe_avfilt_sub->media_type = UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO;
-    upipe_avfilt_sub->audio.sample_fmt = sample_fmt;
-    upipe_avfilt_sub->audio.channels = channels;
-    upipe_avfilt_sub->audio.channel_layout = channel_layout;
-    upipe_avfilt_sub->audio.sample_rate = sample_rate;
+    upipe_avfilt_sub->media.type = AVMEDIA_TYPE_AUDIO;
+    audio->sample_fmt = sample_fmt;
+    audio->sample_rate = sample_rate;
+    av_channel_layout_copy(&audio->ch_layout, &ch_layout);
+    av_channel_layout_uninit(&ch_layout);
 
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
     upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
@@ -1765,12 +1782,15 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
     uref_pic_flow_get_sar(flow_def, &sar);
     uref_pic_flow_get_fps(flow_def, &fps);
 
-    memcpy(upipe_avfilt->video.chroma_map, chroma_map, sizeof (chroma_map));
-    upipe_avfilt->video.pix_fmt = pix_fmt;
-    upipe_avfilt->video.width = width;
-    upipe_avfilt->video.height = height;
-    upipe_avfilt->video.sar = sar;
-    upipe_avfilt->video.fps = fps;
+    upipe_avfilt_media_clean(&upipe_avfilt->media);
+    upipe_avfilt->media.type = AVMEDIA_TYPE_VIDEO;
+    struct upipe_avfilt_media_video *video = &upipe_avfilt->media.video;
+    memcpy(video->chroma_map, chroma_map, sizeof (chroma_map));
+    video->pix_fmt = pix_fmt;
+    video->width = width;
+    video->height = height;
+    video->sar = sar;
+    video->fps = fps;
 
     if (unlikely(upipe_avfilt->buffer_ctx))
         return UBASE_ERR_BUSY;
@@ -1833,31 +1853,27 @@ static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
+    upipe_avfilt_media_clean(&upipe_avfilt->media);
+    upipe_avfilt->media.type = AVMEDIA_TYPE_AUDIO;
+    struct upipe_avfilt_media_audio *audio = &upipe_avfilt->media.audio;
+
     uint8_t channels = 0;
-    uint64_t channel_layout;
-    uint64_t sample_rate;
-    enum AVSampleFormat sample_fmt =
-        upipe_av_samplefmt_from_flow_def(flow_def, &channels);
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &sample_rate));
+    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &audio->sample_rate));
+    audio->sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
     switch (channels) {
         case 1:
-            channel_layout = AV_CH_LAYOUT_MONO;
+            av_channel_layout_from_mask(&audio->ch_layout, AV_CH_LAYOUT_MONO);
             break;
         case 2:
-            channel_layout = AV_CH_LAYOUT_STEREO;
+            av_channel_layout_from_mask(&audio->ch_layout, AV_CH_LAYOUT_STEREO);
             break;
         case 5:
-            channel_layout = AV_CH_LAYOUT_5POINT1_BACK;
+            av_channel_layout_from_mask(&audio->ch_layout, AV_CH_LAYOUT_5POINT1_BACK);
             break;
         default:
             upipe_warn(upipe, "unsupported channel layout");
             return UBASE_ERR_INVALID;
     }
-
-    upipe_avfilt->audio.sample_fmt = sample_fmt;
-    upipe_avfilt->audio.channels = channels;
-    upipe_avfilt->audio.channel_layout = channel_layout;
-    upipe_avfilt->audio.sample_rate = sample_rate;
 
     if (unlikely(upipe_avfilt->buffer_ctx))
         return UBASE_ERR_BUSY;
@@ -1883,9 +1899,9 @@ static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
     }
     p->time_base.num = 1;
     p->time_base.den = UCLOCK_FREQ;
-    p->format = sample_fmt;
-    p->sample_rate = sample_rate;
-    p->channel_layout = channel_layout;
+    p->format = audio->sample_fmt;
+    p->sample_rate = audio->sample_rate;
+    av_channel_layout_copy(&p->ch_layout, &audio->ch_layout);
 
     int err = av_buffersrc_parameters_set(ctx, p);
     av_free(p);
@@ -2176,18 +2192,18 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
         return;
     }
 
-    enum upipe_avfilt_sub_media_type type;
+    enum AVMediaType media_type = AVMEDIA_TYPE_UNKNOWN;
 
     struct ubuf *ubuf = NULL;
     if (ubase_check(uref_flow_match_def(
                 upipe_avfilt->flow_def, UREF_PIC_FLOW_DEF))) {
         ubuf = ubuf_pic_av_alloc(upipe_avfilt->ubuf_mgr, frame);
-        type = UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO;
+        media_type = AVMEDIA_TYPE_VIDEO;
 
     } else if (ubase_check(uref_flow_match_def(
                 upipe_avfilt->flow_def, UREF_SOUND_FLOW_DEF))) {
         ubuf = ubuf_sound_av_alloc(upipe_avfilt->ubuf_mgr, frame);
-        type = UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO;
+        media_type = AVMEDIA_TYPE_AUDIO;
 
     } else {
         upipe_warn(upipe, "unsupported flow format");
@@ -2228,8 +2244,8 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     }
 
     uint64_t duration = 0;
-    switch (type) {
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_VIDEO:
+    switch (media_type) {
+        case AVMEDIA_TYPE_VIDEO:
             duration = frame->pkt_duration;
             UBASE_ERROR(upipe, uref_pic_set_number(
                     uref, frame->coded_picture_number))
@@ -2243,10 +2259,10 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
                 UBASE_ERROR(upipe, uref_pic_set_key(uref))
 
             break;
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_AUDIO:
+        case AVMEDIA_TYPE_AUDIO:
             duration = frame->nb_samples * UCLOCK_FREQ / frame->sample_rate;
             break;
-        case UPIPE_AVFILT_SUB_MEDIA_TYPE_UNKNOWN:
+        default:
             break;
     }
     UBASE_ERROR(upipe, uref_clock_set_duration(uref, duration));
@@ -2276,25 +2292,26 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
-    size_t hsize, vsize;
-    if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
-                 hsize != upipe_avfilt->video.width ||
-                 vsize != upipe_avfilt->video.height))
+    if (upipe_avfilt->media.type != AVMEDIA_TYPE_VIDEO)
         goto inval;
 
-    for (int i = 0; i < UPIPE_AV_MAX_PLANES &&
-         upipe_avfilt->video.chroma_map[i] != NULL; i++) {
+    struct upipe_avfilt_media_video *video = &upipe_avfilt->media.video;
+
+    size_t hsize, vsize;
+    if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
+                 hsize != video->width || vsize != video->height))
+        goto inval;
+
+    for (int i = 0; i < UPIPE_AV_MAX_PLANES && video->chroma_map[i]; i++) {
         const uint8_t *data;
         size_t stride;
         uint8_t vsub;
         if (unlikely(
                 !ubase_check(
-                    uref_pic_plane_read(uref,
-                                        upipe_avfilt->video.chroma_map[i],
+                    uref_pic_plane_read(uref, video->chroma_map[i],
                                         0, 0, -1, -1, &data)) ||
                 !ubase_check(
-                    uref_pic_plane_size(uref,
-                                        upipe_avfilt->video.chroma_map[i],
+                    uref_pic_plane_size(uref, video->chroma_map[i],
                                         &stride, NULL, &vsub, NULL))))
             goto inval;
         frame->data[i] = (uint8_t *)data;
@@ -2304,8 +2321,7 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
                                          buffer_free_pic_cb, uref,
                                          AV_BUFFER_FLAG_READONLY);
         if (frame->buf[i] == NULL) {
-            uref_pic_plane_unmap(uref, upipe_avfilt->video.chroma_map[i],
-                                 0, 0, -1, -1);
+            uref_pic_plane_unmap(uref, video->chroma_map[i], 0, 0, -1, -1);
             goto inval;
         }
 
@@ -2317,7 +2333,7 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
     frame->width = hsize;
     frame->height = vsize;
     frame->key_frame = ubase_check(uref_pic_get_key(uref));
-    frame->format = upipe_avfilt->video.pix_fmt;
+    frame->format = video->pix_fmt;
     frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
     frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
 
@@ -2374,6 +2390,11 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
+    if (upipe_avfilt->media.type != AVMEDIA_TYPE_AUDIO)
+        return UBASE_ERR_INVALID;
+
+    struct upipe_avfilt_media_audio *audio = &upipe_avfilt->media.audio;
+
     size_t size;
     uint8_t sample_size;
     UBASE_RETURN(uref_sound_size(uref, &size, &sample_size));
@@ -2409,10 +2430,9 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
 
     frame->extended_data = frame->data;
     frame->nb_samples = size;
-    frame->format = upipe_avfilt->audio.sample_fmt;
-    frame->sample_rate = upipe_avfilt->audio.sample_rate;
-    frame->channel_layout = upipe_avfilt->audio.channel_layout;
-    frame->channels = upipe_avfilt->audio.channels;
+    frame->format = audio->sample_fmt;
+    frame->sample_rate = audio->sample_rate;
+    av_channel_layout_copy(&frame->ch_layout, &audio->ch_layout);
 
     upipe_verbose_va(upipe, " input frame pts=%f duration=%f",
                      (double) pts / UCLOCK_FREQ,
@@ -2653,6 +2673,7 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt->buffersink_ctx = NULL;
     upipe_avfilt->uref = NULL;
     upipe_avfilt->options = NULL;
+    upipe_avfilt_media_init(&upipe_avfilt->media);
 
     upipe_throw_ready(upipe);
 
@@ -2680,6 +2701,7 @@ static void upipe_avfilt_free(struct upipe *upipe)
     av_dict_free(&upipe_avfilt->options);
     uref_free(upipe_avfilt->uref);
     ubuf_mgr_release(upipe_avfilt->ubuf_mgr);
+    upipe_avfilt_media_clean(&upipe_avfilt->media);
     upipe_avfilt_clean_sync(upipe);
     upipe_avfilt_clean_sub_subs(upipe);
     upipe_avfilt_clean_urefcount(upipe);
