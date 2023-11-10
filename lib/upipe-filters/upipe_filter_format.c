@@ -383,7 +383,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool need_derive = pic_vaapi_in && pic_qsv_out;
         bool need_avfilter = ffmt_mgr->avfilter_mgr && hw &&
             (need_deint || need_scale || need_format || need_hw_transfer ||
-             need_derive);
+             need_derive || need_range);
 
         if (need_avfilter) {
             if (need_format) {
@@ -414,6 +414,16 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                                 " → %" PRIu64 "x%" PRIu64,
                                 hsize_in, vsize_in, hsize_out, vsize_out);
             }
+            if (need_range) {
+                const char *from =
+                    ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
+                    "full" : "limited";
+                const char *to =
+                    ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
+                    "full" : "limited";
+                upipe_notice_va(upipe, "need range conversion %s → %s",
+                                from, to);
+            }
             if (need_derive)
                 upipe_notice(upipe, "need hw surface mapping vaapi → qsv");
 
@@ -433,18 +443,26 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
 
 #define str_cat(fmt, ...) pos += sprintf(filters + pos, fmt, ##__VA_ARGS__)
 
-            if (!pic_vaapi_in)
+            if (!hw_in)
                 str_cat("scale,format=nv12,hwupload,");
             if (need_deint)
                 str_cat("deinterlace_vaapi=auto=1,");
-            if (need_scale || need_format) {
+            if (need_scale || need_format || need_range) {
                 str_cat("scale_vaapi=");
                 if (need_scale)
                     str_cat("w=%"PRIu64":h=%"PRIu64, hsize, vsize);
-                if (need_scale && need_format)
-                    str_cat(":");
-                if (need_format)
+                if (need_format) {
+                    if (need_scale)
+                        str_cat(":");
                     str_cat("format=%s", pix_fmt_sw);
+                }
+                if (need_range) {
+                    if (need_scale || need_format)
+                        str_cat(":");
+                    str_cat("out_range=%s",
+                            ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
+                            "full" : "limited");
+                }
                 str_cat(",");
             }
             if (!hw_out) {
