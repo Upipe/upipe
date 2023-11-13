@@ -79,9 +79,12 @@
 struct es_conf {
     struct uchain uchain;
     uint64_t id;
+    const char *decode_hw_type;
+    const char *decode_hw_device;
     const char *codec;
     const char *filters;
     const char *filters_hw_type;
+    const char *filters_hw_device;
     struct udict *options;
 };
 
@@ -97,8 +100,6 @@ struct upipe_mgr *upipe_noclock_mgr;
 
 static bool file_mode;
 
-static const char *hw_accel;
-
 static struct uprobe *logger;
 static struct upipe *avfsrc;
 static struct upipe *avfsink;
@@ -112,9 +113,9 @@ static void usage(const char *argv0) {
     fprintf(stderr, "   -m: output mime type\n");
     fprintf(stderr, "   -p: add stream with id\n");
     fprintf(stderr, "   -c: stream encoder\n");
-    fprintf(stderr, "   -x: decoder hw accel\n");
+    fprintf(stderr, "   -x: decoder hardware device\n");
     fprintf(stderr, "   -g: filter graph\n");
-    fprintf(stderr, "   -t: hardware device type for filters\n");
+    fprintf(stderr, "   -t: hardware device for filters\n");
     fprintf(stderr, "   -o: encoder option (key=value)\n");
     exit(EXIT_FAILURE);
 }
@@ -287,10 +288,12 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             incoming = decoder;
 
             /* hw config */
-            if (!ubase_check(upipe_avcdec_set_hw_config(decoder,
-                                                        hw_accel,
-                                                        NULL))) {
-                upipe_err_va(upipe, "hw config unsupported: %s", hw_accel);
+            if (!ubase_check(upipe_avcdec_set_hw_config(
+                        decoder,
+                        conf->decode_hw_type,
+                        conf->decode_hw_device))) {
+                upipe_err_va(upipe, "hw config not supported: %s",
+                             conf->decode_hw_type);
                 exit(EXIT_FAILURE);
             }
 
@@ -321,12 +324,17 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
                     exit(EXIT_FAILURE);
                 }
 
-                if (conf->filters_hw_type != NULL &&
-                    !ubase_check(upipe_avfilt_set_hw_config(
-                            avfilt, conf->filters_hw_type, NULL))) {
-                    upipe_err_va(upipe, "cannot set filters hw config "
-                                 "for %"PRIu64" (%s)", id, def);
-                    exit(EXIT_FAILURE);
+                if (conf->filters_hw_type != NULL) {
+                    if (!ubase_check(upipe_avfilt_set_hw_config(
+                                avfilt, conf->filters_hw_type,
+                                conf->filters_hw_device))) {
+                        upipe_err_va(upipe, "cannot set filters hw config "
+                                     "for %"PRIu64" (%s)", id, def);
+                        exit(EXIT_FAILURE);
+                    }
+                    upipe_notice_va(upipe, "configured hw type:%s device:%s",
+                                    conf->filters_hw_type,
+                                    conf->filters_hw_device ?: "default");
                 }
 
                 upipe_release(avfilt);
@@ -452,13 +460,20 @@ int main(int argc, char *argv[])
             case 'f':
                 format = optarg;
                 break;
-            case 'x':
-                hw_accel = optarg;
-                break;
 
             case 'p': {
                 uint64_t pid = strtoull(optarg, NULL, 0);
                 es_cur = es_conf_alloc(udict_mgr, pid, &eslist);
+                break;
+            }
+            case 'x': {
+                check_exit(es_cur, "no stream id specified\n");
+                es_cur->decode_hw_type = optarg;
+                char *device = strchr(optarg, ':');
+                if (device) {
+                    *device++ = '\0';
+                    es_cur->decode_hw_device = device;
+                }
                 break;
             }
             case 'c': {
@@ -474,6 +489,11 @@ int main(int argc, char *argv[])
             case 't': {
                 check_exit(es_cur, "no stream id specified\n");
                 es_cur->filters_hw_type = optarg;
+                char *device = strchr(optarg, ':');
+                if (device) {
+                    *device++ = '\0';
+                    es_cur->filters_hw_device = device;
+                }
                 break;
             }
             case 'o': {
