@@ -881,6 +881,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
     }
 
     uint8_t klen = 4 * srt_km_get_klen(ext);
+    // FIXME: check key length
 
     memcpy(upipe_srt_handshake->salt, srt_km_get_salt(ext), 16);
 
@@ -1047,8 +1048,9 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         size_t size = ext_size + SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
         uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
 
+        uint8_t klen = 128/8; // FIXME: 192 and 256
         if (upipe_srt_handshake->password) {
-            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + (8+128/8);
+            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + (8+klen);
             extension |= SRT_HANDSHAKE_EXT_KMREQ;
         }
         if (upipe_srt_handshake->stream_id) {
@@ -1107,8 +1109,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             out_ext[10] = 2; // SE
             out_ext[14] = 4; // slen;
 
-            uint8_t wrap[8+128/8] = {0};
-            uint8_t klen = 128/8;
+            uint8_t wrap[8+256/8] = {0};
 
             size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
 
