@@ -913,7 +913,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
         goto key_error;
     }
 
-    err = gcry_cipher_decrypt(aes, osek, 16, *wrap, *wrap_len);
+    err = gcry_cipher_decrypt(aes, osek, klen, *wrap, *wrap_len);
     if (err) {
         upipe_err_va(upipe, "Couldn't decrypt session key (0x%x)", err);
         goto key_error;
