@@ -763,17 +763,24 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
             /** XXX: Support crazy 25fps captions? **/
             const uint8_t fps = upipe_bmd_sink->mode == bmdModeNTSC ||
                 upipe_bmd_sink->mode == bmdModeHD1080i5994 ? 0x4 : 0x7;
-            void *vanc;
-            ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
-            uint16_t buf[VANC_WIDTH*2];
-            upipe_sdi_blank_c(buf, VANC_WIDTH);
-            /* +1 to write into the Y plane */
-            sdi_write_cdp(pic_data, pic_data_size, &buf[1], upipe_bmd_sink->mode == bmdModeNTSC ? 1 : 2,
-                    &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
-            sdi_calc_parity_checksum(&buf[1]);
 
-            if (!sd)
-                sdi_encode_v210((uint32_t*)vanc, buf, w);
+            const uint8_t expected_cc_count = fps == 0x4 ? 20 : 10;
+            if (expected_cc_count * 2 == pic_data_size) {
+                void *vanc;
+                ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
+                uint16_t buf[VANC_WIDTH*2];
+                upipe_sdi_blank_c(buf, VANC_WIDTH);
+                /* +1 to write into the Y plane */
+                sdi_write_cdp(pic_data, pic_data_size, &buf[1], upipe_bmd_sink->mode == bmdModeNTSC ? 1 : 2,
+                        &upipe_bmd_sink->cdp_hdr_sequence_cntr, fps);
+                sdi_calc_parity_checksum(&buf[1]);
+
+                if (!sd)
+                    sdi_encode_v210((uint32_t*)vanc, buf, w);
+            }
+            else {
+                upipe_warn(upipe, "Unexpected closed caption packet size, dropping.");
+            }
         }
     }
 
