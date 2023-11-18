@@ -765,7 +765,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
                 upipe_bmd_sink->mode == bmdModeHD1080i5994 ? 0x4 : 0x7;
 
             const uint8_t expected_cc_count = fps == 0x4 ? 20 : 10;
-            if (expected_cc_count * 2 == pic_data_size) {
+            if (expected_cc_count * 3 == pic_data_size) {
                 void *vanc;
                 ancillary->GetBufferForVerticalBlankingLine(CC_LINE, &vanc);
                 uint16_t buf[VANC_WIDTH*2];

@@ -1090,7 +1090,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         if (upipe_sdi_enc->cea708_size && line_num == CC_LINE) {
             uint8_t fps = f->frame_rate == S352_PICTURE_RATE_30000_1001 ? 0x4 : 0x7;
             const uint8_t expected_cc_count = fps == 0x4 ? 20 : 10;
-            if (expected_cc_count * 2 == upipe_sdi_enc->cea708_size) {
+            if (expected_cc_count * 3 == upipe_sdi_enc->cea708_size) {
                 sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, vanc_start, 2,
                             &upipe_sdi_enc->cdp_hdr_sequence_cntr, fps);
                 sdi_calc_parity_checksum(vanc_start);
