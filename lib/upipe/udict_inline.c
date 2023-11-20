@@ -421,14 +421,6 @@ static int udict_inline_set(struct udict *udict, const char *name,
                 *attr_p = attr;
             return UBASE_ERR_NONE;
         }
-        if (likely(base_type == UDICT_TYPE_STRING &&
-                   current_size > attr_size)) {
-            /* Just zero out superfluous bytes */
-            memset(attr + attr_size, 0, current_size - attr_size);
-            if (attr_p != NULL)
-                *attr_p = attr;
-            return UBASE_ERR_NONE;
-        }
         udict_inline_delete(udict, name, type);
     }
 
