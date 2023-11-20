@@ -146,6 +146,20 @@ int main(int argc, char **argv)
     udict_free(udict2);
 
     udict_free(udict1);
+
+    {
+        struct udict *udict1 = udict_alloc(mgr, 0);
+        struct udict *udict2 = udict_alloc(mgr, 0);
+
+        udict_set_string(udict1, "void.", UDICT_TYPE_STRING, "f.def");
+        udict_set_string(udict2, "pic.", UDICT_TYPE_STRING, "f.def");
+        assert(udict_cmp(udict1, udict2) != 0);
+        udict_set_string(udict1, "pic.", UDICT_TYPE_STRING, "f.def");
+        assert(udict_cmp(udict1, udict2) == 0);
+        udict_free(udict1);
+        udict_free(udict2);
+    }
+
     udict_mgr_release(mgr);
 
     umem_mgr_release(umem_mgr);
