@@ -58,6 +58,7 @@
 #include "upipe-av/upipe_avfilter.h"
 #include "upipe-swresample/upipe_swr.h"
 #include "upipe-swscale/upipe_sws.h"
+#include "upipe-filters/upipe_filter_decode.h"
 #include "upipe-filters/upipe_filter_format.h"
 #include "upipe-framers/upipe_auto_framer.h"
 #include "upipe-modules/upipe_null.h"
@@ -85,13 +86,14 @@ struct es_conf {
     const char *filters;
     const char *filters_hw_type;
     const char *filters_hw_device;
-    struct udict *options;
+    struct udict *decode_options;
+    struct udict *encode_options;
 };
 
 enum uprobe_log_level loglevel = UPROBE_LOG_LEVEL;
 struct uref_mgr *uref_mgr;
 
-struct upipe_mgr *upipe_avcdec_mgr;
+struct upipe_mgr *upipe_fdec_mgr;
 struct upipe_mgr *upipe_avcenc_mgr;
 struct upipe_mgr *upipe_avfilt_mgr;
 struct upipe_mgr *upipe_ffmt_mgr;
@@ -106,7 +108,7 @@ static struct upipe *avfsink;
 struct uchain eslist;
 
 static void usage(const char *argv0) {
-    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-x <hwaccel>] [-g <filters> [-t <hw>]] [-o <option=value>] ...] ... <source file> <sink file>\n", argv0);
+    fprintf(stderr, "Usage: %s [-d] [-F] [-m <mime>] [-f <format>] [-p <id> -c <codec> [-x <hwaccel>] [-g <filters> [-t <hw>]] [-o|-O <option=value>] ...] ... <source file> <sink file>\n", argv0);
     fprintf(stderr, "   -d: show more debug logs\n");
     fprintf(stderr, "   -F: file mode\n");
     fprintf(stderr, "   -f: output format name\n");
@@ -117,6 +119,7 @@ static void usage(const char *argv0) {
     fprintf(stderr, "   -g: filter graph\n");
     fprintf(stderr, "   -t: hardware device for filters\n");
     fprintf(stderr, "   -o: encoder option (key=value)\n");
+    fprintf(stderr, "   -O: decoder option (key=value)\n");
     exit(EXIT_FAILURE);
 }
 
@@ -149,14 +152,14 @@ static struct es_conf *es_conf_from_id(struct uchain *list, uint64_t id)
 }
 
 /* iterate in es configuration options */
-static bool es_conf_iterate(struct es_conf *conf, const char **key,
+static bool options_iterate(struct udict *options, const char **key,
                             const char **value, enum udict_type *type)
 {
-    if (!ubase_check(udict_iterate(conf->options, key, type)) ||
+    if (!ubase_check(udict_iterate(options, key, type)) ||
         *type == UDICT_TYPE_END) {
         return false;
     }
-    return ubase_check(udict_get_string(conf->options, value, *type, *key));
+    return ubase_check(udict_get_string(options, value, *type, *key));
 }
 
 /* allocate es configuration */
@@ -172,22 +175,20 @@ static struct es_conf *es_conf_alloc(struct udict_mgr *mgr,
         ulist_add(list, &conf->uchain);
     }
 
-    conf->options = udict_alloc(mgr, 0);
+    conf->decode_options = udict_alloc(mgr, 0);
+    conf->encode_options = udict_alloc(mgr, 0);
     conf->id = id;
     return conf;
 }
 
 /* add option to es configuration */
-static bool es_conf_add_option(struct es_conf *conf, const char *key,
-                               const char *value)
+static int add_option(struct udict *options, const char *key, const char *value)
 {
-    assert(conf);
-    return ubase_check(udict_set_string(conf->options,
-                       value, UDICT_TYPE_STRING, key));
+    return udict_set_string(options, value, UDICT_TYPE_STRING, key);
 }
 
 /* add option to es configuration */
-static inline bool es_conf_add_option_parse(struct es_conf *conf, char *str)
+static int add_option_parse(struct udict *options, char *str)
 {
     const char *key = str;
     char *value = strchr(str, '=');
@@ -197,7 +198,7 @@ static inline bool es_conf_add_option_parse(struct es_conf *conf, char *str)
         *value = '\0';
         value++;
     }
-    return es_conf_add_option(conf, key, value);
+    return add_option(options, key, value);
 }
 
 /* free configuration list */
@@ -207,7 +208,8 @@ static void es_conf_clean(struct uchain *list)
     ulist_delete_foreach (list, uchain, uchain_tmp) {
         ulist_delete(uchain);
         struct es_conf *conf = es_conf_from_uchain(uchain);
-        udict_free(conf->options);
+        udict_free(conf->decode_options);
+        udict_free(conf->encode_options);
         free(conf);
     }
 }
@@ -281,11 +283,20 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
 
             /* decoder */
             struct upipe *decoder = upipe_void_alloc_output(incoming,
-                upipe_avcdec_mgr,
+                upipe_fdec_mgr,
                 uprobe_pfx_alloc_va(uprobe_use(logger),
                                     loglevel, "dec %"PRIu64, id));
             upipe_release(decoder);
             incoming = decoder;
+
+            /* decoder options */
+            const char *key = NULL, *value = NULL;
+            enum udict_type type = UDICT_TYPE_END;
+            while (options_iterate(conf->decode_options, &key, &value, &type)) {
+                upipe_dbg_va(decoder, "decoder option: %s=%s", key, value);
+                if (!ubase_check(upipe_set_option(decoder, key, value)))
+                    upipe_err_va(decoder, "unknown option %s", key);
+            }
 
             /* hw config */
             if (!ubase_check(upipe_avcdec_set_hw_config(
@@ -392,13 +403,14 @@ static int catch_demux(struct uprobe *uprobe, struct upipe *upipe,
             }
 
             /* encoder options */
-            const char *key = NULL, *value = NULL;
-            enum udict_type type = UDICT_TYPE_END;
-            while (es_conf_iterate(conf, &key, &value, &type)) {
+            key = NULL;
+            value = NULL;
+            type = UDICT_TYPE_END;
+            while (options_iterate(conf->encode_options, &key, &value, &type)) {
                 upipe_dbg_va(encoder, "%s option: %s=%s",
-                        conf->codec, key, value);
+                             conf->codec, key, value);
                 if (!ubase_check(upipe_set_option(encoder, key, value)))
-                    upipe_warn_va(encoder, "option %s unknown", key);
+                    upipe_err_va(encoder, "unknown option %s", key);
             }
 
             incoming = encoder;
@@ -446,7 +458,7 @@ int main(int argc, char *argv[])
     ulist_init(&eslist);
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:t:o:x:")) != -1) {
+    while ((opt = getopt(argc, argv, "dFm:f:p:c:g:t:o:O:x:")) != -1) {
         switch(opt) {
             case 'd':
                 if (loglevel > 0) loglevel--;
@@ -498,7 +510,12 @@ int main(int argc, char *argv[])
             }
             case 'o': {
                 check_exit(es_cur, "no stream id specified\n");
-                es_conf_add_option_parse(es_cur, optarg);
+                ubase_assert(add_option_parse(es_cur->encode_options, optarg));
+                break;
+            }
+            case 'O': {
+                check_exit(es_cur, "no stream id specified\n");
+                ubase_assert(add_option_parse(es_cur->decode_options, optarg));
                 break;
             }
 
@@ -554,7 +571,10 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_avfsrc_mgr = upipe_avfsrc_mgr_alloc();
     struct upipe_mgr *upipe_swr_mgr = upipe_swr_mgr_alloc();
     struct upipe_mgr *upipe_sws_mgr = upipe_sws_mgr_alloc();
-    upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr = upipe_fdec_mgr_alloc();
+    struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+    upipe_fdec_mgr_set_avcdec_mgr(upipe_fdec_mgr, upipe_avcdec_mgr);
+    upipe_mgr_release(upipe_avcdec_mgr);
     upipe_avcenc_mgr = upipe_avcenc_mgr_alloc();
     upipe_avfilt_mgr = upipe_avfilt_mgr_alloc();
     upipe_ffmt_mgr = upipe_ffmt_mgr_alloc();
@@ -607,6 +627,7 @@ int main(int argc, char *argv[])
     upipe_mgr_release(upipe_ffmt_mgr);
     upipe_mgr_release(upipe_sws_mgr); /* nop */
     upipe_mgr_release(upipe_swr_mgr); /* nop */
+    upipe_mgr_release(upipe_fdec_mgr);
 
     upipe_av_clean();
 
