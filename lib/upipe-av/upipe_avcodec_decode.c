@@ -349,8 +349,9 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         return -1;
     }
 
-    if (frame->format == AV_PIX_FMT_VAAPI)
-        uref_pic_flow_set_surface_type(flow_def_attr, "av.vaapi");
+    if (frame->format == upipe_avcdec->hw_pix_fmt)
+        uref_pic_flow_set_surface_type_va(flow_def_attr, "av.%s",
+                                          av_get_pix_fmt_name(frame->format));
 
     UBASE_FATAL(upipe, uref_pic_flow_set_align(flow_def_attr, align))
     UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def_attr, context->width))
@@ -1523,6 +1524,42 @@ static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
     upipe_avcdec_decode(upipe, uref, upump_p);
 }
 
+/** @internal @This looks for a decoder with suitable hw support.
+ *
+ * @param upipe description structure of the pipe
+ * @param codec_id codec id
+ * @param hw_config return the selected hw config
+ * @return the codec structure
+ */
+static const AVCodec *upipe_avcdec_find_codec(struct upipe *upipe,
+                                              enum AVCodecID codec_id,
+                                              const AVCodecHWConfig **hw_config)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+
+    *hw_config = NULL;
+    if (upipe_avcdec->hw_device_type == AV_HWDEVICE_TYPE_NONE)
+        return avcodec_find_decoder(codec_id);
+
+    const AVCodec *codec;
+    void *i = NULL;
+    while ((codec = av_codec_iterate(&i))) {
+        if (!av_codec_is_decoder(codec) || codec->id != codec_id)
+            continue;
+
+        const AVCodecHWConfig *config;
+        int j = 0;
+        while ((config = avcodec_get_hw_config(codec, j++)))
+            if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
+                config->device_type == upipe_avcdec->hw_device_type) {
+                *hw_config = config;
+                return codec;
+            }
+    }
+
+    return NULL;
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -1537,11 +1574,12 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     const char *def;
     enum AVCodecID codec_id;
     const AVCodec *codec;
+    const AVCodecHWConfig *hw_config;
+
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (unlikely(ubase_ncmp(def, EXPECTED_FLOW_DEF) ||
-                 !(codec_id =
-                     upipe_av_from_flow_def(def + strlen(EXPECTED_FLOW_DEF))) ||
-                 (codec = avcodec_find_decoder(codec_id)) == NULL)) {
+        !(codec_id = upipe_av_from_flow_def(def + strlen(EXPECTED_FLOW_DEF))) ||
+        !(codec = upipe_avcdec_find_codec(upipe, codec_id, &hw_config)))) {
         upipe_err_va(upipe, "No decoder found for \"%s\"",
                 def + strlen(EXPECTED_FLOW_DEF));
         return UBASE_ERR_INVALID;
@@ -1583,27 +1621,8 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     }
 
     /* Select hw accel for this codec. */
-    if (upipe_avcdec->hw_device_type != AV_HWDEVICE_TYPE_NONE) {
-#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(58, 4, 100)
-        for (int i = 0;; i++) {
-            const AVCodecHWConfig *config = avcodec_get_hw_config(codec, i);
-            if (config == NULL) {
-                upipe_err_va(upipe, "decoder %s does not support device type %s",
-                             codec->name,
-                             av_hwdevice_get_type_name(upipe_avcdec->hw_device_type));
-                free(extradata_alloc);
-                uref_free(flow_def_check);
-                upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-                return UBASE_ERR_EXTERNAL;
-            }
-            if (config->methods & AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX &&
-                config->device_type == upipe_avcdec->hw_device_type) {
-                upipe_avcdec->hw_pix_fmt = config->pix_fmt;
-                break;
-            }
-        }
-#endif
-    }
+    if (hw_config != NULL)
+        upipe_avcdec->hw_pix_fmt = hw_config->pix_fmt;
 
     if (upipe_avcdec->context != NULL) {
         free(extradata_alloc);
@@ -1629,6 +1648,26 @@ static int upipe_avcdec_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         if (extradata_alloc != NULL) {
             upipe_avcdec->context->extradata = extradata_alloc;
             upipe_avcdec->context->extradata_size = extradata_size;
+        }
+
+        const char *chroma[UPIPE_AV_MAX_PLANES];
+        upipe_avcdec->context->pix_fmt =
+            upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma);
+
+        uint64_t width, height;
+        if (ubase_check(uref_pic_flow_get_hsize(flow_def, &width)) &&
+            ubase_check(uref_pic_flow_get_vsize(flow_def, &height))) {
+            upipe_avcdec->context->width = width;
+            upipe_avcdec->context->height = height;
+        }
+
+        upipe_avcdec->context->pkt_timebase.num = 1;
+        upipe_avcdec->context->pkt_timebase.den = UCLOCK_FREQ;
+
+        struct urational fps;
+        if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps))) {
+            upipe_avcdec->context->framerate.num = fps.num;
+            upipe_avcdec->context->framerate.den = fps.den;
         }
 
         upipe_avcdec_store_flow_def_check(upipe, flow_def_check);
