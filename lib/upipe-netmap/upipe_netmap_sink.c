@@ -62,6 +62,7 @@
 #include <bitstream/ietf/ip.h>
 #include <bitstream/ietf/udp.h>
 #include <bitstream/ietf/rfc4175.h>
+#include <bitstream/ietf/rfc8331.h>
 #include <bitstream/smpte/2022_6_hbrmt.h>
 #include <bitstream/ietf/rtp.h>
 #include <bitstream/ieee/ethernet.h>
@@ -98,6 +99,8 @@
 #define VENDOR_ID_MELLANOX 0x15b3
 #define DEVICE_ID_CONNECTX6DX 0x101d
 
+#define HEADER_ETH_IP_UDP_LEN (ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE)
+
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
 /** @hidden */
@@ -115,6 +118,11 @@ struct upipe_netmap_intf {
     in_addr_t dst_ip;
     uint8_t dst_mac[6];
 
+    /** Ancillary Source */
+    in_addr_t ancillary_dst_ip;
+    uint16_t ancillary_dst_port;
+    uint8_t ancillary_dst_mac[6];
+
     int vlan_id;
 
     /** Ring */
@@ -130,10 +138,10 @@ struct upipe_netmap_intf {
     struct ifreq ifr;
 
     /** packet headers */
-    // TODO: rfc
-    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    uint8_t fake_header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
-    int header_len;
+    uint8_t header[HEADER_ETH_IP_UDP_LEN];
+    uint8_t ancillary_header[HEADER_ETH_IP_UDP_LEN];
+    uint8_t fake_header[HEADER_ETH_IP_UDP_LEN];
+    int header_len; /* Same for all types of header */
 
     /** if interface is up */
     bool up;
@@ -158,7 +166,7 @@ struct aes67_flow {
     /* Ethernet details for the destination. */
     struct sockaddr_ll sll;
     /* Raw Ethernet, IP, and UDP headers. */
-    uint8_t header[ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN + IP_HEADER_MINSIZE + UDP_HEADER_SIZE];
+    uint8_t header[HEADER_ETH_IP_UDP_LEN];
     int header_len;
     /* Flow has been populated and packets should be sent. */
     bool populated;
@@ -229,10 +237,14 @@ struct upipe_netmap_sink {
     /* RTP Header */
     uint8_t rtp_header[RTP_HEADER_SIZE + RFC_4175_EXT_SEQ_NUM_LEN + RFC_4175_HEADER_LEN];
     uint8_t audio_rtp_header[RTP_HEADER_SIZE];
-    uint8_t rtp_pt_video, rtp_pt_audio;
+    uint8_t ancillary_rtp_header[RTP_HEADER_SIZE];
+    uint8_t rtp_pt_video;
+    uint8_t rtp_pt_audio;
+    uint8_t rtp_pt_ancillary;
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
+    bool write_ancillary;
     uint64_t phase_delay;
 
     /* Cached timestamps for RFC4175 */
@@ -244,6 +256,8 @@ struct upipe_netmap_sink {
 
     /** sequence number **/
     uint64_t seqnum;
+    /** ancillary sequence number **/
+    uint64_t ancillary_seqnum;
     /* Number of frames since 1970. */
     uint64_t frame_count;
 
@@ -672,6 +686,7 @@ static void upipe_netmap_sink_reset_counters(struct upipe *upipe)
     upipe_netmap_sink->preroll = true;
     upipe_netmap_sink->packed_bytes = 0;
     upipe_netmap_sink->seqnum = 0;
+    upipe_netmap_sink->ancillary_seqnum = 0;
     upipe_netmap_sink->frame_count = 0;
     upipe_netmap_sink->phase_delay = 0;
     memset(upipe_netmap_sink->rtp_timestamp, 0, sizeof(upipe_netmap_sink->rtp_timestamp));
@@ -740,6 +755,7 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 0;
     upipe_netmap_sink->gap_fakes_current = 0;
+    upipe_netmap_sink->write_ancillary = false;
     upipe_netmap_sink->tx_rate_factor = 1;
 
     upipe_netmap_sink->uri = NULL;
@@ -820,8 +836,10 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
 
     memset(upipe_netmap_sink->rtp_header, 0, sizeof upipe_netmap_sink->rtp_header);
     memset(upipe_netmap_sink->audio_rtp_header, 0, sizeof upipe_netmap_sink->audio_rtp_header);
+    memset(upipe_netmap_sink->ancillary_rtp_header, 0, sizeof upipe_netmap_sink->ancillary_rtp_header);
     upipe_netmap_sink->rtp_pt_video = 96;
     upipe_netmap_sink->rtp_pt_audio = 97;
+    upipe_netmap_sink->rtp_pt_ancillary = 98;
 
     /*
      * Audio subpipe.
@@ -868,7 +886,7 @@ static void upipe_netmap_update_timestamp_cache(struct upipe_netmap_sink *upipe_
 }
 
 static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *buf,
-        uint8_t marker, uint8_t pt, bool update, bool f2)
+        uint8_t marker, uint8_t pt, uint64_t seqnum, bool update, bool f2)
 {
     uint64_t *buf64 = (uint64_t*)buf;
     uint32_t *ssrc = (uint32_t*)(buf+8);
@@ -892,11 +910,11 @@ static int upipe_netmap_put_rtp_headers(struct upipe_netmap_sink *upipe_netmap_s
         }
 
 #if 0
-        rtp_set_seqnum(buf, upipe_netmap_sink->seqnum & UINT16_MAX);
+        rtp_set_seqnum(buf, seqnum & UINT16_MAX);
         rtp_set_timestamp(buf, timestamp & UINT32_MAX);
 #endif
         *buf64 = bswap64((UINT64_C(0x80) << 56) | ((uint64_t)marker << 55) | ((uint64_t)pt << 48) |
-                         ((uint64_t)(upipe_netmap_sink->seqnum & UINT16_MAX) << 32) | (uint64_t)(timestamp & UINT32_MAX));
+                         ((uint64_t)(seqnum & UINT16_MAX) << 32) | (uint64_t)(timestamp & UINT32_MAX));
     }
     else {
         *buf64 = bswap64((UINT64_C(0x80) << 56) | ((uint64_t)marker << 55) | ((uint64_t)pt << 48));
@@ -1039,6 +1057,7 @@ static inline void setup_gap_fakes(struct upipe_netmap_sink *upipe_netmap_sink, 
     upipe_netmap_sink->gap_fakes_current = upipe_netmap_sink->gap_fakes;
     if (!progressive)
         upipe_netmap_sink->gap_fakes_current /= 2;
+    upipe_netmap_sink->write_ancillary = true;
 }
 
 /* returns 1 if uref exhausted */
@@ -1076,7 +1095,7 @@ static int worker_rfc4175(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t *
     const uint16_t data_len1 = upipe_netmap_sink->payload;
 
     upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-            marker, upipe_netmap_sink->rtp_pt_video, true, field);
+            marker, upipe_netmap_sink->rtp_pt_video, upipe_netmap_sink->seqnum, true, field);
     upipe_put_rfc4175_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE, data_len1,
                               field, upipe_netmap_sink->line, continuation, upipe_netmap_sink->pixel_offset);
 
@@ -1292,6 +1311,72 @@ static int worker_hbrmt(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **d
     }
 
     return pixels * 4;
+}
+
+static void write_ancillary(struct upipe_netmap_sink *upipe_netmap_sink, uint8_t **dst, uint16_t **len, uint64_t **ptr)
+{
+    const bool progressive = upipe_netmap_sink->progressive;
+    const bool copy = dst[1] != NULL && dst[0] != NULL;
+    const int idx = (dst[0] != NULL) ? 0 : 1;
+    const bool field = progressive ? 0 : upipe_netmap_sink->line >= upipe_netmap_sink->vsize / 2;
+    const bool marker = 1;
+
+    const uint16_t header_size = upipe_netmap_sink->intf[0].header_len;
+    const uint16_t payload_size = RTP_HEADER_SIZE + RFC_8331_HEADER_LEN;
+    const uint16_t eth_frame_len = header_size + payload_size;
+
+    uint8_t rfc_8331_header[RFC_8331_HEADER_LEN];
+
+    upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->ancillary_rtp_header,
+        marker, upipe_netmap_sink->rtp_pt_ancillary, upipe_netmap_sink->ancillary_seqnum, true, field);
+  
+    /* RFC 8331 Headers */
+    const uint8_t f = progressive ? RFC_8331_F_PROGRESSIVE : field ? RFC_8331_F_FIELD_2 : RFC_8331_F_FIELD_1;
+    rfc8331_set_extended_sequence_number(rfc_8331_header, (uint16_t)((upipe_netmap_sink->ancillary_seqnum >> 16) & UINT16_MAX));
+    rfc8331_set_length(rfc_8331_header, 0);
+    rfc8331_set_anc_count(rfc_8331_header, 0);
+    rfc8331_set_f(rfc_8331_header, f);
+
+    for (size_t i = 0; i < 2; i++) {
+        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+        if (unlikely(!intf->d || !intf->up))
+            continue;
+
+        uint8_t *buf = intf->ancillary_header;
+        buf = ethernet_payload(buf);
+
+        /* Write IP and UDP headers. src_port set to destination port */
+        upipe_udp_raw_fill_headers(buf, intf->src_ip, intf->ancillary_dst_ip,
+                intf->ancillary_dst_port /* actually src_port */, intf->ancillary_dst_port,
+                10 /* TTL */, 0 /* TOS */,
+                payload_size);
+
+        /* Ethernet/IP Header */
+        memcpy(dst[i], intf->ancillary_header, header_size);
+        dst[i] += header_size;
+
+        /* RTP HEADER */
+        memcpy(dst[i], upipe_netmap_sink->ancillary_rtp_header, RTP_HEADER_SIZE);
+        dst[i] += RTP_HEADER_SIZE;
+
+        /* RFC 8331 Header */
+        memcpy(dst[i], rfc_8331_header, RFC_8331_HEADER_LEN);
+        dst[i] += RFC_8331_HEADER_LEN;
+    }
+
+    upipe_netmap_sink->ancillary_seqnum++;
+    upipe_netmap_sink->ancillary_seqnum &= UINT32_MAX;
+
+    upipe_netmap_sink->bits += (eth_frame_len + 4 /* CRC */) * 8;
+
+    /* write packet size */
+    if (likely(copy)) {
+        *len[0] = *len[1] = eth_frame_len;
+        *ptr[0] = *ptr[1] = 0;
+    } else if (len[idx]) {
+        *len[idx] = eth_frame_len;
+        *ptr[idx] = 0;
+    }
 }
 
 static float pts_to_time(uint64_t pts)
@@ -2025,25 +2110,32 @@ static void upipe_netmap_sink_worker(struct upump *upump)
 
         if (rfc4175) {
             /* At the beginning of a frame or field fill the "gap" with empty packets */
-            if ((upipe_netmap_sink->line == 0 ||
-                (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2)) && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
-
-                for (size_t i = 0; i < 2; i++) {
-                    struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
-                    if (unlikely(!intf->d || !intf->up))
-                        continue;
-                    /* Do not use make_fake_packet() here because
-                     * advance_ring_state() is called above at the start of the
-                     * video handling section. */
-                    memset(dst[i], 0, pkt_len);
-                    memcpy(dst[i], intf->fake_header, intf->header_len);
-                    *len[i] = pkt_len;
-                    *ptr[i] = 0;
+            const bool first_field_or_frame = (upipe_netmap_sink->line == 0 || (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2));
+            if (first_field_or_frame && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
+                if (upipe_netmap_sink->write_ancillary) {
+                    write_ancillary(upipe_netmap_sink, dst, len, ptr);
+                    upipe_netmap_sink->write_ancillary = false;
+                    /* upipe_netmap_sink->bits incremented in write_ancillary() as packet sizes are variable */
                 }
-                upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
+                else {
+                    for (size_t i = 0; i < 2; i++) {
+                        struct upipe_netmap_intf *intf = &upipe_netmap_sink->intf[i];
+                        if (unlikely(!intf->d || !intf->up))
+                            continue;
+                        /* Do not use make_fake_packet() here because
+                        * advance_ring_state() is called above at the start of the
+                        * video handling section. */
+                        memset(dst[i], 0, pkt_len);
+                        memcpy(dst[i], intf->fake_header, intf->header_len);
+                        *len[i] = pkt_len;
+                        *ptr[i] = 0;
+                    }
+                    upipe_netmap_sink->bits += (pkt_len + 4 /* CRC */) * 8;
+                }
                 upipe_netmap_sink->gap_fakes_current--;
             } else {
-                setup_gap_fakes(upipe_netmap_sink, progressive);
+                if (!upipe_netmap_sink->gap_fakes_current)
+                    setup_gap_fakes(upipe_netmap_sink, progressive);
 
                 if (worker_rfc4175(upipe_netmap_sink, dst, len, ptr)) {
                     for (int i = 0; i < UPIPE_RFC4175_MAX_PLANES; i++) {
@@ -2195,8 +2287,6 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
 /* XXX
  * circular variable store
  * https://app.asana.com/0/1141488647259340/1201642161098561
- * 2110 (rf4175) packet size decisions
- * https://app.asana.com/0/1141488647259340/1201586998881877
  */
             uint64_t pixels = upipe_netmap_sink->hsize * upipe_netmap_sink->vsize;
             upipe_netmap_sink->frame_size = pixels * UPIPE_RFC4175_PIXEL_PAIR_BYTES / 2;
@@ -2208,23 +2298,9 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
             upipe_netmap_sink->payload = payload;
 
             upipe_netmap_sink->packets_per_frame = (upipe_netmap_sink->frame_size + payload - 1) / payload;
+            uint64_t actual_packets_per_frame = upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes;
 
-            uint64_t packets = upipe_netmap_sink->packets_per_frame;
-            bool progressive = upipe_netmap_sink->progressive;
-            if (!progressive && upipe_netmap_sink->hsize == 720) {
-                if (upipe_netmap_sink->vsize == 486) {
-                    packets *= 525;
-                    packets /= 487;
-                } else if (upipe_netmap_sink->vsize == 576) {
-                    packets *= 625;
-                    packets /= 576;
-                }
-            } else {
-                    packets *= 1125;
-                    packets /= 1080;
-            }
-
-            upipe_netmap_sink->rate = 8 * (packets * (network_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
+            upipe_netmap_sink->rate = 8 * (actual_packets_per_frame * (network_header_len + payload + 4 /* CRC */)) * upipe_netmap_sink->fps.num;
 
             struct upipe_netmap_sink_audio *audio_subpipe = upipe_netmap_sink_to_audio_subpipe(upipe_netmap_sink);
             const uint64_t audio_pps = (48000 / audio_subpipe->output_samples) * audio_subpipe->num_flows;
@@ -2237,7 +2313,7 @@ static bool upipe_netmap_sink_output(struct upipe *upipe, struct uref *uref,
              * between these two is calculated with the rational below.  Need to
              * account for the gap fakes too. */
             struct urational rational = {
-                (upipe_netmap_sink->packets_per_frame + upipe_netmap_sink->gap_fakes) * upipe_netmap_sink->fps.num,
+                (actual_packets_per_frame) * upipe_netmap_sink->fps.num,
                 (48000 / audio_subpipe->output_samples) * upipe_netmap_sink->fps.den
             };
             urational_simplify(&rational);
@@ -2516,7 +2592,7 @@ static int upipe_netmap_sink_set_flow_def(struct upipe *upipe,
     if (!upipe_netmap_sink->rfc4175) {
         /* Largely constant headers so don't keep rewriting them */
         upipe_netmap_put_rtp_headers(upipe_netmap_sink, upipe_netmap_sink->rtp_header,
-                false, 98, false, false);
+                false, 98, upipe_netmap_sink->seqnum, false, false);
         upipe_put_hbrmt_headers(upipe, upipe_netmap_sink->rtp_header + RTP_HEADER_SIZE);
     } else {
             /* RTP Headers done in worker_rfc4175 */
@@ -2847,9 +2923,25 @@ static int upipe_netmap_set_option(struct upipe *upipe, const char *option,
         return UBASE_ERR_NONE;
     }
 
+    if (!strcmp(option, "rtp-pt-ancillary")) {
+        int type = atoi(value);
+        if (type < 0 || type > 127) {
+            upipe_err_va(upipe, "rtp-pt-ancillary value (%d) out of range 0..127", type);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_netmap_sink->rtp_pt_ancillary = type;
+        /* FIXME: remove this after cleaning up how headers are handled.  IP
+         * details have (had) a similar issue about not updating. */
+        rtp_set_type(upipe_netmap_sink->ancillary_rtp_header, type);
+        return UBASE_ERR_NONE;
+    }
+
     upipe_err_va(upipe, "Unknown option %s", option);
     return UBASE_ERR_INVALID;
 }
+
+static int ancillary_set_destination(struct upipe * upipe,
+        const char *path_1, const char *path_2);
 
 /** @internal @This processes control commands on a netmap sink pipe.
  *
@@ -2916,6 +3008,13 @@ static int _upipe_netmap_sink_control(struct upipe *upipe,
             const char *option = va_arg(args, const char *);
             const char *value  = va_arg(args, const char *);
             return upipe_netmap_set_option(upipe, option, value);
+        }
+
+        case UPIPE_NETMAP_SINK_ANCILLARY_SET_DESTINATION: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_NETMAP_SINK_SIGNATURE)
+            const char *path_1 = va_arg(args, const char *);
+            const char *path_2 = va_arg(args, const char *);
+            return ancillary_set_destination(upipe, path_1, path_2);
         }
 
         default:
@@ -3340,6 +3439,97 @@ make_header:
     aes67_flow[1].populated = true;
     audio_subpipe->num_flows = audio_count_populated_flows(audio_subpipe);
     audio_subpipe->need_reconfig = true;
+    return ret;
+}
+
+static int ancillary_set_destination(struct upipe * upipe, const char *path_1, const char *path_2)
+{
+    struct upipe_netmap_sink *upipe_netmap_sink = upipe_netmap_sink_from_upipe(upipe);
+    struct upipe_netmap_intf *intf = upipe_netmap_sink->intf;
+    /* IP details for the destination. */
+    struct sockaddr_in sin;
+
+    int ret = UBASE_ERR_NONE;
+
+    for (int i = 0; i < 2; i++) {
+        const uint8_t *src_mac, *dst_mac;
+        uint32_t src_ip, dst_ip;
+
+        src_mac = intf[i].src_mac;
+        src_ip = intf[i].src_ip;
+
+        char *path = strdup((i==0) ? path_1 : path_2);
+        if (!path) {
+            ret = UBASE_ERR_ALLOC;
+            dst_mac = src_mac;
+            dst_ip = intf[i].ancillary_dst_ip = src_ip;
+            goto make_header;
+        }
+
+        /* Parse the path. */
+        if (!upipe_udp_parse_node_service(upipe, path, NULL, 0, NULL,
+                                          (struct sockaddr_storage *)&sin)) {
+            free(path);
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = intf[i].ancillary_dst_ip = src_ip;
+            intf[i].ancillary_dst_port = ntohs(sin.sin_port);
+            goto make_header;
+        }
+        free(path);
+
+        /* A zero-length IP address (path string starting with a colon) will
+         * parse as 0.0.0.0 so re-use the source addresses but keep the parsed
+         * port number. */
+        if (sin.sin_addr.s_addr == 0) {
+            ret = UBASE_ERR_INVALID;
+            dst_mac = src_mac;
+            dst_ip = src_ip;
+            goto make_header;
+        }
+
+        /* Set MAC address. */
+        dst_ip = ntohl(sin.sin_addr.s_addr);
+
+        /* If a multicast IP address, fill a multicast MAC address. */
+        if (IN_MULTICAST(dst_ip)) {
+            intf[i].ancillary_dst_mac[0] = 0x01;
+            intf[i].ancillary_dst_mac[1] = 0x00;
+            intf[i].ancillary_dst_mac[2] = 0x5e;
+            intf[i].ancillary_dst_mac[3] = (dst_ip >> 16) & 0x7f;
+            intf[i].ancillary_dst_mac[4] = (dst_ip >>  8) & 0xff;
+            intf[i].ancillary_dst_mac[5] = (dst_ip      ) & 0xff;
+        }
+
+        /* Otherwise query ARP for the destination address. */
+        else {
+            /* TODO */
+        }
+
+        intf[i].ancillary_dst_ip = sin.sin_addr.s_addr;
+        intf[i].ancillary_dst_port = ntohs(sin.sin_port);
+        dst_mac = intf[i].ancillary_dst_mac;
+
+make_header:
+
+        /* Write ethernet header. */
+        ethernet_set_dstaddr(intf[i].ancillary_header, dst_mac);
+        ethernet_set_srcaddr(intf[i].ancillary_header, src_mac);
+        if (intf[i].vlan_id < 0) {
+            ethernet_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_IP);
+        }
+        /* VLANs */
+        else {
+            ethernet_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_VLAN);
+            ethernet_vlan_set_priority(intf[i].ancillary_header, 0);
+            ethernet_vlan_set_cfi(intf[i].ancillary_header, 0);
+            ethernet_vlan_set_id(intf[i].ancillary_header, intf[i].vlan_id);
+            ethernet_vlan_set_lentype(intf[i].ancillary_header, ETHERNET_TYPE_IP);
+        }
+
+        /* Ancillary packets are variable size so we can't populate IP/UDP headers*/
+    }
+
     return ret;
 }
 

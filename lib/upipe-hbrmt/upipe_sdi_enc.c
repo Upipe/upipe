@@ -1093,7 +1093,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
             if (expected_cc_count * 3 == upipe_sdi_enc->cea708_size) {
                 sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, vanc_start, 2,
                             &upipe_sdi_enc->cdp_hdr_sequence_cntr, fps);
-                sdi_calc_parity_checksum(vanc_start);
+                sdi_calc_parity_checksum(vanc_start, 2);
             } 
             else {
                 upipe_warn(upipe, "Unexpected closed caption packet size, dropping packet");
@@ -1111,7 +1111,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
 
                 if (ubase_check(uref_block_extract(upipe_sdi_enc->scte104_uref, 0, size, buf))) {
                     sdi_write_scte104(buf, size, vanc_start, 2);
-                    sdi_calc_parity_checksum(vanc_start);
+                    sdi_calc_parity_checksum(vanc_start, 2);
                 }
 
                 uref_free(upipe_sdi_enc->scte104_uref);
@@ -1121,7 +1121,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 uint8_t tmp[16];
                 sdi_encode_scte104_null(tmp);
                 sdi_write_scte104(tmp, sizeof(tmp), vanc_start, 2);
-                sdi_calc_parity_checksum(vanc_start);
+                sdi_calc_parity_checksum(vanc_start, 2);
                 upipe_sdi_enc->write_scte104_null = false;
             }
         }

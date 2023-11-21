@@ -18,7 +18,7 @@
 
 #define VANC_WIDTH 1920
 
-void sdi_calc_parity_checksum(uint16_t *buf);
+void sdi_calc_parity_checksum(uint16_t *buf, uint8_t gap);
 
 void sdi_clear_vbi(uint8_t *dst, int w);
 
