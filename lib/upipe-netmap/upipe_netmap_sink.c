@@ -244,7 +244,6 @@ struct upipe_netmap_sink {
 
     unsigned gap_fakes_current;
     unsigned gap_fakes;
-    bool write_ancillary;
     uint64_t phase_delay;
 
     /* Cached timestamps for RFC4175 */
@@ -755,7 +754,6 @@ static struct upipe *_upipe_netmap_sink_alloc(struct upipe_mgr *mgr,
     upipe_netmap_sink_reset_counters(upipe);
     upipe_netmap_sink->gap_fakes = 0;
     upipe_netmap_sink->gap_fakes_current = 0;
-    upipe_netmap_sink->write_ancillary = false;
     upipe_netmap_sink->tx_rate_factor = 1;
 
     upipe_netmap_sink->uri = NULL;
@@ -1057,7 +1055,6 @@ static inline void setup_gap_fakes(struct upipe_netmap_sink *upipe_netmap_sink, 
     upipe_netmap_sink->gap_fakes_current = upipe_netmap_sink->gap_fakes;
     if (!progressive)
         upipe_netmap_sink->gap_fakes_current /= 2;
-    upipe_netmap_sink->write_ancillary = true;
 }
 
 /* returns 1 if uref exhausted */
@@ -2112,9 +2109,8 @@ static void upipe_netmap_sink_worker(struct upump *upump)
             /* At the beginning of a frame or field fill the "gap" with empty packets */
             const bool first_field_or_frame = (upipe_netmap_sink->line == 0 || (!progressive && upipe_netmap_sink->line == upipe_netmap_sink->vsize / 2));
             if (first_field_or_frame && upipe_netmap_sink->pixel_offset == 0 && upipe_netmap_sink->gap_fakes_current) {
-                if (upipe_netmap_sink->write_ancillary) {
+                if (upipe_netmap_sink->gap_fakes_current == (upipe_netmap_sink->gap_fakes / 2)) {
                     write_ancillary(upipe_netmap_sink, dst, len, ptr);
-                    upipe_netmap_sink->write_ancillary = false;
                     /* upipe_netmap_sink->bits incremented in write_ancillary() as packet sizes are variable */
                 }
                 else {
