@@ -245,7 +245,7 @@ static void upipe_av_uref_pic_free(void *opaque, uint8_t *data);
 
 static void buffer_uref_free(void *opaque, uint8_t *data)
 {
-    struct uref *uref = (struct uref *)data;
+    struct uref *uref = opaque;
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
     uref_free(flow_def_attr);
     uref_free(uref);
@@ -276,8 +276,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return -1;
         }
-        frame->opaque_ref = av_buffer_create((uint8_t *)uref, sizeof (*uref),
-                                             buffer_uref_free, NULL, 0);
+        frame->opaque_ref = av_buffer_create(NULL, 0, buffer_uref_free,
+                                             uref, 0);
         if (frame->opaque_ref == NULL) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
@@ -286,7 +286,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         internal_frame = true;
     }
 
-    uref = (struct uref *)frame->opaque_ref->data;
+    uref = av_buffer_get_opaque(frame->opaque_ref);
 
     uint64_t framenum = 0;
     uref_pic_get_number(uref, &framenum);
@@ -424,13 +424,13 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     struct ubuf *ubuf;
     if (frame->format == upipe_avcdec->hw_pix_fmt ||
         !(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
-        av_buffer_unref(&frame->opaque_ref);
         ubuf = ubuf_pic_av_alloc(upipe_avcdec->ubuf_mgr, frame);
         if (unlikely(ubuf == NULL)) {
             upipe_err_va(upipe, "cannot alloc ubuf for %s frame",
                          av_get_pix_fmt_name(pix_fmt));
             goto error;
         }
+        av_buffer_unref(&frame->opaque_ref);
     } else {
         ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
                               width_aligned, height_aligned);
@@ -491,7 +491,7 @@ error:
 static void upipe_av_uref_pic_free(void *opaque, uint8_t *data)
 {
     AVBufferRef *opaque_ref = opaque;
-    struct uref *uref = (struct uref *)opaque_ref->data;
+    struct uref *uref = av_buffer_get_opaque(opaque_ref);
     uref_pic_plane_unmap(uref, (const char *)data, 0, 0, -1, -1);
     av_buffer_unref(&opaque_ref);
 }
@@ -1171,7 +1171,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     if (frame->opaque_ref == NULL)
         return;
 
-    struct uref *uref = (struct uref *)frame->opaque_ref->data;
+    struct uref *uref = av_buffer_get_opaque(frame->opaque_ref);
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
 
     uint64_t framenum = 0;
@@ -1181,7 +1181,8 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
                  upipe_avcdec->counter, frame->width, frame->height, framenum);
 
     /* allocate new ubuf with wrapped avframe */
-    if (uref->ubuf == NULL) {
+    bool use_ubuf_av = uref->ubuf == NULL;
+    if (use_ubuf_av) {
         int ret;
         if (unlikely((ret = upipe_avcdec_get_buffer_pic(context, frame, 0)) < 0)) {
             upipe_err_va(upipe, "couldn't get frame buffer: %s", av_err2str(ret));
@@ -1193,11 +1194,15 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     flow_def_attr = uref_from_uchain(uref->uchain.next);
     /* Duplicate uref because it is freed in _release, because the ubuf
      * is still in use by avcodec. */
+    struct uref *old_uref = uref;
     uref = uref_dup(uref);
     if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
+
+    if (use_ubuf_av)
+        ubuf_free(uref_detach_ubuf(old_uref));
 
     /* Resize the picture (was allocated too big). */
     if (unlikely(!ubase_check(uref_pic_resize(uref, 0, 0, frame->width, frame->height)))) {
