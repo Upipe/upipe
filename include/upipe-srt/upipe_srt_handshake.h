@@ -48,7 +48,7 @@ enum upipe_srt_handshake_command {
     /** set our peer address (const struct sockaddr *, socklen_t) **/
     UPIPE_SRT_HANDSHAKE_SET_PEER,
 
-    /** set the encryption password (const char *) */
+    /** set the encryption password (const char *, int) */
     UPIPE_SRT_HANDSHAKE_SET_PASSWORD,
 };
 
@@ -69,15 +69,15 @@ static inline int upipe_srt_handshake_set_peer(struct upipe *upipe,
 /** @This sets the encryption key
  *
  * @param upipe description structure of the pipe
- * @param even key
- * @param odd key
+ * @param password passphrase
+ * @param key_len key length in bytes
  * @return false in case of error
  */
 static inline int upipe_srt_handshake_set_password(struct upipe *upipe,
-        const char *password)
+        const char *password, int key_len)
 {
     return upipe_control(upipe, UPIPE_SRT_HANDSHAKE_SET_PASSWORD, UPIPE_SRT_HANDSHAKE_SIGNATURE,
-            password);
+            password, key_len);
 }
 
 /** @This returns the management structure for all srt handshakes sources.

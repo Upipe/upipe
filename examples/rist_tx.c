@@ -75,6 +75,7 @@ static void usage(const char *argv0) {
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     fprintf(stdout, "   -k encryption password\n");
+    fprintf(stdout, "   -l key length in bits\n");
     exit(EXIT_FAILURE);
 }
 
@@ -92,6 +93,7 @@ static char *srcpath;
 static char *dirpath;
 static char *latency;
 static char *password;
+static int key_length = 128;
 
 static enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
@@ -213,7 +215,7 @@ static int start(void)
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc_va(uprobe_use(&uprobe_hs), loglevel, "srt handshake %u", z));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
-    upipe_srt_handshake_set_password(upipe_srt_handshake, password);
+    upipe_srt_handshake_set_password(upipe_srt_handshake, password, key_length / 8);
 
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
@@ -303,7 +305,7 @@ int main(int argc, char *argv[])
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "qdk:")) != -1) {
+    while ((opt = getopt(argc, argv, "qdk:l:")) != -1) {
         switch (opt) {
             case 'q':
                 loglevel++;
@@ -314,6 +316,9 @@ int main(int argc, char *argv[])
                  break;
             case 'k':
                 password = optarg;
+                break;
+            case 'l':
+                key_length = atoi(optarg);
                 break;
             default:
                 usage(argv[0]);

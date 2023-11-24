@@ -729,8 +729,18 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
         case UPIPE_SRT_HANDSHAKE_SET_PASSWORD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_SRT_HANDSHAKE_SIGNATURE)
             const char *password = va_arg(args, const char*);
+            upipe_srt_handshake->sek_len = va_arg(args, int);
             free(upipe_srt_handshake->password);
             upipe_srt_handshake->password = password ? strdup(password) : NULL;
+            switch (upipe_srt_handshake->sek_len) {
+            case 128/8:
+            case 192/8:
+            case 256/8:
+                break;
+            default:
+                upipe_err_va(upipe, "Invalid key length %d, using 128 bits", 8*upipe_srt_handshake->sek_len);
+                upipe_srt_handshake->sek_len = 128/8;
+            }
             return UBASE_ERR_NONE;
         }
 
@@ -881,7 +891,9 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
     }
 
     uint8_t klen = 4 * srt_km_get_klen(ext);
-    // FIXME: check key length
+    if (upipe_srt_handshake->sek_len != klen)
+        upipe_warn_va(upipe, "Requested key length %u, got %u. Proceeding.",
+                8*upipe_srt_handshake->sek_len, 8*klen);
 
     memcpy(upipe_srt_handshake->salt, srt_km_get_salt(ext), 16);
 
@@ -923,6 +935,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
     gcry_cipher_close(aes);
 
     upipe_srt_handshake->sek_len = klen;
+
     memcpy(upipe_srt_handshake->sek[0], osek, klen);
 
     return true;
@@ -1048,7 +1061,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         size_t size = ext_size + SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
         uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
 
-        uint8_t klen = 128/8; // FIXME: 192 and 256
+        const uint8_t klen = upipe_srt_handshake->sek_len;
         if (upipe_srt_handshake->password) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + (8+klen);
             extension |= SRT_HANDSHAKE_EXT_KMREQ;
@@ -1116,7 +1129,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             gcry_randomize(upipe_srt_handshake->sek[0], klen, GCRY_STRONG_RANDOM);
             gcry_randomize(upipe_srt_handshake->salt, 16, GCRY_STRONG_RANDOM);
 
-            upipe_srt_handshake->sek_len = klen;
             srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
             memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
 

@@ -170,6 +170,7 @@ static struct uprobe *logger;
 static char *dirpath;
 static char *srcpath;
 static char *password;
+static int key_length = 128;
 static char *latency;
 
 static bool restart;
@@ -213,7 +214,7 @@ static int start(void)
     if (!ubase_check(upipe_set_option(upipe_srth, "latency", latency)))
         return EXIT_FAILURE;
 
-    upipe_srt_handshake_set_password(upipe_srth, password);
+    upipe_srt_handshake_set_password(upipe_srth, password, key_length / 8);
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
     upipe_srth_sub = upipe_void_alloc_sub(upipe_srth,
@@ -335,10 +336,11 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d] [-k password] <udp source> <udp dest> <latency>", argv0);
+    fprintf(stdout, "Usage: %s [-d] [-k password] [-l 128] <udp source> <udp dest> <latency>", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
     fprintf(stdout, "   -k encryption password\n");
+    fprintf(stdout, "   -l key length in bits\n");
     exit(EXIT_FAILURE);
 }
 
@@ -347,7 +349,7 @@ int main(int argc, char *argv[])
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "qdk:")) != -1) {
+    while ((opt = getopt(argc, argv, "qdk:l:")) != -1) {
         switch (opt) {
             case 'd':
                 loglevel--;
@@ -357,6 +359,9 @@ int main(int argc, char *argv[])
                 break;
             case 'k':
                 password = optarg;
+                break;
+            case 'l':
+                key_length = atoi(optarg);
                 break;
             default:
                 usage(argv[0]);
