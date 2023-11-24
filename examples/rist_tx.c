@@ -380,8 +380,6 @@ int main(int argc, char *argv[])
 
     upump_free(sigint_pump);
 
-    /* should never be here for the moment. todo: sighandler.
-     * release everything */
     uprobe_release(logger);
     uprobe_clean(&uprobe_udp_srt);
     uprobe_clean(&uprobe_hs);
@@ -391,6 +389,8 @@ int main(int argc, char *argv[])
     udict_mgr_release(udict_mgr);
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
+
+    printf("done\n");
 
     return 0;
 }
