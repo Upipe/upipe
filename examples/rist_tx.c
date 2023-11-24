@@ -181,12 +181,15 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 
 static int start(void)
 {
+    static unsigned z = 0;
+    z++;
+
     bool listener = dirpath && *dirpath == '@';
 
     /* rtp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp source data"));
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "udp source data %u", z));
 
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
         return EXIT_FAILURE;
@@ -196,7 +199,7 @@ static int start(void)
     /* send through srt sender */
     struct upipe_mgr *upipe_srt_sender_mgr = upipe_srt_sender_mgr_alloc();
     upipe_srt_sender = upipe_void_alloc_output(upipe_udpsrc, upipe_srt_sender_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srt sender"));
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "srt sender %u", z));
     upipe_mgr_release(upipe_srt_sender_mgr);
 
     if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", latency)))
@@ -205,12 +208,12 @@ static int start(void)
     uprobe_init(&uprobe_udp_srt, catch_udp, uprobe_use(logger));
     uprobe_init(&uprobe_hs, catch_hs, uprobe_use(logger));
     upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_alloc(&uprobe_udp_srt, loglevel, "udp source srt"));
+            uprobe_pfx_alloc_va(&uprobe_udp_srt, loglevel, "udp source srt %u", z));
     upipe_attach_uclock(upipe_udpsrc_srt);
 
     struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc();
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
-            uprobe_pfx_alloc(uprobe_use(&uprobe_hs), loglevel, "srt handshake"));
+            uprobe_pfx_alloc_va(uprobe_use(&uprobe_hs), loglevel, "srt handshake %u", z));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
     upipe_srt_handshake_set_password(upipe_srt_handshake, password);
 
@@ -219,19 +222,19 @@ static int start(void)
     upipe_mgr_release(upipe_udpsrc_mgr);
 
     upipe_srt_handshake_sub = upipe_void_alloc_sub(upipe_srt_handshake,
-        uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srt handshake sub"));
+        uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "srt handshake sub %u", z));
     assert(upipe_srt_handshake_sub);
 
     upipe_srt_sender_sub = upipe_void_chain_output_sub(upipe_srt_handshake,
         upipe_srt_sender,
-        uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srt sender sub"));
+        uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "srt sender sub %u", z));
     assert(upipe_srt_sender_sub);
     upipe_release(upipe_srt_sender_sub);
 
     /* send to udp */
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
     upipe_udpsink = upipe_void_chain_output(upipe_srt_sender, upipe_udpsink_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "udp sink"));
+            uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "udp sink %u", z));
     upipe_release(upipe_udpsink);
 
     upipe_set_output(upipe_srt_handshake_sub, upipe_udpsink);
@@ -262,7 +265,7 @@ static int start(void)
     if (!getsockname(udp_fd, peer, &peer_len)) {
         char uri[INET6_ADDRSTRLEN+6];
         addr_to_str(peer, uri);
-        upipe_warn_va(upipe_srt_handshake, "Local %s", uri); // XXX: INADDR_ANY when listening
+        upipe_warn_va(upipe_srt_handshake, "Local %s (%u)", uri, z); // XXX: INADDR_ANY when listening
         upipe_srt_handshake_set_peer(upipe_srt_handshake, peer, peer_len);
     }
 
