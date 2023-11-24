@@ -99,7 +99,7 @@ static struct uprobe uprobe_udp_srt;
 static struct uprobe uprobe_hs;
 static struct uprobe *logger;
 
-static bool restart;
+static bool restart = true;
 
 static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 {
@@ -134,7 +134,6 @@ static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
     case UPROBE_SOURCE_END:
         upipe_warn(upipe, "Remote shutdown");
-        restart = true;
         struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
                 NULL, UCLOCK_FREQ, 0);
         upump_start(u);
@@ -150,7 +149,6 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
     case UPROBE_SOURCE_END:
         upipe_warn(upipe, "Remote end not listening, can't receive SRT");
-        restart = true;
         struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
                 NULL, UCLOCK_FREQ, 0);
         upump_start(u);
@@ -283,10 +281,8 @@ static void stop(struct upump *upump)
     upipe_release(upipe_udpsrc);
     upipe_release(upipe_srt_handshake_sub);
 
-    if (restart) {
-        restart = false;
+    if (restart)
         start();
-    }
 }
 
 static void sig_cb(struct upump *upump)
@@ -297,6 +293,7 @@ static void sig_cb(struct upump *upump)
         abort();
     done = true;
 
+    restart = false;
     stop(NULL);
 }
 
