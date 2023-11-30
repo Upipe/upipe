@@ -1062,10 +1062,12 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
 
         const uint8_t klen = upipe_srt_handshake->sek_len;
+#ifdef UPIPE_HAVE_GCRYPT_H
         if (upipe_srt_handshake->password) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + (8+klen);
             extension |= SRT_HANDSHAKE_EXT_KMREQ;
         }
+#endif
         if (upipe_srt_handshake->stream_id) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + upipe_srt_handshake->stream_id_len;
             extension |= SRT_HANDSHAKE_EXT_CONFIG;
