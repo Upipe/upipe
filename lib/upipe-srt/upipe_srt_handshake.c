@@ -38,9 +38,7 @@
 #include "upipe/uref_attr.h"
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
-#include "upipe/upipe_helper_subpipe.h"
 #include "upipe/upipe_helper_urefcount.h"
-#include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_uref_mgr.h"
 #include "upipe/upipe_helper_ubuf_mgr.h"
@@ -63,14 +61,8 @@ static int upipe_srt_handshake_check(struct upipe *upipe, struct uref *flow_form
 
 /** @internal @This is the private context of a SRT handshake pipe. */
 struct upipe_srt_handshake {
-    /** real refcount management structure */
-    struct urefcount urefcount_real;
-    /** refcount management structure exported to the public structure */
+    /** refcount management structure */
     struct urefcount urefcount;
-
-    struct upipe_mgr sub_mgr;
-    /** list of output subpipes */
-    struct uchain outputs;
 
     struct upump_mgr *upump_mgr;
     struct upump *upump_timer;
@@ -132,15 +124,12 @@ struct upipe_srt_handshake {
 
     uint64_t last_hs_sent;
 
-    struct upipe *control;
-
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_srt_handshake, upipe, UPIPE_SRT_HANDSHAKE_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_srt_handshake, urefcount, upipe_srt_handshake_no_input)
-UPIPE_HELPER_UREFCOUNT_REAL(upipe_srt_handshake, urefcount_real, upipe_srt_handshake_free);
+UPIPE_HELPER_UREFCOUNT(upipe_srt_handshake, urefcount, upipe_srt_handshake_free);
 
 UPIPE_HELPER_VOID(upipe_srt_handshake)
 
@@ -191,99 +180,9 @@ struct upipe_srt_handshake_output {
     struct upipe upipe;
 };
 
-static int upipe_srt_handshake_output_check(struct upipe *upipe, struct uref *flow_format);
-UPIPE_HELPER_UPIPE(upipe_srt_handshake_output, upipe, UPIPE_SRT_HANDSHAKE_OUTPUT_SIGNATURE)
-UPIPE_HELPER_VOID(upipe_srt_handshake_output);
-UPIPE_HELPER_UREFCOUNT(upipe_srt_handshake_output, urefcount, upipe_srt_handshake_output_free)
-UPIPE_HELPER_OUTPUT(upipe_srt_handshake_output, output, flow_def, output_state, request_list)
-UPIPE_HELPER_UREF_MGR(upipe_srt_handshake_output, uref_mgr, uref_mgr_request,
-                      upipe_srt_handshake_output_check,
-                      upipe_srt_handshake_output_register_output_request,
-                      upipe_srt_handshake_output_unregister_output_request)
-UPIPE_HELPER_UBUF_MGR(upipe_srt_handshake_output, ubuf_mgr, flow_format, ubuf_mgr_request,
-                      upipe_srt_handshake_output_check,
-                      upipe_srt_handshake_output_register_output_request,
-                      upipe_srt_handshake_output_unregister_output_request)
-UPIPE_HELPER_SUBPIPE(upipe_srt_handshake, upipe_srt_handshake_output, output, sub_mgr, outputs,
-                     uchain)
-
-static int upipe_srt_handshake_output_check(struct upipe *upipe, struct uref *flow_format)
+static void upipe_srt_handshake_shutdown(struct upipe *upipe)
 {
-    struct upipe_srt_handshake_output *upipe_srt_handshake_output = upipe_srt_handshake_output_from_upipe(upipe);
-    if (flow_format)
-        upipe_srt_handshake_output_store_flow_def(upipe, flow_format);
-
-    if (upipe_srt_handshake_output->uref_mgr == NULL) {
-        upipe_srt_handshake_output_require_uref_mgr(upipe);
-        return UBASE_ERR_NONE;
-    }
-
-    if (upipe_srt_handshake_output->ubuf_mgr == NULL) {
-        struct uref *flow_format =
-            uref_block_flow_alloc_def(upipe_srt_handshake_output->uref_mgr, NULL);
-        if (unlikely(flow_format == NULL)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return UBASE_ERR_ALLOC;
-        }
-        upipe_srt_handshake_output_require_ubuf_mgr(upipe, flow_format);
-        return UBASE_ERR_NONE;
-    }
-
-    return UBASE_ERR_NONE;
-}
-
-/** @This is called when there is no external reference to the pipe anymore.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_srt_handshake_no_input(struct upipe *upipe)
-{
-    upipe_srt_handshake_throw_sub_outputs(upipe, UPROBE_SOURCE_END);
-    upipe_srt_handshake_release_urefcount_real(upipe);
-}
-/** @internal @This allocates an output subpipe of a dup pipe.
- *
- * @param mgr common management structure
- * @param uprobe structure used to raise events
- * @param signature signature of the pipe allocator
- * @param args optional arguments
- * @return pointer to upipe or NULL in case of allocation error
- */
-static struct upipe *upipe_srt_handshake_output_alloc(struct upipe_mgr *mgr,
-                                            struct uprobe *uprobe,
-                                            uint32_t signature, va_list args)
-{
-    if (mgr->signature != UPIPE_SRT_HANDSHAKE_OUTPUT_SIGNATURE)
-        return NULL;
-
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_sub_mgr(mgr);
-    if (upipe_srt_handshake->control)
-        return NULL;
-
-    struct upipe *upipe = upipe_srt_handshake_output_alloc_void(mgr, uprobe, signature, args);
-    if (unlikely(upipe == NULL))
-        return NULL;
-
-//    struct upipe_srt_handshake_output *upipe_srt_handshake_output = upipe_srt_handshake_output_from_upipe(upipe);
-
-    upipe_srt_handshake->control = upipe;
-
-    upipe_srt_handshake_output_init_urefcount(upipe);
-    upipe_srt_handshake_output_init_output(upipe);
-    upipe_srt_handshake_output_init_sub(upipe);
-    upipe_srt_handshake_output_init_ubuf_mgr(upipe);
-    upipe_srt_handshake_output_init_uref_mgr(upipe);
-
-    upipe_throw_ready(upipe);
-
-    upipe_srt_handshake_output_require_uref_mgr(upipe);
-
-    return upipe;
-}
-
-static void upipe_srt_handshake_output_shutdown(struct upipe *upipe)
-{
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_sub_mgr(upipe->mgr);
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
     uint64_t now = uclock_now(upipe_srt_handshake->uclock);
     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
@@ -308,29 +207,10 @@ static void upipe_srt_handshake_output_shutdown(struct upipe *upipe)
     memset(extra, 0, 4);
 
     uref_block_unmap(uref, 0);
-    upipe_srt_handshake_output_output(upipe, uref,
+    upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
             &upipe_srt_handshake->upump_timer);
 }
 
-
-/** @This frees a upipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_srt_handshake_output_free(struct upipe *upipe)
-{
-    upipe_srt_handshake_output_shutdown(upipe);
-    upipe_throw_dead(upipe);
-
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_sub_mgr(upipe->mgr);
-    upipe_srt_handshake->control = NULL;
-    upipe_srt_handshake_output_clean_output(upipe);
-    upipe_srt_handshake_output_clean_sub(upipe);
-    upipe_srt_handshake_output_clean_urefcount(upipe);
-    upipe_srt_handshake_output_clean_ubuf_mgr(upipe);
-    upipe_srt_handshake_output_clean_uref_mgr(upipe);
-    upipe_srt_handshake_output_free_void(upipe);
-}
 
 static struct uref *upipe_srt_handshake_alloc_hs(struct upipe *upipe, int ext_size, uint32_t timestamp, uint8_t **cif)
 {
@@ -416,78 +296,10 @@ static void upipe_srt_handshake_timer(struct upump *upump)
 
     uref_block_unmap(uref, 0);
 
-    /* control goes through subpipe */
-    upipe_srt_handshake_output_output(upipe_srt_handshake->control, uref,
+    upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
             &upipe_srt_handshake->upump_timer);
     upipe_srt_handshake->last_hs_sent = now;
 }
-
-/** @internal @This sets the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_srt_handshake_output_set_flow_def(struct upipe *upipe, struct uref *flow_def)
-{
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
-    if (flow_def == NULL)
-        return UBASE_ERR_INVALID;
-    UBASE_RETURN(uref_flow_match_def(flow_def, "block."))
-
-    if (upipe_srt_handshake->control) {
-        struct uref *flow_def_dup = uref_dup(flow_def);
-        if (unlikely(flow_def_dup == NULL))
-            return UBASE_ERR_ALLOC;
-        upipe_srt_handshake_output_store_flow_def(upipe_srt_handshake->control, flow_def_dup);
-    }
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This processes control commands on an output subpipe of a dup
- * pipe.
- *
- * @param upipe description structure of the pipe
- * @param command type of command to process
- * @param args arguments of the command
- * @return an error code
- */
-static int _upipe_srt_handshake_output_control(struct upipe *upipe,
-                                    int command, va_list args)
-{
-    UBASE_HANDLED_RETURN(upipe_srt_handshake_output_control_super(upipe, command, args));
-    UBASE_HANDLED_RETURN(upipe_srt_handshake_output_control_output(upipe, command, args));
-    switch (command) {
-        case UPIPE_SET_FLOW_DEF: {
-            struct uref *flow_def = va_arg(args, struct uref *);
-            return upipe_srt_handshake_output_set_flow_def(upipe, flow_def);
-        }
-        default:
-            return UBASE_ERR_UNHANDLED;
-    }
-}
-static int upipe_srt_handshake_output_control(struct upipe *upipe, int command, va_list args)
-{
-    UBASE_RETURN(_upipe_srt_handshake_output_control(upipe, command, args))
-    return upipe_srt_handshake_output_check(upipe, NULL);
-}
-
-/** @internal @This initializes the output manager for a srt set pipe.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_srt_handshake_init_sub_mgr(struct upipe *upipe)
-{
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
-    struct upipe_mgr *sub_mgr = &upipe_srt_handshake->sub_mgr;
-    sub_mgr->refcount = upipe_srt_handshake_to_urefcount_real(upipe_srt_handshake);
-    sub_mgr->signature = UPIPE_SRT_HANDSHAKE_OUTPUT_SIGNATURE;
-    sub_mgr->upipe_alloc = upipe_srt_handshake_output_alloc;
-    sub_mgr->upipe_input = NULL;
-    sub_mgr->upipe_control = upipe_srt_handshake_output_control;
-}
-
 
 /** @internal @This allocates a SRT handshake pipe.
  *
@@ -514,9 +326,6 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
 #endif
 
     upipe_srt_handshake_init_urefcount(upipe);
-    upipe_srt_handshake_init_urefcount_real(upipe);
-    upipe_srt_handshake_init_sub_outputs(upipe);
-    upipe_srt_handshake_init_sub_mgr(upipe);
 
     upipe_srt_handshake_init_uref_mgr(upipe);
     upipe_srt_handshake_init_ubuf_mgr(upipe);
@@ -539,7 +348,6 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->last_hs_sent = 0;
 
     upipe_srt_handshake->expect_conclusion = false;
-    upipe_srt_handshake->control = NULL;
 
     upipe_srt_handshake->stream_id = NULL;
     upipe_srt_handshake->stream_id_len = 0;
@@ -697,7 +505,6 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     UBASE_HANDLED_RETURN(upipe_srt_handshake_control_output(upipe, command, args));
-    UBASE_HANDLED_RETURN(upipe_srt_handshake_control_outputs(upipe, command, args));
 
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
@@ -731,15 +538,20 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
             const char *password = va_arg(args, const char*);
             upipe_srt_handshake->sek_len = va_arg(args, int);
             free(upipe_srt_handshake->password);
-            upipe_srt_handshake->password = password ? strdup(password) : NULL;
-            switch (upipe_srt_handshake->sek_len) {
-            case 128/8:
-            case 192/8:
-            case 256/8:
-                break;
-            default:
-                upipe_err_va(upipe, "Invalid key length %d, using 128 bits", 8*upipe_srt_handshake->sek_len);
-                upipe_srt_handshake->sek_len = 128/8;
+            if (password) {
+                upipe_srt_handshake->password = strdup(password);
+                switch (upipe_srt_handshake->sek_len) {
+                    case 128/8:
+                    case 192/8:
+                    case 256/8:
+                        break;
+                    default:
+                        upipe_err_va(upipe, "Invalid key length %d, using 128 bits", 8*upipe_srt_handshake->sek_len);
+                        upipe_srt_handshake->sek_len = 128/8;
+                }
+            } else {
+                upipe_srt_handshake->password = NULL;
+                upipe_srt_handshake->sek_len = 0;
             }
             return UBASE_ERR_NONE;
         }
@@ -1062,10 +874,12 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
 
         const uint8_t klen = upipe_srt_handshake->sek_len;
+#ifdef UPIPE_HAVE_GCRYPT_H
         if (upipe_srt_handshake->password) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + (8+klen);
             extension |= SRT_HANDSHAKE_EXT_KMREQ;
         }
+#endif
         if (upipe_srt_handshake->stream_id) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + upipe_srt_handshake->stream_id_len;
             extension |= SRT_HANDSHAKE_EXT_CONFIG;
@@ -1332,6 +1146,34 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     }
 }
 
+static struct uref *upipe_srt_handshake_handle_keepalive(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
+
+    struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
+            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
+    if (!uref)
+        return NULL;
+    uint8_t *out;
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size, &out)))) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    }
+
+    srt_set_packet_control(out, true);
+    srt_set_packet_timestamp(out, timestamp);
+    srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
+    srt_set_control_packet_type(out, SRT_CONTROL_TYPE_KEEPALIVE);
+    srt_set_control_packet_subtype(out, 0);
+    srt_set_control_packet_type_specific(out, srt_get_control_packet_type_specific(buf));
+
+    uref_block_unmap(uref, 0);
+    return uref;
+    // should go to sender
+}
+
 static struct uref *upipe_srt_handshake_handle_ack(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -1373,6 +1215,7 @@ static struct uref *upipe_srt_handshake_input_control(struct upipe *upipe, const
     if (type == SRT_CONTROL_TYPE_HANDSHAKE) {
         return upipe_srt_handshake_handle_hs(upipe, buf, size, now);
     } else if (type == SRT_CONTROL_TYPE_KEEPALIVE) {
+        return upipe_srt_handshake_handle_keepalive(upipe, buf, size, now);
     } else if (type == SRT_CONTROL_TYPE_ACK) {
         return upipe_srt_handshake_handle_ack(upipe, buf, size, now);
     } else if (type == SRT_CONTROL_TYPE_NAK) {
@@ -1437,7 +1280,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
         } else {
             uref_free(uref);
             if (reply) {
-                upipe_srt_handshake_output_output(upipe_srt_handshake->control, reply, upump_p);
+                upipe_srt_handshake_output(&upipe_srt_handshake->upipe, reply, upump_p);
             }
         }
     } else {
@@ -1454,6 +1297,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
 static void upipe_srt_handshake_free(struct upipe *upipe)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    upipe_srt_handshake_shutdown(upipe);
     upipe_throw_dead(upipe);
 
     free(upipe_srt_handshake->password);
@@ -1467,8 +1311,6 @@ static void upipe_srt_handshake_free(struct upipe *upipe)
     upipe_srt_handshake_clean_ubuf_mgr(upipe);
     upipe_srt_handshake_clean_uref_mgr(upipe);
     upipe_srt_handshake_clean_urefcount(upipe);
-    upipe_srt_handshake_clean_urefcount_real(upipe);
-    upipe_srt_handshake_clean_sub_outputs(upipe);
     upipe_srt_handshake_free_void(upipe);
 }
 

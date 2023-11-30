@@ -1084,10 +1084,15 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
                 upipe_srt_receiver->rtt_variance += var;
                 upipe_srt_receiver->rtt_variance /= 4;
             }
+            ubase_assert(uref_block_unmap(uref, 0));
+            uref_free(uref);
+        } else {
+            ubase_assert(uref_block_unmap(uref, 0));
+            if (upipe_srt_receiver->control)
+                upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref, NULL);
+            else
+                uref_free(uref);
         }
-
-        ubase_assert(uref_block_unmap(uref, 0));
-        uref_free(uref);
         return;
     }
 
@@ -1227,7 +1232,10 @@ error:
  */
 static void upipe_srt_receiver_free(struct upipe *upipe)
 {
+    struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
     upipe_throw_dead(upipe);
+
+    free(upipe_srt_receiver->acks);
 
     upipe_srt_receiver_clean_output(upipe);
     upipe_srt_receiver_clean_upump_timer(upipe);

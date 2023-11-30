@@ -139,6 +139,12 @@ struct upipe_srt_sender_input {
 
 static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts, struct upump **upump_p);
 
+UPIPE_HELPER_UPIPE(upipe_srt_sender_input, upipe, UPIPE_SRT_SENDER_INPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_srt_sender_input, urefcount, upipe_srt_sender_input_free)
+UPIPE_HELPER_VOID(upipe_srt_sender_input);
+UPIPE_HELPER_SUBPIPE(upipe_srt_sender, upipe_srt_sender_input, output, sub_mgr, inputs,
+                     uchain)
+
 /** @internal @This handles SRT messages.
  *
  * @param upipe description structure of the pipe
@@ -175,17 +181,24 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
         while (srt_get_nak_range(&buf, &s, &seq, &packets)) {
             upipe_srt_sender_lost_sub_n(upipe, seq, packets, upump_p);
         }
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+    } else {
+        struct upipe *upipe_super = NULL;
+        upipe_srt_sender_input_get_super(upipe, &upipe_super);
+        if (type == SRT_CONTROL_TYPE_HANDSHAKE) {
+            uint64_t ts = srt_get_packet_timestamp(buf);
+            if (ts) {
+                struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe_super);
+                uint64_t now = uclock_now(upipe_srt_sender->uclock);
+                upipe_srt_sender->establish_time = now - ts * UCLOCK_FREQ / 1000000;
+            }
+        }
+
+        uref_block_unmap(uref, 0);
+        upipe_srt_sender_output(upipe_super, uref, NULL);
     }
-
-    uref_block_unmap(uref, 0);
-    uref_free(uref);
 }
-
-UPIPE_HELPER_UPIPE(upipe_srt_sender_input, upipe, UPIPE_SRT_SENDER_INPUT_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_srt_sender_input, urefcount, upipe_srt_sender_input_free)
-UPIPE_HELPER_VOID(upipe_srt_sender_input);
-UPIPE_HELPER_SUBPIPE(upipe_srt_sender, upipe_srt_sender_input, output, sub_mgr, inputs,
-                     uchain)
 
 /** @internal @This retransmits a number of packets */
 static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts, struct upump **upump_p)
@@ -376,7 +389,6 @@ static int upipe_srt_sender_check(struct upipe *upipe, struct uref *flow_format)
         return UBASE_ERR_NONE;
 
     if (upipe_srt_sender->upump_timer == NULL) {
-        upipe_srt_sender->establish_time = uclock_now(upipe_srt_sender->uclock); // FIXME
         struct upump *upump =
             upump_alloc_timer(upipe_srt_sender->upump_mgr,
                               upipe_srt_sender_timer, upipe, upipe->refcount,
@@ -562,7 +574,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
     srt_set_data_packet_message_number(buf, seqnum);
     srt_set_data_packet_seq(buf, seqnum);
     srt_set_data_packet_position(buf, SRT_DATA_POSITION_ONLY);
-    srt_set_data_packet_order(buf, true);
+    srt_set_data_packet_order(buf, false);
     srt_set_data_packet_retransmit(buf, false);
 
 #ifdef UPIPE_HAVE_GCRYPT_H
