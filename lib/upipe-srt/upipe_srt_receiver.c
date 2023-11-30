@@ -1227,7 +1227,10 @@ error:
  */
 static void upipe_srt_receiver_free(struct upipe *upipe)
 {
+    struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
     upipe_throw_dead(upipe);
+
+    free(upipe_srt_receiver->acks);
 
     upipe_srt_receiver_clean_output(upipe);
     upipe_srt_receiver_clean_upump_timer(upipe);
