@@ -139,6 +139,12 @@ struct upipe_srt_sender_input {
 
 static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts, struct upump **upump_p);
 
+UPIPE_HELPER_UPIPE(upipe_srt_sender_input, upipe, UPIPE_SRT_SENDER_INPUT_SIGNATURE)
+UPIPE_HELPER_UREFCOUNT(upipe_srt_sender_input, urefcount, upipe_srt_sender_input_free)
+UPIPE_HELPER_VOID(upipe_srt_sender_input);
+UPIPE_HELPER_SUBPIPE(upipe_srt_sender, upipe_srt_sender_input, output, sub_mgr, inputs,
+                     uchain)
+
 /** @internal @This handles SRT messages.
  *
  * @param upipe description structure of the pipe
@@ -175,17 +181,15 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
         while (srt_get_nak_range(&buf, &s, &seq, &packets)) {
             upipe_srt_sender_lost_sub_n(upipe, seq, packets, upump_p);
         }
+        uref_block_unmap(uref, 0);
+        uref_free(uref);
+    } else {
+        struct upipe *upipe_super = NULL;
+        upipe_srt_sender_input_get_super(upipe, &upipe_super);
+        uref_block_unmap(uref, 0);
+        upipe_srt_sender_output(upipe_super, uref, NULL);
     }
-
-    uref_block_unmap(uref, 0);
-    uref_free(uref);
 }
-
-UPIPE_HELPER_UPIPE(upipe_srt_sender_input, upipe, UPIPE_SRT_SENDER_INPUT_SIGNATURE)
-UPIPE_HELPER_UREFCOUNT(upipe_srt_sender_input, urefcount, upipe_srt_sender_input_free)
-UPIPE_HELPER_VOID(upipe_srt_sender_input);
-UPIPE_HELPER_SUBPIPE(upipe_srt_sender, upipe_srt_sender_input, output, sub_mgr, inputs,
-                     uchain)
 
 /** @internal @This retransmits a number of packets */
 static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint32_t pkts, struct upump **upump_p)

@@ -82,7 +82,6 @@ static void usage(const char *argv0) {
 static struct upipe *upipe_udpsink;
 static struct upipe *upipe_udpsrc_srt;
 static struct upipe *upipe_udpsrc;
-static struct upipe *upipe_srt_handshake_sub;
 static struct upipe *upipe_srt_sender;
 static struct upipe *upipe_srt_sender_sub;
 
@@ -221,10 +220,6 @@ static int start(void)
 
     upipe_mgr_release(upipe_udpsrc_mgr);
 
-    upipe_srt_handshake_sub = upipe_void_alloc_sub(upipe_srt_handshake,
-        uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "srt handshake sub %u", z));
-    assert(upipe_srt_handshake_sub);
-
     upipe_srt_sender_sub = upipe_void_chain_output_sub(upipe_srt_handshake,
         upipe_srt_sender,
         uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "srt sender sub %u", z));
@@ -236,8 +231,6 @@ static int start(void)
     upipe_udpsink = upipe_void_chain_output(upipe_srt_sender, upipe_udpsink_mgr,
             uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "udp sink %u", z));
     upipe_release(upipe_udpsink);
-
-    upipe_set_output(upipe_srt_handshake_sub, upipe_udpsink);
 
     int udp_fd = -1;
     if (listener) {
@@ -281,7 +274,6 @@ static void stop(struct upump *upump)
 
     upipe_release(upipe_udpsrc_srt);
     upipe_release(upipe_udpsrc);
-    upipe_release(upipe_srt_handshake_sub);
 
     if (restart)
         start();

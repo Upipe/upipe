@@ -160,7 +160,6 @@ static struct upump_mgr *upump_mgr;
 
 static struct upipe *upipe_udpsrc;
 static struct upipe *upipe_udp_sink;
-static struct upipe *upipe_srth_sub;
 static struct upipe *upipe_srtr_sub;
 
 static struct uprobe uprobe_udp;
@@ -217,14 +216,6 @@ static int start(void)
     upipe_srt_handshake_set_password(upipe_srth, password, key_length / 8);
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
-    upipe_srth_sub = upipe_void_alloc_sub(upipe_srth,
-            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srth_sub"));
-    assert(upipe_srth_sub);
-    upipe_udp_sink = upipe_void_alloc_output(upipe_srth_sub,
-            udp_sink_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel,
-                "udpsink"));
-    upipe_release(upipe_udp_sink);
-
     struct upipe_mgr *upipe_srt_receiver_mgr = upipe_srt_receiver_mgr_alloc();
     struct upipe *upipe_srtr = upipe_void_chain_output(upipe_srth,
             upipe_srt_receiver_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srtr"));
@@ -237,7 +228,11 @@ static int start(void)
     upipe_srtr_sub = upipe_void_alloc_sub(upipe_srtr,
             uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srtr_sub"));
     assert(upipe_srtr_sub);
-    upipe_set_output(upipe_srtr_sub, upipe_udp_sink);
+
+    upipe_udp_sink = upipe_void_alloc_output(upipe_srtr_sub,
+            udp_sink_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel,
+                "udpsink"));
+    upipe_release(upipe_udp_sink);
 
     int udp_fd;
     /* receive SRT */
@@ -280,7 +275,6 @@ static void stop(struct upump *upump)
     upump_stop(upump);
     upump_free(upump);
 
-    upipe_release(upipe_srth_sub);
     upipe_release(upipe_srtr_sub);
     upipe_release(upipe_udpsrc);
 
