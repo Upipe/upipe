@@ -562,7 +562,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
     srt_set_data_packet_message_number(buf, seqnum);
     srt_set_data_packet_seq(buf, seqnum);
     srt_set_data_packet_position(buf, SRT_DATA_POSITION_ONLY);
-    srt_set_data_packet_order(buf, true);
+    srt_set_data_packet_order(buf, false);
     srt_set_data_packet_retransmit(buf, false);
 
 #ifdef UPIPE_HAVE_GCRYPT_H
