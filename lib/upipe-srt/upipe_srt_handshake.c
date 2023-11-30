@@ -731,15 +731,20 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
             const char *password = va_arg(args, const char*);
             upipe_srt_handshake->sek_len = va_arg(args, int);
             free(upipe_srt_handshake->password);
-            upipe_srt_handshake->password = password ? strdup(password) : NULL;
-            switch (upipe_srt_handshake->sek_len) {
-            case 128/8:
-            case 192/8:
-            case 256/8:
-                break;
-            default:
-                upipe_err_va(upipe, "Invalid key length %d, using 128 bits", 8*upipe_srt_handshake->sek_len);
-                upipe_srt_handshake->sek_len = 128/8;
+            if (password) {
+                upipe_srt_handshake->password = strdup(password);
+                switch (upipe_srt_handshake->sek_len) {
+                    case 128/8:
+                    case 192/8:
+                    case 256/8:
+                        break;
+                    default:
+                        upipe_err_va(upipe, "Invalid key length %d, using 128 bits", 8*upipe_srt_handshake->sek_len);
+                        upipe_srt_handshake->sek_len = 128/8;
+                }
+            } else {
+                upipe_srt_handshake->password = NULL;
+                upipe_srt_handshake->sek_len = 0;
             }
             return UBASE_ERR_NONE;
         }
