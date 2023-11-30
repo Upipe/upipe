@@ -368,7 +368,8 @@ int main(int argc, char *argv[])
         return ret;
 
     if (0) {
-        upipe_dump_open(NULL, NULL, "dump.dot", NULL, upipe_udpsink, upipe_udpsrc, upipe_udpsrc_srt, NULL);
+        restart = false;
+        //upipe_dump_open(NULL, NULL, "dump.dot", NULL, upipe_udpsink, upipe_udpsrc, upipe_udpsrc_srt, NULL);
         struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
                 NULL, UCLOCK_FREQ, 0);
         upump_start(u);
