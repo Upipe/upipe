@@ -186,6 +186,15 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
     } else {
         struct upipe *upipe_super = NULL;
         upipe_srt_sender_input_get_super(upipe, &upipe_super);
+        if (type == SRT_CONTROL_TYPE_HANDSHAKE) {
+            uint64_t ts = srt_get_packet_timestamp(buf);
+            if (ts) {
+                struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe_super);
+                uint64_t now = uclock_now(upipe_srt_sender->uclock);
+                upipe_srt_sender->establish_time = now - ts * UCLOCK_FREQ / 1000000;
+            }
+        }
+
         uref_block_unmap(uref, 0);
         upipe_srt_sender_output(upipe_super, uref, NULL);
     }
@@ -380,7 +389,6 @@ static int upipe_srt_sender_check(struct upipe *upipe, struct uref *flow_format)
         return UBASE_ERR_NONE;
 
     if (upipe_srt_sender->upump_timer == NULL) {
-        upipe_srt_sender->establish_time = uclock_now(upipe_srt_sender->uclock); // FIXME
         struct upump *upump =
             upump_alloc_timer(upipe_srt_sender->upump_mgr,
                               upipe_srt_sender_timer, upipe, upipe->refcount,
