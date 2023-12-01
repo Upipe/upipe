@@ -262,6 +262,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-netmap/Makefile
                  include/upipe-dvbcsa/Makefile
                  include/upipe-ebur128/Makefile
+                 include/upipe-srt/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -327,6 +328,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-dvbcsa/libupipe_dvbcsa.pc
                  lib/upipe-ebur128/Makefile
                  lib/upipe-ebur128/libupipe_ebur128.pc
+                 lib/upipe-srt/Makefile
+                 lib/upipe-srt/libupipe_srt.pc
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile
