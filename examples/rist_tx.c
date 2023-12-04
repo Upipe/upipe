@@ -269,7 +269,9 @@ static void stop(struct upump *upump)
     }
 
     upipe_release(upipe_udpsrc_srt);
+    upipe_udpsrc_srt = NULL;
     upipe_release(upipe_udpsrc);
+    upipe_udpsrc = NULL;
 
     if (restart)
         start();
