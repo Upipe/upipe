@@ -96,8 +96,6 @@ static int key_length = 128;
 
 static enum uprobe_log_level loglevel = UPROBE_LOG_DEBUG;
 
-static struct uprobe uprobe_udp_srt;
-static struct uprobe uprobe_hs;
 static struct uprobe *logger;
 
 static bool restart = true;
@@ -204,15 +202,13 @@ static int start(void)
     if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", latency)))
         return EXIT_FAILURE;
 
-    uprobe_init(&uprobe_udp_srt, catch_udp, uprobe_use(logger));
-    uprobe_init(&uprobe_hs, catch_hs, uprobe_use(logger));
     upipe_udpsrc_srt = upipe_void_alloc(upipe_udpsrc_mgr,
-            uprobe_pfx_alloc_va(&uprobe_udp_srt, loglevel, "udp source srt %u", z));
+            uprobe_pfx_alloc_va(uprobe_alloc(catch_udp, uprobe_use(logger)), loglevel, "udp source srt %u", z));
     upipe_attach_uclock(upipe_udpsrc_srt);
 
     struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc();
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
-            uprobe_pfx_alloc_va(uprobe_use(&uprobe_hs), loglevel, "srt handshake %u", z));
+            uprobe_pfx_alloc_va(uprobe_alloc(catch_hs, uprobe_use(logger)), loglevel, "srt handshake %u", z));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
     upipe_srt_handshake_set_password(upipe_srt_handshake, password, key_length / 8);
 
@@ -379,8 +375,6 @@ int main(int argc, char *argv[])
     upump_free(sigint_pump);
 
     uprobe_release(logger);
-    uprobe_clean(&uprobe_udp_srt);
-    uprobe_clean(&uprobe_hs);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
