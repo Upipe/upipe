@@ -27,9 +27,9 @@
  * @short Upipe module for SRT handshakes
  */
 
-#ifndef _UPIPE_MODULES_UPIPE_SRT_RECEIVER_H_
+#ifndef _UPIPE_SRT_UPIPE_SRT_RECEIVER_H_
 /** @hidden */
-#define _UPIPE_MODULES_UPIPE_SRT_RECEIVER_H_
+#define _UPIPE_SRT_UPIPE_SRT_RECEIVER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
