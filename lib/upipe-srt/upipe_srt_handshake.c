@@ -467,7 +467,7 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
             return UBASE_ERR_ALLOC;
         }
 
-        strncpy(stream_id, value, stream_id_len);
+        strncpy((char*)stream_id, value, stream_id_len);
 
         for (size_t i = 0; i < stream_id_len; i += 4) {
             uint8_t tmp = stream_id[i+0];
