@@ -852,6 +852,13 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
         upipe_srt_receiver->sek_len = opaque.size;
         memcpy(upipe_srt_receiver->sek[0], opaque.v, opaque.size);
     }
+
+    if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.odd_key"))) {
+        if (opaque.size > sizeof(upipe_srt_receiver->sek[1]))
+            opaque.size = sizeof(upipe_srt_receiver->sek[1]);
+        upipe_srt_receiver->sek_len = opaque.size;
+        memcpy(upipe_srt_receiver->sek[1], opaque.v, opaque.size);
+    }
 #endif
 
     flow_def = uref_dup(flow_def);
@@ -1106,6 +1113,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     bool retransmit = srt_get_data_packet_retransmit(buf);
     uint32_t num = srt_get_data_packet_message_number(buf);
     uint32_t ts = srt_get_packet_timestamp(buf);
+    uint8_t kk = srt_get_data_packet_encryption(buf);
 
     ubase_assert(uref_block_unmap(uref, 0));
     uref_block_resize(uref, SRT_HEADER_SIZE, -1); /* skip SRT header */
@@ -1134,7 +1142,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
 #ifdef UPIPE_HAVE_GCRYPT_H
         } else {
             const uint8_t *salt = upipe_srt_receiver->salt;
-            const uint8_t *sek = upipe_srt_receiver->sek[0];
+            const uint8_t *sek = upipe_srt_receiver->sek[(kk & (1<<0))? 0 : 1];
             int key_len = upipe_srt_receiver->sek_len;
 
             uint8_t iv[16];
