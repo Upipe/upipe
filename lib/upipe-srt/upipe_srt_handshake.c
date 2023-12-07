@@ -338,7 +338,6 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake_init_uclock(upipe);
     upipe_srt_handshake_require_uclock(upipe);
 
-    srand48((long)&uprobe); // FIXME
     upipe_srt_handshake->isn = 0;
     upipe_srt_handshake->remote_socket_id = 0; // will be set with remote first packet
     upipe_srt_handshake->mtu = 1500;
@@ -1334,8 +1333,10 @@ static struct upipe_mgr upipe_srt_handshake_mgr = {
 /** @This returns the management structure for all SRT handshake sources
  *
  * @return pointer to manager
+ * @param seed random seed for socket id and syn cookie
  */
-struct upipe_mgr *upipe_srt_handshake_mgr_alloc(void)
+struct upipe_mgr *upipe_srt_handshake_mgr_alloc(long seed)
 {
+    srand48(seed);
     return &upipe_srt_handshake_mgr;
 }

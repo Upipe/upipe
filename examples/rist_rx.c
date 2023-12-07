@@ -205,7 +205,7 @@ static int start(void)
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp);
     upipe_mgr_release(upipe_udpsrc_mgr);
 
-    struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc();
+    struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc((long)&upipe_udpsrc);
     struct upipe *upipe_srth = upipe_void_alloc_output(upipe_udpsrc,
             upipe_srt_handshake_mgr, &uprobe_srt);
     assert(upipe_srth);

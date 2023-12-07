@@ -84,7 +84,7 @@ static inline int upipe_srt_handshake_set_password(struct upipe *upipe,
  *
  * @return pointer to manager
  */
-struct upipe_mgr *upipe_srt_handshake_mgr_alloc(void);
+struct upipe_mgr *upipe_srt_handshake_mgr_alloc(long seed);
 
 #ifdef __cplusplus
 }
