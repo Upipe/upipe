@@ -27,9 +27,9 @@
  * @short Upipe module sending SRT
  */
 
-#ifndef _UPIPE_FILTERS_UPIPE_SRT_SENDER_H_
+#ifndef _UPIPE_SRT_UPIPE_SRT_SENDER_H_
 /** @hidden */
-#define _UPIPE_FILTERS_UPIPE_SRT_SENDER_H_
+#define _UPIPE_SRT_UPIPE_SRT_SENDER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
