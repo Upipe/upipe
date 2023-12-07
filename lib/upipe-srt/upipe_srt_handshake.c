@@ -650,7 +650,10 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
             if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.even_key")))
                 upipe_err(upipe, "damn");
 
-            // TODO: odd key ?
+            opaque.v = upipe_srt_handshake->sek[1];
+            opaque.size = upipe_srt_handshake->sek_len;
+            if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.odd_key")))
+                upipe_err(upipe, "damn");
 
             uref_pic_set_number(flow_def, upipe_srt_handshake->isn);
             upipe_srt_handshake_store_flow_def(upipe, flow_def);
@@ -723,7 +726,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
 
     *wrap_len = ((*kk == 3) ? 2 : 1) * klen + 8;
 
-    uint8_t osek[32];
+    uint8_t osek[64]; /* 2x 256 bits keys */
 
     gcry_cipher_hd_t aes;
     err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
@@ -734,13 +737,13 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
 
     err = gcry_cipher_setkey(aes, kek, klen);
     if (err) {
-        upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
+        upipe_err_va(upipe, "Couldn't use key encrypting key (%s)", gcry_strerror(err));
         goto key_error;
     }
 
-    err = gcry_cipher_decrypt(aes, osek, klen, *wrap, *wrap_len);
+    err = gcry_cipher_decrypt(aes, osek, ((*kk == 3) ? 2 : 1) * klen, *wrap, *wrap_len);
     if (err) {
-        upipe_err_va(upipe, "Couldn't decrypt session key (0x%x)", err);
+        upipe_err_va(upipe, "Couldn't decrypt session key (%s)", gcry_strerror(err));
         goto key_error;
     }
 
@@ -748,7 +751,12 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
 
     upipe_srt_handshake->sek_len = klen;
 
-    memcpy(upipe_srt_handshake->sek[0], osek, klen);
+    if (*kk == 3) {
+        memcpy(upipe_srt_handshake->sek[0], osek, klen);
+        memcpy(upipe_srt_handshake->sek[1], &osek[klen], klen);
+    } else {
+        memcpy(upipe_srt_handshake->sek[(*kk & (1<<0)) ? 0 : 1], osek, klen);
+    }
 
     return true;
 
@@ -1146,6 +1154,61 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     }
 }
 
+static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
+
+    uint8_t kk = 0;
+    const uint8_t *wrap;
+    uint8_t wrap_len = 0;
+
+    const uint8_t *cif = srt_get_control_packet_cif(buf);
+    size -= SRT_HEADER_SIZE;
+
+    if (!srt_check_km(buf, size) || !upipe_srt_handshake_parse_kmreq(upipe, buf, &kk, &wrap, &wrap_len))
+    if (!upipe_srt_handshake_parse_kmreq(upipe, cif, &kk, &wrap, &wrap_len)) {
+        upipe_err_va(upipe, "parse failed");
+        return NULL;
+    }
+
+    struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
+            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len);
+    if (!uref)
+        return NULL;
+    uint8_t *out;
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size, &out)))) {
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+    }
+
+    srt_set_packet_control(out, true);
+    srt_set_packet_timestamp(out, timestamp);
+    srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
+    srt_set_control_packet_type(out, SRT_CONTROL_TYPE_USER);
+    srt_set_control_packet_subtype(out, SRT_HANDSHAKE_EXT_TYPE_KMRSP);
+    srt_set_control_packet_type_specific(out, 0);
+    uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
+    memset(extra, 0, SRT_KMREQ_COMMON_SIZE);
+
+    if (wrap_len) {
+        extra[0] = 0x12;  // S V PT
+        extra[1] = 0x20; extra[2] = 0x29; // Sign
+        srt_km_set_kk(extra, kk);
+        srt_km_set_cipher(extra, SRT_KMREQ_CIPHER_AES);
+        extra[10] = 2; // SE
+        extra[14] = 4; // slen;
+        srt_km_set_klen(extra, upipe_srt_handshake->sek_len / 4);
+        memcpy(&extra[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
+        memcpy(&extra[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+    }
+    upipe_srt_handshake_finalize(upipe);
+
+    uref_block_unmap(uref, 0);
+    return uref;
+}
+
 static struct uref *upipe_srt_handshake_handle_keepalive(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -1212,34 +1275,49 @@ static struct uref *upipe_srt_handshake_input_control(struct upipe *upipe, const
 
     uint16_t type = srt_get_control_packet_type(buf);
     uint64_t now = uclock_now(upipe_srt_handshake->uclock);
+    const uint8_t *cif = srt_get_control_packet_cif(buf);
 
     upipe_verbose_va(upipe, "control pkt %s", get_ctrl_type(type));
     *handled = true;
 
-    if (type == SRT_CONTROL_TYPE_HANDSHAKE) {
-        return upipe_srt_handshake_handle_hs(upipe, buf, size, now);
-    } else if (type == SRT_CONTROL_TYPE_KEEPALIVE) {
-        return upipe_srt_handshake_handle_keepalive(upipe, buf, size, now);
-    } else if (type == SRT_CONTROL_TYPE_ACK) {
-        return upipe_srt_handshake_handle_ack(upipe, buf, size, now);
-    } else if (type == SRT_CONTROL_TYPE_NAK) {
-        *handled = false;
-    } else if (type == SRT_CONTROL_TYPE_ACKACK) {
-        *handled = false; // send to next pipe for RTT estimation
-    } else if (type == SRT_CONTROL_TYPE_SHUTDOWN) {
-        upipe_err_va(upipe, "shutdown requested");
-        upipe_throw_source_end(upipe);
-    } else if (type == SRT_CONTROL_TYPE_DROPREQ) {
-        const uint8_t *cif = srt_get_control_packet_cif(buf);
-        if (!srt_check_dropreq(cif, size - SRT_HEADER_SIZE)) {
-            upipe_err_va(upipe, "dropreq pkt invalid");
-        } else {
-            uint32_t first = srt_get_dropreq_first_seq(cif);
-            uint32_t last = srt_get_dropreq_last_seq(cif);
-            upipe_dbg_va(upipe, "sender dropped packets from %u to %u", first, last);
-        }
-    } else {
-        *handled = false;
+    if (size < SRT_HEADER_SIZE) {
+        upipe_err_va(upipe, "control packet too small (%d)", size);
+        return NULL;
+    }
+
+    switch (type) {
+        case SRT_CONTROL_TYPE_HANDSHAKE:
+            return upipe_srt_handshake_handle_hs(upipe, buf, size, now);
+
+        case SRT_CONTROL_TYPE_KEEPALIVE:
+            return upipe_srt_handshake_handle_keepalive(upipe, buf, size, now);
+
+        case SRT_CONTROL_TYPE_ACK:
+            return upipe_srt_handshake_handle_ack(upipe, buf, size, now);
+
+        case SRT_CONTROL_TYPE_USER:
+            return upipe_srt_handshake_handle_user(upipe, buf, size, now);
+
+        case SRT_CONTROL_TYPE_SHUTDOWN:
+            upipe_err_va(upipe, "shutdown requested");
+            upipe_throw_source_end(upipe);
+            break;
+
+        case SRT_CONTROL_TYPE_DROPREQ:
+            if (!srt_check_dropreq(cif, size - SRT_HEADER_SIZE)) {
+                upipe_err_va(upipe, "dropreq pkt invalid");
+            } else {
+                uint32_t first = srt_get_dropreq_first_seq(cif);
+                uint32_t last = srt_get_dropreq_last_seq(cif);
+                upipe_dbg_va(upipe, "sender dropped packets from %u to %u", first, last);
+            }
+            break;
+
+        case SRT_CONTROL_TYPE_NAK: /* fallthrough */
+        case SRT_CONTROL_TYPE_ACKACK: // send to next pipe for RTT estimation
+        default:
+            *handled = false;
+            break;
     }
 
     return NULL;
