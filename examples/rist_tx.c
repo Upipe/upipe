@@ -206,7 +206,7 @@ static int start(void)
             uprobe_pfx_alloc_va(uprobe_alloc(catch_udp, uprobe_use(logger)), loglevel, "udp source srt %u", z));
     upipe_attach_uclock(upipe_udpsrc_srt);
 
-    struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc();
+    struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc((long)&upipe_udpsrc_srt);
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc_va(uprobe_alloc(catch_hs, uprobe_use(logger)), loglevel, "srt handshake %u", z));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
