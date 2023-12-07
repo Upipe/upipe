@@ -436,6 +436,13 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
         upipe_srt_sender->sek_len = opaque.size;
         memcpy(upipe_srt_sender->sek[0], opaque.v, opaque.size);
     }
+
+    if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.odd_key"))) {
+        if (opaque.size > sizeof(upipe_srt_sender->sek[1]))
+            opaque.size = sizeof(upipe_srt_sender->sek[1]);
+        upipe_srt_sender->sek_len = opaque.size;
+        memcpy(upipe_srt_sender->sek[1], opaque.v, opaque.size);
+    }
 #endif
 
     return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
