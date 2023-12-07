@@ -203,6 +203,7 @@ static void upipe_srt_handshake_shutdown(struct upipe *upipe)
     srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
     srt_set_control_packet_type(out, SRT_CONTROL_TYPE_SHUTDOWN);
     srt_set_control_packet_subtype(out, 0);
+    srt_set_control_packet_type_specific(out, 0);
     uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
     memset(extra, 0, 4);
 
@@ -1168,6 +1169,8 @@ static struct uref *upipe_srt_handshake_handle_keepalive(struct upipe *upipe, co
     srt_set_control_packet_type(out, SRT_CONTROL_TYPE_KEEPALIVE);
     srt_set_control_packet_subtype(out, 0);
     srt_set_control_packet_type_specific(out, srt_get_control_packet_type_specific(buf));
+    uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
+    memset(extra, 0, 4);
 
     uref_block_unmap(uref, 0);
     return uref;
@@ -1196,6 +1199,8 @@ static struct uref *upipe_srt_handshake_handle_ack(struct upipe *upipe, const ui
     srt_set_control_packet_type(out, SRT_CONTROL_TYPE_ACKACK);
     srt_set_control_packet_subtype(out, 0);
     srt_set_control_packet_type_specific(out, srt_get_control_packet_type_specific(buf));
+    uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
+    memset(extra, 0, 4);
 
     uref_block_unmap(uref, 0);
     return uref;

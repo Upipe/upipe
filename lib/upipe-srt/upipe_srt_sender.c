@@ -198,6 +198,8 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
         uref_block_unmap(uref, 0);
         if (upipe_srt_sender->flow_def)
             upipe_srt_sender_output(upipe_super, uref, NULL);
+        else
+            uref_free(uref);
     }
 }
 
