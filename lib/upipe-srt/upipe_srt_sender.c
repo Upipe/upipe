@@ -104,6 +104,8 @@ struct upipe_srt_sender {
     uint8_t sek[2][32];
     uint8_t sek_len;
 
+    uint64_t last_sent;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -154,6 +156,17 @@ UPIPE_HELPER_SUBPIPE(upipe_srt_sender, upipe_srt_sender_input, output, sub_mgr, 
 static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
+    struct upipe *upipe_super = NULL;
+    upipe_srt_sender_input_get_super(upipe, &upipe_super);
+    struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe_super);
+
+    upipe_srt_sender_check(upipe_super, NULL);
+
+    uint64_t now = 0;
+
+    if (upipe_srt_sender->uclock)
+        now = uclock_now(upipe_srt_sender->uclock);
+
     size_t total_size;
     ubase_assert(uref_block_size(uref, &total_size));
 
@@ -184,21 +197,17 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
         uref_block_unmap(uref, 0);
         uref_free(uref);
     } else {
-        struct upipe *upipe_super = NULL;
-        upipe_srt_sender_input_get_super(upipe, &upipe_super);
-        struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe_super);
         if (type == SRT_CONTROL_TYPE_HANDSHAKE) {
             uint64_t ts = srt_get_packet_timestamp(buf);
-            if (ts) {
-                uint64_t now = uclock_now(upipe_srt_sender->uclock);
+            if (ts)
                 upipe_srt_sender->establish_time = now - ts * UCLOCK_FREQ / 1000000;
-            }
         }
 
         uref_block_unmap(uref, 0);
-        if (upipe_srt_sender->flow_def)
-            upipe_srt_sender_output(upipe_super, uref, NULL);
-        else
+        if (upipe_srt_sender->flow_def) {
+            upipe_srt_sender->last_sent = now;
+            upipe_srt_sender_output(upipe_super, uref, upump_p);
+        } else
             uref_free(uref);
     }
 }
@@ -209,6 +218,8 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
     struct upipe *upipe_super = NULL;
     upipe_srt_sender_input_get_super(upipe, &upipe_super);
     struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe_super);
+
+    uint64_t now = uclock_now(upipe_srt_sender->uclock);
 
     struct uchain *uchain;
     ulist_foreach(&upipe_srt_sender->queue, uchain) {
@@ -235,6 +246,7 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
             uref_block_unmap(uref, 0);
         }
 
+        upipe_srt_sender->last_sent = now;
         upipe_srt_sender_output(upipe_super, uref_dup(uref), NULL);
         if (--pkts == 0)
             return;
@@ -259,8 +271,6 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
         return;
     }
 
-    uint64_t now = uclock_now(upipe_srt_sender->uclock);
-
     memset(buf, 0, s);
     srt_set_packet_control(buf, true);
     srt_set_control_packet_type(buf, SRT_CONTROL_TYPE_DROPREQ);
@@ -274,6 +284,7 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
     srt_set_dropreq_last_seq(cif, seq + pkts - 1);
 
     uref_block_unmap(uref, 0);
+    upipe_srt_sender->last_sent = now;
     upipe_srt_sender_output(&upipe_srt_sender->upipe, uref, upump_p);
 }
 
@@ -333,6 +344,33 @@ static void upipe_srt_sender_timer(struct upump *upump)
     struct upipe_srt_sender *upipe_srt_sender = upipe_srt_sender_from_upipe(upipe);
 
     uint64_t now = uclock_now(upipe_srt_sender->uclock);
+
+    if (now - upipe_srt_sender->last_sent > UCLOCK_FREQ) {
+        struct uref *uref = uref_block_alloc(upipe_srt_sender->uref_mgr,
+                upipe_srt_sender->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
+        if (uref) {
+            uint8_t *out;
+            int output_size = -1;
+            if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size, &out)))) {
+                uref_free(uref);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            }
+
+            srt_set_packet_control(out, true);
+            srt_set_packet_timestamp(out, (now - upipe_srt_sender->establish_time) / 27);
+            srt_set_packet_dst_socket_id(out, upipe_srt_sender->socket_id);
+            srt_set_control_packet_type(out, SRT_CONTROL_TYPE_KEEPALIVE);
+            srt_set_control_packet_subtype(out, 0);
+            srt_set_control_packet_type_specific(out, 0);
+            uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
+            memset(extra, 0, 4);
+
+            uref_block_unmap(uref, 0);
+
+            upipe_srt_sender->last_sent = now;
+            upipe_srt_sender_output(upipe, uref, &upipe_srt_sender->upump_timer);
+        }
+    }
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_sender->queue, uchain, uchain_tmp) {
@@ -395,7 +433,7 @@ static int upipe_srt_sender_check(struct upipe *upipe, struct uref *flow_format)
         struct upump *upump =
             upump_alloc_timer(upipe_srt_sender->upump_mgr,
                               upipe_srt_sender_timer, upipe, upipe->refcount,
-                              UCLOCK_FREQ, UCLOCK_FREQ);
+                              UCLOCK_FREQ, UCLOCK_FREQ / 4);
         upipe_srt_sender_set_upump_timer(upipe, upump);
         upump_start(upump);
 
@@ -531,6 +569,8 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_sender->sek_len = 0;
 
+    upipe_srt_sender->last_sent = 0;
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -663,6 +703,7 @@ error:
     uref_attr_set_priv(uref, seqnum);
 
     /* Output packet immediately */
+    upipe_srt_sender->last_sent = now;
     upipe_srt_sender_output(upipe, uref_dup(uref), upump_p);
 
     upipe_verbose_va(upipe, "Output & buffer %u", seqnum);
