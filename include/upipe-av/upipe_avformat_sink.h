@@ -75,6 +75,8 @@ enum upipe_avfsink_command {
     UPIPE_AVFSINK_SET_TS_OFFSET,
     /** returns the current position of the sink, in octets (uint64_t *) */
     UPIPE_AVFSINK_GET_POSITION,
+    /** sets a metadata value (const char *, const char *) */
+    UPIPE_AVFSINK_SET_METADATA,
 };
 
 /** @This enumerates the avformat sink sub pipe private commands. */
@@ -230,6 +232,21 @@ static inline int upipe_avfsink_get_position(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_AVFSINK_GET_POSITION,
                          UPIPE_AVFSINK_SIGNATURE, position_p);
+}
+
+/** @This sets a metadata value
+ *
+ * @param upipe description structure of the pipe
+ * @param key metadata key
+ * @param value metadata value
+ * @return an error code
+ */
+static inline int upipe_avfsink_set_metadata(struct upipe *upipe,
+                                             const char *key,
+                                             const char *value)
+{
+    return upipe_control(upipe, UPIPE_AVFSINK_SET_METADATA,
+                         UPIPE_AVFSINK_SIGNATURE, key, value);
 }
 
 /** @This sets the default disposition flag.

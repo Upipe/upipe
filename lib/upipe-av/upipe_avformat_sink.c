@@ -1354,6 +1354,25 @@ static int _upipe_avfsink_get_position(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets a metadata value in the global context
+ *
+ * @param upipe description structure of the pipe
+ * @param key metadata key
+ * @param value metadata value
+ * @return an error code
+ */
+static int _upipe_avfsink_set_metadata(struct upipe *upipe,
+                                       const char *key,
+                                       const char *value)
+{
+    struct upipe_avfsink *upipe_avfsink = upipe_avfsink_from_upipe(upipe);
+    if (upipe_avfsink->context == NULL)
+        return UBASE_ERR_INVALID;
+    if (av_dict_set(&upipe_avfsink->context->metadata, key, value, 0) < 0)
+        return UBASE_ERR_EXTERNAL;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an avformat source pipe.
  *
  * @param upipe description structure of the pipe
@@ -1433,6 +1452,12 @@ static int upipe_avfsink_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
             uint64_t *position_p = va_arg(args, uint64_t *);
             return _upipe_avfsink_get_position(upipe, position_p);
+        }
+        case UPIPE_AVFSINK_SET_METADATA: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFSINK_SIGNATURE)
+            const char *key = va_arg(args, const char *);
+            const char *value = va_arg(args, const char *);
+            return _upipe_avfsink_set_metadata(upipe, key, value);
         }
 
         case UPIPE_GET_URI: {
