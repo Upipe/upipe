@@ -126,6 +126,9 @@ struct upipe_srt_receiver {
     /** last time a NACK was sent */
     uint64_t last_nack[65536];
 
+    /** last time any SRT packet was sent */
+    uint64_t last_sent;
+
     /** number of packets in the buffer */
     uint64_t packets;
 
@@ -334,14 +337,42 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
-    if (upipe_srt_receiver->buffered == 0)
-        return;
-
     uint64_t expected_seq = UINT64_MAX;
 
     uint64_t rtt = _upipe_srt_receiver_get_rtt(upipe);
 
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
+
+    if (now - upipe_srt_receiver->last_sent > UCLOCK_FREQ) {
+        struct uref *uref = uref_block_alloc(upipe_srt_receiver->uref_mgr,
+                upipe_srt_receiver->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
+        if (uref) {
+            uint8_t *out;
+            int output_size = -1;
+            if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size, &out)))) {
+                uref_free(uref);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            }
+
+            srt_set_packet_control(out, true);
+            srt_set_packet_timestamp(out, now / 27);
+            srt_set_packet_dst_socket_id(out, upipe_srt_receiver->socket_id);
+            srt_set_control_packet_type(out, SRT_CONTROL_TYPE_KEEPALIVE);
+            srt_set_control_packet_subtype(out, 0);
+            srt_set_control_packet_type_specific(out, 0);
+            uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
+            memset(extra, 0, 4);
+
+            uref_block_unmap(uref, 0);
+
+            upipe_srt_receiver->last_sent = now;
+            upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref,
+                    &upipe_srt_receiver->upump_timer_lost);
+        }
+    }
+
+    if (upipe_srt_receiver->buffered == 0)
+        return;
 
     /* space out NACKs a bit more than RTT. XXX: tune me */
     uint64_t next_nack = now - rtt * 12 / 10;
@@ -491,6 +522,7 @@ next:
                 uref_block_unmap(uref, 0);
                 upipe_srt_receiver->last_ack = now;
                 assert(upipe_srt_receiver->control);
+                upipe_srt_receiver->last_sent = now;
                 upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref, NULL);
 
                 upipe_srt_receiver->acks[upipe_srt_receiver->ack_widx].ack_num = ack_num;
@@ -517,6 +549,7 @@ next:
 
         uref_block_resize(pkt, 0, 1472 - s);
 
+        upipe_srt_receiver->last_sent = now;
         upipe_srt_receiver_output_output(upipe_srt_receiver->control, pkt, NULL);
     }
 }
@@ -731,6 +764,7 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
     upipe_srt_receiver->dups = 0;
 
     upipe_srt_receiver->latency = 0;
+    upipe_srt_receiver->last_sent = 0;
 
     upipe_srt_receiver->packets = 0;
     upipe_srt_receiver->bytes = 0;
@@ -1068,11 +1102,12 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
 
     if (srt_get_packet_control(buf)) {
-        if (srt_get_control_packet_type(buf) == SRT_CONTROL_TYPE_ACKACK)  {
+        uint16_t type = srt_get_control_packet_type(buf);
+
+        if (type == SRT_CONTROL_TYPE_ACKACK) {
             uint32_t ack_num = srt_get_control_packet_type_specific(buf);
             uint64_t rtt = upipe_srt_receiver_ackack(upipe, ack_num, now);
             upipe_verbose_va(upipe, "RTT %.2f", (float) rtt / 27000.);
@@ -1095,9 +1130,10 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
             uref_free(uref);
         } else {
             ubase_assert(uref_block_unmap(uref, 0));
-            if (upipe_srt_receiver->control)
-                upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref, NULL);
-            else
+            if (upipe_srt_receiver->control) {
+                upipe_srt_receiver->last_sent = now;
+                upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref, upump_p);
+            } else
                 uref_free(uref);
         }
         return;
