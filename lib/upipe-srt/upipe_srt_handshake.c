@@ -1213,6 +1213,11 @@ static struct uref *upipe_srt_handshake_handle_ack(struct upipe *upipe, const ui
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
+    uint32_t ack_number = srt_get_control_packet_type_specific(buf);
+
+    /* Don't output an ACKACK on Light ACKs or Small ACKs */
+    if (!ack_number)
+        return NULL;
 
     struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
             upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
@@ -1230,7 +1235,7 @@ static struct uref *upipe_srt_handshake_handle_ack(struct upipe *upipe, const ui
     srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
     srt_set_control_packet_type(out, SRT_CONTROL_TYPE_ACKACK);
     srt_set_control_packet_subtype(out, 0);
-    srt_set_control_packet_type_specific(out, srt_get_control_packet_type_specific(buf));
+    srt_set_control_packet_type_specific(out, ack_number);
     uint8_t *extra = (uint8_t*)srt_get_control_packet_cif(out);
     memset(extra, 0, 4);
 
