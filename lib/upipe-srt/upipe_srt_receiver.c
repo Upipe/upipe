@@ -404,7 +404,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
             if (last_received == UINT64_MAX)
                 last_received = expected_seq - 1;
 
-            for (uint32_t seq = expected_seq; seq != seqnum; seq++) {
+            for (uint32_t seq = expected_seq; seq != seqnum; seq = (seq + 1) & ~(1 << 31)) {
                 /* if packet was lost, we should have detected it already */
                 if (upipe_srt_receiver->last_nack[seq & 0xffff] == 0) {
                     upipe_err_va(upipe, "packet %u missing but was not marked as lost!", seq);
@@ -422,7 +422,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
             }
 
             /* update NACK request time */
-            for (uint32_t seq = expected_seq; seq != seqnum; seq++) {
+            for (uint32_t seq = expected_seq; seq != seqnum; seq = (seq + 1) & ~(1 << 31)) {
                 upipe_srt_receiver->last_nack[seq & 0xffff] = now;
             }
 
@@ -480,7 +480,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
         }
 
 next:
-        expected_seq = (seqnum + 1) & UINT32_MAX;
+        expected_seq = (seqnum + 1) & ~(1 << 31);
     }
 
     // A Full ACK control packet is sent every 10 ms and has all the fields of Figure 13.
@@ -581,6 +581,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
         if (likely(upipe_srt_receiver->last_output_seqnum != UINT64_MAX)) {
             uint32_t diff = seqnum - upipe_srt_receiver->last_output_seqnum - 1;
+            diff &= ~(1 << 31); // seqnums are 31 bits
             if (diff) {
                 upipe_srt_receiver->loss += diff;
                 upipe_dbg_va(upipe, "PKT LOSS: %" PRIu64 " -> %"PRIu64" DIFF %u",
