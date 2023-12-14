@@ -617,7 +617,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
     uint64_t now = uclock_now(upipe_srt_sender->uclock);
 
     uint32_t seqnum = upipe_srt_sender->seqnum++;
-    seqnum &= (1U << 31) - 1;
+    seqnum &= ~(1 << 31);
     memset(buf, 0, SRT_HEADER_SIZE);
     srt_set_packet_control(buf, false);
     srt_set_packet_timestamp(buf, (now - upipe_srt_sender->establish_time) / 27);
