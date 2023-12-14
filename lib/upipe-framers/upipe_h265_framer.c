@@ -1154,122 +1154,29 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         UBASE_FATAL(upipe, uref_pic_flow_set_full_range(flow_def))
     }
 
-    const char *colour_primaries_str = NULL;
-    switch (colour_primaries) {
-        case 1:
-            colour_primaries_str = "bt709";
-            break;
-        case 4:
-            colour_primaries_str = "bt470m";
-            break;
-        case 5:
-            colour_primaries_str = "bt470bg";
-            break;
-        case 6:
-            colour_primaries_str = "smpte170m";
-            break;
-        case 7:
-            colour_primaries_str = "smpte240m";
-            break;
-        case 8:
-            colour_primaries_str = "film";
-            break;
-        case 9:
-            colour_primaries_str = "bt2020";
-            break;
-        default:
-            break;
-    }
-    if (colour_primaries_str != NULL) {
-        UBASE_FATAL(upipe, uref_pic_flow_set_colour_primaries(flow_def,
-                    colour_primaries_str))
-    }
+    int err;
 
-    const char *transfer_characteristics_str = NULL;
-    switch (transfer_characteristics) {
-        case 1:
-            transfer_characteristics_str = "bt709";
-            break;
-        case 4:
-            transfer_characteristics_str = "bt470m";
-            break;
-        case 5:
-            transfer_characteristics_str = "bt470bg";
-            break;
-        case 6:
-            transfer_characteristics_str = "smpte170m";
-            break;
-        case 7:
-            transfer_characteristics_str = "smpte240m";
-            break;
-        case 8:
-            transfer_characteristics_str = "linear";
-            break;
-        case 9:
-            transfer_characteristics_str = "log100";
-            break;
-        case 10:
-            transfer_characteristics_str = "log316";
-            break;
-        case 11:
-            transfer_characteristics_str = "iec61966-2-4";
-            break;
-        case 12:
-            transfer_characteristics_str = "bt1361e";
-            break;
-        case 13:
-            transfer_characteristics_str = "iec61966-2-1";
-            break;
-        case 14:
-            transfer_characteristics_str = "bt2020-10";
-            break;
-        case 15:
-            transfer_characteristics_str = "bt2020-12";
-            break;
-        default:
-            break;
-    }
-    if (transfer_characteristics_str != NULL) {
-        UBASE_FATAL(upipe, uref_pic_flow_set_transfer_characteristics(flow_def,
-                    transfer_characteristics_str))
-    }
+    err = uref_pic_flow_set_colour_primaries_val(flow_def, colour_primaries);
+    if (unlikely(err == UBASE_ERR_UNHANDLED))
+        upipe_err_va(upipe, "unknown colour primaries %u", colour_primaries);
+    else if (unlikely(!ubase_check(err)))
+        upipe_throw_fatal(upipe, err);
 
-    const char *matrix_coefficients_str = NULL;
-    switch (matrix_coefficients) {
-        case 0:
-            matrix_coefficients_str = "GBR";
-            break;
-        case 1:
-            matrix_coefficients_str = "bt709";
-            break;
-        case 4:
-            matrix_coefficients_str = "fcc";
-            break;
-        case 5:
-            matrix_coefficients_str = "bt470bg";
-            break;
-        case 6:
-            matrix_coefficients_str = "smpte170m";
-            break;
-        case 7:
-            matrix_coefficients_str = "smpte240m";
-            break;
-        case 8:
-            matrix_coefficients_str = "YCgCo";
-            break;
-        case 9:
-            matrix_coefficients_str = "bt2020nc";
-            break;
-        case 10:
-            matrix_coefficients_str = "bt2020c";
-            break;
-        default:
-            break;
-    }
-    if (matrix_coefficients_str != NULL) {
-        UBASE_FATAL(upipe, uref_pic_flow_set_matrix_coefficients(flow_def,
-                    matrix_coefficients_str))
-    }
+    err = uref_pic_flow_set_transfer_characteristics_val(
+        flow_def, transfer_characteristics);
+    if (unlikely(err == UBASE_ERR_UNHANDLED))
+        upipe_err_va(upipe, "unknown transfer characteristics %u",
+                     transfer_characteristics);
+    else if (unlikely(!ubase_check(err)))
+        upipe_throw_fatal(upipe, err);
+
+    err = uref_pic_flow_set_matrix_coefficients_val(
+        flow_def, matrix_coefficients);
+    if (unlikely(err == UBASE_ERR_UNHANDLED))
+        upipe_err_va(upipe, "unknown matrix coefficients %u",
+                     matrix_coefficients);
+    else if (unlikely(!ubase_check(err)))
+        upipe_throw_fatal(upipe, err);
 
     upipe_h265f->active_sps = sps_id;
     ubuf_block_stream_clean(s);

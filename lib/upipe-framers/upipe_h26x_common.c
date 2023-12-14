@@ -27,6 +27,7 @@
 #include "upipe/ubuf_block.h"
 #include "upipe/ubuf_block_stream.h"
 #include "upipe/uref_block.h"
+#include "upipe/uref_pic_flow.h"
 #include "upipe-framers/uref_h26x_flow.h"
 #include "upipe-framers/uref_h26x.h"
 #include "upipe-framers/upipe_h26x_common.h"

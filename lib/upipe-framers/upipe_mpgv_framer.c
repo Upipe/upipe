@@ -597,83 +597,29 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
                     video_format_str))
     }
 
-    const char *colour_primaries_str = NULL;
-    switch (colour_primaries) {
-        case 1:
-            colour_primaries_str = "bt709";
-            break;
-        case 4:
-            colour_primaries_str = "bt470m";
-            break;
-        case 5:
-            colour_primaries_str = "bt470bg";
-            break;
-        case 6:
-            colour_primaries_str = "smpte170m";
-            break;
-        case 7:
-            colour_primaries_str = "smpte240m";
-            break;
-        default:
-            break;
-    }
-    if (colour_primaries_str != NULL) {
-        UBASE_FATAL(upipe, uref_pic_flow_set_colour_primaries(flow_def,
-                    colour_primaries_str))
-    }
+    int err;
 
-    const char *transfer_characteristics_str = NULL;
-    switch (transfer_characteristics) {
-        case 1:
-            transfer_characteristics_str = "bt709";
-            break;
-        case 4:
-            transfer_characteristics_str = "bt470m";
-            break;
-        case 5:
-            transfer_characteristics_str = "bt470bg";
-            break;
-        case 6:
-            transfer_characteristics_str = "smpte170m";
-            break;
-        case 7:
-            transfer_characteristics_str = "smpte240m";
-            break;
-        case 8:
-            transfer_characteristics_str = "linear";
-            break;
-        default:
-            break;
-    }
-    if (transfer_characteristics_str != NULL) {
-        UBASE_FATAL(upipe, uref_pic_flow_set_transfer_characteristics(flow_def,
-                    transfer_characteristics_str))
-    }
+    err = uref_pic_flow_set_colour_primaries_val(flow_def, colour_primaries);
+    if (unlikely(err == UBASE_ERR_UNHANDLED))
+        upipe_err_va(upipe, "unknown colour primaries %u", colour_primaries);
+    else if (unlikely(!ubase_check(err)))
+        upipe_throw_fatal(upipe, err);
 
-    const char *matrix_coefficients_str = NULL;
-    switch (matrix_coefficients) {
-        case 1:
-            matrix_coefficients_str = "bt709";
-            break;
-        case 4:
-            matrix_coefficients_str = "fcc";
-            break;
-        case 5:
-            matrix_coefficients_str = "bt470bg";
-            break;
-        case 6:
-            matrix_coefficients_str = "smpte170m";
-            break;
-        case 7:
-            matrix_coefficients_str = "smpte240m";
-            break;
-        default:
-            break;
-    }
-    if (matrix_coefficients_str != NULL) {
-        UBASE_FATAL(upipe, uref_pic_flow_set_matrix_coefficients(flow_def,
-                    matrix_coefficients_str))
-    }
+    err = uref_pic_flow_set_transfer_characteristics_val(
+        flow_def, transfer_characteristics);
+    if (unlikely(err == UBASE_ERR_UNHANDLED))
+        upipe_err_va(upipe, "unknown transfer characteristics %u",
+                     transfer_characteristics);
+    else if (unlikely(!ubase_check(err)))
+        upipe_throw_fatal(upipe, err);
+
+    err = uref_pic_flow_set_matrix_coefficients_val(
+        flow_def, matrix_coefficients);
+    if (unlikely(err == UBASE_ERR_UNHANDLED))
+        upipe_err_va(upipe, "unknown matrix coefficients %u",
+                     matrix_coefficients);
+    else if (unlikely(!ubase_check(err)))
+        upipe_throw_fatal(upipe, err);
 
     upipe_mpgvf_store_flow_def(upipe, NULL);
     uref_free(upipe_mpgvf->flow_def_requested);
