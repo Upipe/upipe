@@ -449,28 +449,24 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
                                 content)) < 0)
         upipe_err_va(upipe, "can't set option %s:%s (%d)",
                      "videoformat", content, ret);
-    content =
-        ubase_check(uref_pic_flow_get_full_range(upipe_x264->flow_def_input)) ?
-        "on" : "off";
-    if ((ret = x264_param_parse(&upipe_x264->params, "fullrange", content)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "fullrange", content, ret);
-    if (ubase_check(uref_pic_flow_get_colour_primaries(
-                    upipe_x264->flow_def_input, &content)) &&
-        (ret = x264_param_parse(&upipe_x264->params, "colorprim", content)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "colorprim", content, ret);
-    if (ubase_check(uref_pic_flow_get_transfer_characteristics(
-                    upipe_x264->flow_def_input, &content)) &&
-        (ret = x264_param_parse(&upipe_x264->params, "transfer", content)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "transfer", content, ret);
-    if (ubase_check(uref_pic_flow_get_matrix_coefficients(
-                    upipe_x264->flow_def_input, &content)) &&
-        (ret = x264_param_parse(&upipe_x264->params, "colormatrix",
-                                content)) < 0)
-        upipe_err_va(upipe, "can't set option %s:%s (%d)",
-                     "colormatrix", content, ret);
+
+    upipe_x264->params.vui.b_fullrange =
+        ubase_check(uref_pic_flow_get_full_range(upipe_x264->flow_def_input));
+
+    if (!ubase_check(uref_pic_flow_get_colour_primaries_val(
+                upipe_x264->flow_def_input,
+                &upipe_x264->params.vui.i_colorprim)))
+        upipe_err(upipe, "cannot set colour primaries");
+
+    if (!ubase_check(uref_pic_flow_get_transfer_characteristics_val(
+                upipe_x264->flow_def_input,
+                &upipe_x264->params.vui.i_transfer)))
+        upipe_err(upipe, "cannot set transfer characteristics");
+
+    if (!ubase_check(uref_pic_flow_get_matrix_coefficients_val(
+                upipe_x264->flow_def_input,
+                &upipe_x264->params.vui.i_colmatrix)))
+        upipe_err(upipe, "cannot set matrix coefficients");
 
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {

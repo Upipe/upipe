@@ -403,6 +403,64 @@ static inline int uref_pic_flow_infer_dar(struct uref *uref,
     return UBASE_ERR_NONE;
 }
 
+/** @This sets colour primaries value to flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param colour_primaries colour primaries value (ISO/IEC 23091-2:2019)
+ * @return an error code
+ */
+int uref_pic_flow_set_colour_primaries_val(struct uref *flow_def,
+                                           int colour_primaries);
+
+/** @This gets colour primaries value from flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param colour_primaries colour primaries value (ISO/IEC 23091-2:2019)
+ * @return an error code
+ */
+int uref_pic_flow_get_colour_primaries_val(struct uref *flow_def,
+                                           int *colour_primaries);
+
+/** @This sets transfer characteristics value to flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param transfer_characteristics transfer characteristics value
+ * (ISO/IEC 23091-2:2019)
+ * @return an error code
+ */
+int uref_pic_flow_set_transfer_characteristics_val(struct uref *flow_def,
+                                                   int transfer_characteristics);
+
+/** @This gets transfer characteristics value from flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param transfer_characteristics transfer characteristics value
+ * (ISO/IEC 23091-2:2019)
+ * @return an error code
+ */
+int uref_pic_flow_get_transfer_characteristics_val(struct uref *flow_def,
+                                                   int *transfer_characteristics);
+
+/** @This sets matrix coefficients value to flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param matrix_coefficients matrix coefficients value
+ * (ISO/IEC 23091-2:2019)
+ * @return an error code
+ */
+int uref_pic_flow_set_matrix_coefficients_val(struct uref *flow_def,
+                                              int matrix_coefficients);
+
+/** @This gets matrix coefficients value from flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param matrix_coefficients matrix coefficients value
+ * (ISO/IEC 23091-2:2019)
+ * @return an error code
+ */
+int uref_pic_flow_get_matrix_coefficients_val(struct uref *flow_def,
+                                              int *matrix_coefficients);
+
 #ifdef __cplusplus
 }
 #endif
