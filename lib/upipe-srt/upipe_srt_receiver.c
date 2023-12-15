@@ -988,8 +988,11 @@ static bool upipe_srt_receiver_insert_inner(struct upipe *upipe, struct uref *ur
         return true;
     }
 
+    diff &= ~(1<<31); /* seqnums are 31 bits */
+
     /* browse the list until we find a seqnum bigger than ours */
-    if (diff < 0x8000000) // seqnum > next_seqnum
+
+    if (diff < 1<<30) // make sure seqnum > next_seqnum
         return false;
 
     /* if there's no previous packet we're too late */
@@ -1236,8 +1239,9 @@ error:
         upipe_srt_receiver->expected_seqnum = seqnum;
 
     uint32_t diff = seqnum - upipe_srt_receiver->expected_seqnum;
+    diff &= ~(1 << 31); // seqnums are 31 bits
 
-    if (diff < 0x80000000U) { // seqnum > last seq, insert at the end
+    if (diff < 1<<30) { // seqnum > last seq, insert at the end
         /* packet is from the future */
         upipe_srt_receiver->buffered++;
 
@@ -1255,7 +1259,7 @@ error:
                     upipe_srt_receiver->last_nack[seq & 0xffff] = fake_last_nack;
         }
 
-        upipe_srt_receiver->expected_seqnum = seqnum + 1;
+        upipe_srt_receiver->expected_seqnum = (seqnum + 1) & ~(1 << 31);
         return;
     }
 
