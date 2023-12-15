@@ -299,6 +299,12 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
         }
 
         upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
+        diff++;
+        seq += diff;
+        pkts -= diff;
+
+        if (pkts == 0)
+            return;
     }
 }
 
