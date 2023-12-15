@@ -228,13 +228,14 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
         uref_attr_get_priv(uref, &uref_seqnum);
 
         uint32_t diff = uref_seqnum - seq;
-        if (diff >= pkts) {
-            /* packet not in range */
-            if (diff < 0x80000000) {
-                /* packet after range */
-                break;
-            }
+        diff &= ~(1<<31);
+
+        if (diff > (1<<30)) {
+            /* Look at next packet */
             continue;
+        } else if (diff >= pkts) {
+            /* packet after range, give up */
+            break;
         }
 
         upipe_verbose_va(upipe, "Retransmit %" PRIu64, uref_seqnum);
@@ -248,9 +249,12 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
 
         upipe_srt_sender->last_sent = now;
         upipe_srt_sender_output(upipe_super, uref_dup(uref), NULL);
-        if (--pkts == 0)
+
+        diff++;
+        seq += diff;
+        pkts -= diff;
+        if (pkts == 0)
             return;
-        seq++;
     }
 
     /* XXX: Is it needed? */
