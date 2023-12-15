@@ -276,7 +276,7 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
         uref_attr_get_priv(uref, &uref_seqnum);
 
         uint16_t diff = uref_seqnum - seq;
-        if (diff > pkts) {
+        if (diff >= pkts) {
             /* packet not in range */
             if (diff < 0x8000) {
                 /* packet after range */
