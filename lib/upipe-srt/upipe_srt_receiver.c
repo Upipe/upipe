@@ -562,6 +562,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
+    uint64_t rtt = _upipe_srt_receiver_get_rtt(upipe);
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
@@ -575,7 +576,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        if (now - cr_sys <= upipe_srt_receiver->latency)
+        if (now - cr_sys <= upipe_srt_receiver->latency - rtt)
             break;
 
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
