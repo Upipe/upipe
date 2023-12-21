@@ -315,7 +315,7 @@ static void upipe_srt_receiver_output_free(struct upipe *upipe)
     upipe_srt_receiver_output_free_void(upipe);
 }
 
-static uint64_t _upipe_srt_receiver_get_rtt(struct upipe *upipe)
+static uint64_t upipe_srt_receiver_get_rtt(struct upipe *upipe)
 {
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
@@ -339,7 +339,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
 
     uint64_t expected_seq = UINT64_MAX;
 
-    uint64_t rtt = _upipe_srt_receiver_get_rtt(upipe);
+    uint64_t rtt = upipe_srt_receiver_get_rtt(upipe);
 
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
 
@@ -562,7 +562,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
-    uint64_t rtt = _upipe_srt_receiver_get_rtt(upipe);
+    uint64_t rtt = upipe_srt_receiver_get_rtt(upipe);
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
@@ -620,7 +620,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
 static void upipe_srt_receiver_restart_timer(struct upipe *upipe)
 {
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
-    uint64_t rtt = _upipe_srt_receiver_get_rtt(upipe);
+    uint64_t rtt = upipe_srt_receiver_get_rtt(upipe);
 
     upipe_srt_receiver_set_upump_timer_lost(upipe, NULL);
     if (upipe_srt_receiver->upump_mgr) {
@@ -1252,7 +1252,7 @@ error:
         upipe_srt_receiver->last_nack[seqnum & 0xffff] = 0;
 
         if (diff != 0) {
-            uint64_t rtt = _upipe_srt_receiver_get_rtt(upipe);
+            uint64_t rtt = upipe_srt_receiver_get_rtt(upipe);
             /* wait a bit to send a NACK, in case of reordering */
             uint64_t fake_last_nack = uclock_now(upipe_srt_receiver->uclock) - rtt;
             for (uint32_t seq = upipe_srt_receiver->expected_seqnum; seq != seqnum; seq++)
