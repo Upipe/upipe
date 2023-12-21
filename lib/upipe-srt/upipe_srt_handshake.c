@@ -1103,8 +1103,11 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             size -= ext_len;
         }
 
-        extension = SRT_HANDSHAKE_EXT_HSREQ;
-        size = SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE;
+        extension = 0;
+        if (version == SRT_HANDSHAKE_VERSION) {
+            extension = SRT_HANDSHAKE_EXT_HSREQ;
+            size = SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE;
+        }
         if (wrap_len) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
             extension |= SRT_HANDSHAKE_EXT_KMREQ;
@@ -1118,22 +1121,26 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         if (!uref)
             return NULL;
 
-        srt_set_handshake_extension(out_cif, extension);
+        if (extension)
+            srt_set_handshake_extension(out_cif, extension);
+        else
+            srt_set_handshake_extension(out_cif, 2 /* SRT_DGRAM */);
         srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_CONCLUSION);
 
-        ext = srt_get_handshake_extension_buf((uint8_t*)cif);
         uint8_t *out_ext = srt_get_handshake_extension_buf(out_cif);
+        if (version == SRT_HANDSHAKE_VERSION) {
+            srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_HSRSP);
+            srt_set_handshake_extension_len(out_ext, SRT_HANDSHAKE_HSREQ_SIZE / 4);
+            out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+            srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
+                    upipe_srt_handshake->minor, upipe_srt_handshake->patch);
+            srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
+            srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
+            srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
 
-        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_HSRSP);
-        srt_set_handshake_extension_len(out_ext, SRT_HANDSHAKE_HSREQ_SIZE / 4);
-        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-        srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
-                upipe_srt_handshake->minor, upipe_srt_handshake->patch);
-        srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
-        srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
-        srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
-
-        out_ext += SRT_HANDSHAKE_HSREQ_SIZE;
+            out_ext += SRT_HANDSHAKE_HSREQ_SIZE;
+        } else
+            srt_set_handshake_version(out_cif, SRT_HANDSHAKE_VERSION_MIN);
 
         if (upipe_srt_handshake->stream_id) {
             srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_SID);
