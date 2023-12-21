@@ -1170,7 +1170,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
         if (version == SRT_HANDSHAKE_VERSION_MIN) {
             struct uref *next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
-                    upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 12);
+                    upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_HANDSHAKE_HSREQ_SIZE);
             if (!next)
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             else {
