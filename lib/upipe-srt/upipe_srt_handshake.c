@@ -1053,8 +1053,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             return NULL;
         }
 
-        if (version != SRT_HANDSHAKE_VERSION
-                || syn_cookie != upipe_srt_handshake->syn_cookie
+        if (syn_cookie != upipe_srt_handshake->syn_cookie
                 || dst_socket_id != 0) {
             upipe_err(upipe, "Malformed conclusion handshake");
             upipe_srt_handshake->expect_conclusion = false;
@@ -1063,7 +1062,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
         /* At least HSREQ is expected */
         size -= SRT_HEADER_SIZE + SRT_HANDSHAKE_CIF_SIZE;
-        if (size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
+        if (version == SRT_HANDSHAKE_VERSION && size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
             upipe_err(upipe, "Malformed conclusion handshake (size)");
             upipe_srt_handshake->expect_conclusion = false;
             return NULL;
@@ -1160,6 +1159,39 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
             memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
             memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+        }
+
+        if (version == SRT_HANDSHAKE_VERSION_MIN) {
+            struct uref *next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
+                    upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 12);
+            if (!next)
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            else {
+                uint8_t *out;
+                int output_size = -1;
+                if (likely(ubase_check(uref_block_write(next, 0, &output_size, &out)))) {
+                    srt_set_packet_control(out, true);
+                    srt_set_packet_timestamp(out, timestamp);
+                    srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
+
+                    srt_set_control_packet_type(out, SRT_CONTROL_TYPE_USER);
+                    srt_set_control_packet_subtype(out, SRT_HANDSHAKE_EXT_TYPE_HSREQ);
+                    srt_set_control_packet_type_specific(out, 0);
+
+                    uint8_t *out_ext = &out[SRT_HEADER_SIZE];
+                    srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
+                            upipe_srt_handshake->minor, upipe_srt_handshake->patch);
+                    srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
+                    srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
+                    srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
+
+                    uref_block_unmap(next, 0);
+                    ulist_init(&uref->uchain);
+                    ulist_add(&uref->uchain, &next->uchain);
+                } else {
+                    uref_free(next);
+                }
+            }
         }
 
         upipe_srt_handshake_finalize(upipe);
@@ -1364,7 +1396,10 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
         } else {
             uref_free(uref);
             if (reply) {
+                struct uchain *next = ulist_peek(&reply->uchain);
                 upipe_srt_handshake_output(&upipe_srt_handshake->upipe, reply, upump_p);
+                if (next)
+                    upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref_from_uchain(next), upump_p);
             }
         }
     } else {
