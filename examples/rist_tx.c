@@ -210,6 +210,8 @@ static int start(void)
     struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc_va(uprobe_alloc(catch_hs, uprobe_use(logger)), loglevel, "srt handshake %u", z));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
+    if (!ubase_check(upipe_set_option(upipe_srt_handshake, "latency", latency)))
+        return EXIT_FAILURE;
     upipe_srt_handshake_set_password(upipe_srt_handshake, password, key_length / 8);
 
     upipe_mgr_release(upipe_srt_handshake_mgr);
