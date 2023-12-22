@@ -955,6 +955,33 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
             return UBASE_ERR_NONE;
         }
 
+        case UPIPE_SRTR_GET_STATS: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SRT_RECEIVER_SIGNATURE)
+            unsigned *expected_seqnum    = va_arg(args, unsigned*);
+            unsigned *last_output_seqnum = va_arg(args, unsigned*);
+            size_t   *buffered           = va_arg(args, size_t*);
+            size_t   *nacks              = va_arg(args, size_t*);
+            size_t   *repaired           = va_arg(args, size_t*);
+            size_t   *loss               = va_arg(args, size_t*);
+            size_t   *dups               = va_arg(args, size_t*);
+
+            struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
+            *buffered = upipe_srt_receiver->buffered;
+            *expected_seqnum = upipe_srt_receiver->expected_seqnum;
+            *last_output_seqnum = upipe_srt_receiver->last_output_seqnum;
+            *nacks = upipe_srt_receiver->nacks;
+            *repaired = upipe_srt_receiver->repaired;
+            *loss = upipe_srt_receiver->loss;
+            *dups = upipe_srt_receiver->dups;
+
+            upipe_srt_receiver->nacks = 0;
+            upipe_srt_receiver->repaired = 0;
+            upipe_srt_receiver->loss = 0;
+            upipe_srt_receiver->dups = 0;
+
+            return UBASE_ERR_NONE;
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
