@@ -39,6 +39,24 @@ extern "C" {
 #define UPIPE_SRT_RECEIVER_SIGNATURE UBASE_FOURCC('s','r','t','r')
 #define UPIPE_SRT_RECEIVER_OUTPUT_SIGNATURE UBASE_FOURCC('s','r','r','o')
 
+enum upipe_srt_receiver_command {
+    UPIPE_SRTR_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** get counters (unsigned *, unsigned *, size_t *, size_t *, size_t *, size_t *, size_t *) */
+    UPIPE_SRTR_GET_STATS,
+};
+
+static inline int upipe_srt_receiver_get_stats(struct upipe *upipe,
+        unsigned *expected_seqnum, unsigned *last_output_seqnum,
+        size_t *buffered, size_t *nacks, size_t *repaired,
+        size_t *lost, size_t *duplicates)
+{
+    return upipe_control(upipe, UPIPE_SRTR_GET_STATS,
+            UPIPE_SRT_RECEIVER_SIGNATURE, expected_seqnum, last_output_seqnum,
+            buffered, nacks, repaired, lost, duplicates);
+}
+
+
 /** @This returns the management structure for all srt receiver sources.
  *
  * @return pointer to manager
