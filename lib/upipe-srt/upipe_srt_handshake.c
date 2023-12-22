@@ -1298,7 +1298,7 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
 
     uint16_t subtype = srt_get_control_packet_subtype(buf);
-    if (subtype != SRT_HANDSHAKE_EXT_TYPE_KMRSP)
+    if (subtype != SRT_HANDSHAKE_EXT_TYPE_KMRSP && subtype != SRT_HANDSHAKE_EXT_TYPE_KMREQ)
         return NULL;
 
     uint8_t kk = 0;
