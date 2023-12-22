@@ -598,6 +598,8 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_block_size(uref, &size))))
             size = 0;
         upipe_srt_receiver->bytes -= size;
+
+        uref_clock_set_cr_sys(uref, cr_sys + upipe_srt_receiver->latency);
         upipe_srt_receiver_output(upipe, uref, NULL); // XXX: use timer upump ?
 
         static uint64_t old;
