@@ -856,6 +856,7 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
     upipe_warn(upipe, "Emptying buffer");
     upipe_srt_receiver->expected_seqnum = UINT64_MAX;
     upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
+    upipe_srt_receiver->buffered = 0;
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
         ulist_delete(uchain);
