@@ -1318,6 +1318,7 @@ static void upipe_srt_receiver_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_srt_receiver->acks);
+    upipe_srt_receiver->acks = NULL;
 
     upipe_srt_receiver_clean_output(upipe);
     upipe_srt_receiver_clean_upump_timer(upipe);
