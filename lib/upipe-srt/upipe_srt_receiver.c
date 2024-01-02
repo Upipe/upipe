@@ -859,7 +859,9 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
     upipe_srt_receiver->buffered = 0;
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
+        struct uref *uref = uref_from_uchain(uchain);
         ulist_delete(uchain);
+        uref_free(uref);        
     }
 
     if (flow_def == NULL)
