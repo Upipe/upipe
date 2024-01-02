@@ -842,13 +842,7 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the input flow definition.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- * @return an error code
- */
-static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+static void upipe_srt_receiver_empty_buffer(struct upipe *upipe)
 {
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
@@ -863,6 +857,20 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
         ulist_delete(uchain);
         uref_free(uref);        
     }
+}
+
+/** @internal @This sets the input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flow_def)
+{
+    struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
+
+    /* FIXME: Don't do this on a new key flow def */
+    upipe_srt_receiver_empty_buffer(upipe);
 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -1330,6 +1338,7 @@ static void upipe_srt_receiver_free(struct upipe *upipe)
     upipe_srt_receiver_clean_urefcount(upipe);
     upipe_srt_receiver_clean_urefcount_real(upipe);
     upipe_srt_receiver_clean_sub_outputs(upipe);
+    upipe_srt_receiver_empty_buffer(upipe);
     upipe_srt_receiver_free_void(upipe);
 }
 
