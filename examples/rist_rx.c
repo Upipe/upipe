@@ -273,8 +273,10 @@ static int start(void)
 
 static void stop(struct upump *upump)
 {
-    upump_stop(upump);
-    upump_free(upump);
+    if (upump) {
+        upump_stop(upump);
+        upump_free(upump);
+    }
 
     upipe_release(upipe_srtr_sub);
     upipe_release(upipe_udpsrc);
@@ -283,6 +285,18 @@ static void stop(struct upump *upump)
         restart = false;
         start();
     }
+}
+
+static void sig_cb(struct upump *upump)
+{
+    static int done = false;
+
+    if (done)
+        abort();
+    done = true;
+
+    restart = false;
+    stop(NULL);
 }
 
 static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
@@ -425,11 +439,17 @@ int main(int argc, char *argv[])
         upump_start(u);
     }
 
+    struct upump *sigint_pump =
+        upump_alloc_signal(upump_mgr, sig_cb,
+                           (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
+
     /* fire loop ! */
     upump_mgr_run(upump_mgr, NULL);
 
-    /* should never be here for the moment. todo: sighandler.
-     * release everything */
+    upump_free(sigint_pump);
+
     uprobe_clean(&uprobe_srt);
     uprobe_clean(&uprobe_udp);
     uprobe_release(logger);
