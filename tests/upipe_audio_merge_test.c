@@ -59,8 +59,24 @@
 #define SAMPLES             1024
 #define UPROBE_LOG_LEVEL    UPROBE_LOG_VERBOSE
 
-const float TEST_VALUES[2][2] = {{0.75, -0.5}, {0, 0}};
-const int16_t test_values_int[2][2] = {{32767 * 3 / 4, -16384}, {0, 0}};
+const float test_values_float[3][2] = {
+    { 0.75, -0.5 },
+    { 0,    -0.1 },
+    { 0.1,  0    },
+};
+
+const int16_t test_values_int[3][2] = {
+    { INT16_MAX*3/4, INT16_MIN/2 },
+    { 0,             INT16_MIN/3 },
+    { INT16_MAX/4,   0 },
+};
+
+const int32_t test_values_interleaved[4][2] = {
+    { INT32_MIN/2,   INT32_MIN/2+1   },
+    { INT32_MAX/4*3, INT32_MAX/4*3-1 },
+    { 0xdeafbeef, 0xcafebabe },
+    { 0xabcdcba,  0x12345678 },
+};
 
 int count = 0;
 
@@ -103,6 +119,26 @@ static void fill_in_int(struct ubuf *ubuf, int16_t value)
     }
 }
 
+static void fill_in_interleaved(struct ubuf *ubuf, const int32_t *value)
+{
+    size_t size;
+    uint8_t sample_size;
+    ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
+
+    const char *channel = NULL;
+    while (ubase_check(ubuf_sound_iterate_plane(ubuf, &channel)) &&
+           channel != NULL) {
+        int32_t *buffer;
+        ubase_assert(ubuf_sound_plane_write_int32_t(ubuf, channel, 0, -1,
+                                                    &buffer));
+
+        for (int x = 0; x < size; x++) {
+            buffer[2*x+0] = value[0];
+            buffer[2*x+1] = value[1];
+        }
+        ubase_assert(ubuf_sound_plane_unmap(ubuf, channel, 0, -1));
+    }
+}
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -144,12 +180,12 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 
     ubase_assert(uref_sound_plane_read_float(uref, "l", 0, -1, &r));
     for (int x = 0; x < size; x++)
-        assert(r[x] == TEST_VALUES[count][0]);
+        assert(r[x] == test_values_float[count][0]);
     ubase_assert(uref_sound_plane_unmap(uref, "l", 0, -1));
 
     ubase_assert(uref_sound_plane_read_float(uref, "r", 0, -1, &r));
     for (int x = 0; x < size; x++)
-        assert(r[x] == TEST_VALUES[count][1]);
+        assert(r[x] == test_values_float[count][1]);
     ubase_assert(uref_sound_plane_unmap(uref, "r", 0, -1));
 
     upipe_notice(upipe, "float data good");
@@ -179,6 +215,66 @@ static void test_input_int(struct upipe *upipe, struct uref *uref,
     ubase_assert(uref_sound_plane_unmap(uref, "r", 0, -1));
 
     upipe_notice(upipe, "int16_t data good");
+
+    count++;
+    uref_free(uref);
+}
+
+static void test_input_idx(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
+{
+    assert(uref != NULL);
+    const int16_t *r;
+
+    size_t size;
+    uint8_t sample_size;
+    ubase_assert(ubuf_sound_size(uref->ubuf, &size, &sample_size));
+
+    ubase_assert(uref_sound_plane_read_int16_t(uref, "l", 0, -1, &r));
+    for (int x = 0; x < size; x++)
+        assert(r[x] == test_values_int[count][1]);
+    ubase_assert(uref_sound_plane_unmap(uref, "l", 0, -1));
+
+    ubase_assert(uref_sound_plane_read_int16_t(uref, "r", 0, -1, &r));
+    for (int x = 0; x < size; x++)
+        assert(r[x] == test_values_int[count][0]);
+    ubase_assert(uref_sound_plane_unmap(uref, "r", 0, -1));
+
+    upipe_notice(upipe, "idx data good");
+
+    count++;
+    uref_free(uref);
+}
+
+static void test_input_interleaved(struct upipe *upipe, struct uref *uref,
+                       struct upump **upump_p)
+{
+    assert(uref != NULL);
+    const uint8_t *r;
+
+    const int32_t data[3][16] = { {
+        [2] = test_values_interleaved[0][0],
+        [3] = test_values_interleaved[0][1],
+        [4] = test_values_interleaved[1][0],
+        [5] = test_values_interleaved[1][1],
+    }, {
+        [4] = test_values_interleaved[2][0],
+        [5] = test_values_interleaved[2][1],
+    }, {
+        [2] = test_values_interleaved[3][0],
+        [3] = test_values_interleaved[3][1],
+    } };
+
+    size_t size;
+    uint8_t sample_size;
+    ubase_assert(ubuf_sound_size(uref->ubuf, &size, &sample_size));
+
+    ubase_assert(uref_sound_plane_read_uint8_t(uref, "lrcLRS0123456789", 0, -1, &r));
+    for (int x = 0; x < size; x++)
+        assert(memcmp(r + sample_size * x, data[count], sample_size) == 0);
+    ubase_assert(uref_sound_plane_unmap(uref, "lrcLRS0123456789", 0, -1));
+
+    upipe_notice(upipe, "interleaved data good");
 
     count++;
     uref_free(uref);
@@ -298,7 +394,7 @@ int main(int argc, char *argv[])
     /* First, feed a "real" sample to input 0 to test the pipe's function...*/
     uref = uref_sound_alloc(uref_mgr, sound_mgr_0, SAMPLES);
     assert(uref != NULL);
-    fill_in(uref->ubuf, TEST_VALUES[0][0]);
+    fill_in(uref->ubuf, test_values_float[0][0]);
     ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
     upipe_input(upipe_audio_merge_input0, uref, NULL);
 
@@ -310,7 +406,7 @@ int main(int argc, char *argv[])
     /* .. and then to input 1. */
     uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
     assert(uref != NULL);
-    fill_in(uref->ubuf, TEST_VALUES[0][1]);
+    fill_in(uref->ubuf, test_values_float[0][1]);
     ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
     upipe_input(upipe_audio_merge_input1, uref, NULL);
 
@@ -322,7 +418,21 @@ int main(int argc, char *argv[])
     ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
     upipe_input(upipe_audio_merge_input0, uref, NULL);
 
-    /* ... and the same to input 1 */
+    /* .. and a real one to input 1. */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
+    assert(uref != NULL);
+    fill_in(uref->ubuf, test_values_float[1][1]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input1, uref, NULL);
+
+    /* Then a real one to input 0. */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_0, SAMPLES);
+    assert(uref != NULL);
+    fill_in(uref->ubuf, test_values_float[2][0]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input0, uref, NULL);
+
+    /* ... and a fake one to input 1 */
     uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
     assert(uref != NULL);
     ubuf_free(uref->ubuf);
@@ -333,7 +443,7 @@ int main(int argc, char *argv[])
     upipe_release(upipe_audio_merge_input0);
     upipe_release(upipe_audio_merge_input1);
 
-    assert(count == 2);
+    assert(count == 3);
 
     /* clean */
     uref_free(flow0);
@@ -363,7 +473,6 @@ int main(int argc, char *argv[])
     ubase_assert(uref_sound_flow_add_plane(output_flow, "l"));
     ubase_assert(uref_sound_flow_add_plane(output_flow, "r"));
     ubase_assert(uref_sound_flow_set_channels(output_flow, 2));
-    assert(upipe_audio_merge_mgr != NULL);
     upipe_audio_merge = upipe_flow_alloc(upipe_audio_merge_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "merge"), output_flow);
     assert(upipe_audio_merge != NULL);
@@ -415,6 +524,180 @@ int main(int argc, char *argv[])
     ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
     upipe_input(upipe_audio_merge_input1, uref, NULL);
 
+    upipe_release(upipe_audio_merge_input0);
+    upipe_release(upipe_audio_merge_input1);
+
+    assert(count == 1);
+
+    /* clean */
+    uref_free(flow0);
+    uref_free(flow1);
+    ubuf_mgr_release(sound_mgr_0);
+    ubuf_mgr_release(sound_mgr_1);
+    uref_free(output_flow);
+    upipe_release(upipe_audio_merge);
+
+    /* Test channel_idx */
+
+    uprobe_notice(logger, NULL, "testing channel_idx");
+
+    count = 0;
+    merge_test_mgr.upipe_input = test_input_idx;
+
+    /* merge superpipe */
+    output_flow = uref_sound_flow_alloc_def(uref_mgr, "s16.", 1, 2);
+    assert(output_flow);
+    ubase_assert(uref_sound_flow_set_rate(output_flow, 48000));
+    ubase_assert(uref_sound_flow_set_samples(output_flow, SAMPLES));
+
+    /* before we add channels/planes duplicate the flowdef for out input flow defs */
+    flow0 = uref_dup(output_flow);
+    flow1 = uref_dup(output_flow);
+
+    ubase_assert(uref_sound_flow_add_plane(output_flow, "l"));
+    ubase_assert(uref_sound_flow_add_plane(output_flow, "r"));
+    ubase_assert(uref_sound_flow_set_channels(output_flow, 2));
+    assert(upipe_audio_merge_mgr != NULL);
+    upipe_audio_merge = upipe_flow_alloc(upipe_audio_merge_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "merge"), output_flow);
+    assert(upipe_audio_merge != NULL);
+
+    /* connect output of merge pipe to sink */
+    ubase_assert(upipe_set_output(upipe_audio_merge, upipe_sink));
+
+    /* merge subpipe 0 */
+    ubase_assert(uref_sound_flow_add_plane(flow0, "l"));
+    ubase_assert(uref_sound_flow_set_channels(flow0, 1));
+    ubase_assert(uref_sound_flow_set_channel_idx(flow0, 1));
+    uref_dump(flow0, logger);
+    upipe_audio_merge_input0 = upipe_void_alloc_sub(upipe_audio_merge,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "merge input 0"));
+    assert(upipe_audio_merge_input0 != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_audio_merge_input0, flow0));
+
+    /* merge subpipe 1 */
+    ubase_assert(uref_sound_flow_add_plane(flow1, "r"));
+    ubase_assert(uref_sound_flow_set_channels(flow1, 1));
+    ubase_assert(uref_sound_flow_set_channel_idx(flow1, 0));
+    uref_dump(flow1, logger);
+    upipe_audio_merge_input1 = upipe_void_alloc_sub(upipe_audio_merge,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "merge input 1"));
+    assert(upipe_audio_merge_input1 != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_audio_merge_input1, flow1));
+
+    /* input 0 sound ubuf manager */
+    sound_mgr_0 = ubuf_mem_mgr_alloc_from_flow_def(
+                 UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, flow0);
+    assert(sound_mgr_0);
+
+    /* First, feed a "real" sample to input 0 to test the pipe's function...*/
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_0, SAMPLES);
+    assert(uref != NULL);
+    fill_in_int(uref->ubuf, test_values_int[0][0]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input0, uref, NULL);
+
+    /* input 1 sound ubuf manager */
+    sound_mgr_1 = ubuf_mem_mgr_alloc_from_flow_def(
+                 UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, flow1);
+    assert(sound_mgr_1);
+
+    /* .. and then to input 1. */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
+    assert(uref != NULL);
+    fill_in_int(uref->ubuf, test_values_int[0][1]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input1, uref, NULL);
+
+    /* Don't test error handling again. */
+
+    upipe_release(upipe_audio_merge_input0);
+    upipe_release(upipe_audio_merge_input1);
+
+    assert(count == 1);
+
+    /* clean */
+    uref_free(flow0);
+    uref_free(flow1);
+    ubuf_mgr_release(sound_mgr_0);
+    ubuf_mgr_release(sound_mgr_1);
+    uref_free(output_flow);
+    upipe_release(upipe_audio_merge);
+
+    /* Test interleaved */
+
+    uprobe_notice(logger, NULL, "testing interleaved");
+
+    count = 0;
+    merge_test_mgr.upipe_input = test_input_interleaved;
+
+    /* merge superpipe */
+    output_flow = uref_sound_flow_alloc_def(uref_mgr, "s32.", 16, 64);
+    assert(output_flow);
+    ubase_assert(uref_sound_flow_set_rate(output_flow, 48000));
+    ubase_assert(uref_sound_flow_set_samples(output_flow, SAMPLES));
+
+    ubase_assert(uref_sound_flow_set_channels(output_flow, 16));
+    uref_sound_flow_add_plane(output_flow, "lrcLRS0123456789");
+    upipe_audio_merge = upipe_flow_alloc(upipe_audio_merge_mgr,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "merge"), output_flow);
+    assert(upipe_audio_merge != NULL);
+
+    /* connect output of merge pipe to sink */
+    ubase_assert(upipe_set_output(upipe_audio_merge, upipe_sink));
+
+    /* merge subpipe 0 */
+    flow0 = uref_sound_flow_alloc_def(uref_mgr, "s32.", 2, 8);
+    assert(flow0);
+    ubase_assert(uref_sound_flow_add_plane(flow0, "lr"));
+    ubase_assert(uref_sound_flow_set_channels(flow0, 2));
+    ubase_assert(uref_sound_flow_set_channel_idx(flow0, 2));
+    uref_dump(flow0, logger);
+    upipe_audio_merge_input0 = upipe_void_alloc_sub(upipe_audio_merge,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "merge input 0"));
+    assert(upipe_audio_merge_input0 != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_audio_merge_input0, flow0));
+
+    /* merge subpipe 1 */
+    flow1 = uref_sound_flow_alloc_def(uref_mgr, "s32.", 2, 8);
+    assert(flow1);
+    ubase_assert(uref_sound_flow_add_plane(flow1, "lr"));
+    ubase_assert(uref_sound_flow_set_channels(flow1, 2));
+    ubase_assert(uref_sound_flow_set_channel_idx(flow1, 4));
+    uref_dump(flow1, logger);
+    upipe_audio_merge_input1 = upipe_void_alloc_sub(upipe_audio_merge,
+            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
+                             "merge input 1"));
+    assert(upipe_audio_merge_input1 != NULL);
+    ubase_assert(upipe_set_flow_def(upipe_audio_merge_input1, flow1));
+
+    /* input 0 sound ubuf manager */
+    sound_mgr_0 = ubuf_mem_mgr_alloc_from_flow_def(
+                 UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, flow0);
+    assert(sound_mgr_0);
+
+    /* First, feed a "real" sample to input 0 to test the pipe's function...*/
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_0, SAMPLES);
+    assert(uref != NULL);
+    fill_in_interleaved(uref->ubuf, test_values_interleaved[0]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input0, uref, NULL);
+
+    /* input 1 sound ubuf manager */
+    sound_mgr_1 = ubuf_mem_mgr_alloc_from_flow_def(
+                 UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, flow1);
+    assert(sound_mgr_1);
+
+    /* .. and then to input 1. */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
+    assert(uref != NULL);
+    fill_in_interleaved(uref->ubuf, test_values_interleaved[1]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input1, uref, NULL);
+
     /* Then feed a dummy sample with no attached ubuf to test error handling to input 0... */
     uref = uref_sound_alloc(uref_mgr, sound_mgr_0, SAMPLES);
     assert(uref != NULL);
@@ -423,7 +706,21 @@ int main(int argc, char *argv[])
     ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
     upipe_input(upipe_audio_merge_input0, uref, NULL);
 
-    /* ... and the same to input 1 */
+    /* .. and a real one to input 1. */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
+    assert(uref != NULL);
+    fill_in_interleaved(uref->ubuf, test_values_interleaved[2]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input1, uref, NULL);
+
+    /* Then a real one to input 0. */
+    uref = uref_sound_alloc(uref_mgr, sound_mgr_0, SAMPLES);
+    assert(uref != NULL);
+    fill_in_interleaved(uref->ubuf, test_values_interleaved[3]);
+    ubase_assert(uref_sound_flow_set_samples(uref, SAMPLES));
+    upipe_input(upipe_audio_merge_input0, uref, NULL);
+
+    /* ... and a fake one to input 1 */
     uref = uref_sound_alloc(uref_mgr, sound_mgr_1, SAMPLES);
     assert(uref != NULL);
     ubuf_free(uref->ubuf);
@@ -434,7 +731,7 @@ int main(int argc, char *argv[])
     upipe_release(upipe_audio_merge_input0);
     upipe_release(upipe_audio_merge_input1);
 
-    assert(count == 2);
+    assert(count == 3);
 
     /* clean */
     uref_free(flow0);
@@ -443,6 +740,7 @@ int main(int argc, char *argv[])
     ubuf_mgr_release(sound_mgr_1);
     uref_free(output_flow);
     upipe_release(upipe_audio_merge);
+
     upipe_mgr_release(upipe_audio_merge_mgr); // nop
 
     test_free(upipe_sink);
