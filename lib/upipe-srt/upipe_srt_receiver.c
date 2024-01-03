@@ -869,9 +869,6 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
 {
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
-    /* FIXME: Don't do this on a new key flow def */
-    upipe_srt_receiver_empty_buffer(upipe);
-
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
@@ -884,8 +881,16 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
     }
 
     uint64_t id;
-    if (ubase_check(uref_flow_get_id(flow_def, &id)))
+    if (ubase_check(uref_flow_get_id(flow_def, &id))) {
+        if (upipe_srt_receiver->socket_id != id)
+            upipe_srt_receiver_empty_buffer(upipe);
+
         upipe_srt_receiver->socket_id = id;
+    }
+    else {
+        /* XXX: Is this reachable in reality? */
+        upipe_srt_receiver_empty_buffer(upipe);
+    }
 
     struct udict_opaque opaque;
     if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.salt"))) {
