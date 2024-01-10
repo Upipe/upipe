@@ -166,10 +166,12 @@ static void upipe_voidsrc_worker(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_voidsrc *upipe_voidsrc = upipe_voidsrc_from_upipe(upipe);
+    uint64_t interval = upipe_voidsrc->interval;
 
     uint64_t now = uclock_now(upipe_voidsrc->uclock);
     if (upipe_voidsrc->pts == UINT64_MAX)
-        upipe_voidsrc->pts = now;
+        upipe_voidsrc->pts = ((now - 1) / interval) * interval + interval;
+
 
     for (/* nothing */;
          !upipe_single(upipe) && upipe_voidsrc->pts <= now;
@@ -180,11 +182,11 @@ static void upipe_voidsrc_worker(struct upump *upump)
             return;
         }
 
-        uref_clock_set_duration(uref, upipe_voidsrc->interval);
+        uref_clock_set_duration(uref, interval);
         uref_clock_set_pts_sys(uref, upipe_voidsrc->pts);
         uref_clock_set_pts_prog(uref, upipe_voidsrc->pts);
         if (upipe_voidsrc->pts != UINT64_MAX)
-            upipe_voidsrc->pts += upipe_voidsrc->interval;
+            upipe_voidsrc->pts += interval;
 
         upipe_voidsrc_output(upipe, uref, &upipe_voidsrc->timer);
 
@@ -194,7 +196,7 @@ static void upipe_voidsrc_worker(struct upump *upump)
             break;
     }
 
-    uint64_t wait = upipe_voidsrc->interval;
+    uint64_t wait = interval;
     if (now != UINT64_MAX)
         wait = upipe_voidsrc->pts - now;
 
