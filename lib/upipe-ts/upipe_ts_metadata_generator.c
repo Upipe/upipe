@@ -201,6 +201,12 @@ static void upipe_ts_mdg_send(struct upipe *upipe)
         upipe_ts_mdg->max_octetrate = upipe_ts_mdg->size;
     }
 
+    unsigned intervals = (now - cr_sys) / upipe_ts_mdg->interval;
+    cr_sys += intervals * upipe_ts_mdg->interval;
+    pts_prog += intervals * upipe_ts_mdg->interval;
+    uref_clock_set_cr_sys(uref, cr_sys);
+    uref_clock_set_pts_prog(uref, pts_prog);
+
     upipe_ts_mdg_output(upipe, uref_dup(uref), &upipe_ts_mdg->upump);
 
     if (!upipe_ts_mdg->interval)
