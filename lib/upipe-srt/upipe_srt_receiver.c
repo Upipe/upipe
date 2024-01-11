@@ -842,6 +842,23 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
     return UBASE_ERR_NONE;
 }
 
+static void upipe_srt_receiver_empty_buffer(struct upipe *upipe)
+{
+    struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
+
+    /* empty buffer */
+    upipe_warn(upipe, "Emptying buffer");
+    upipe_srt_receiver->expected_seqnum = UINT64_MAX;
+    upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
+    upipe_srt_receiver->buffered = 0;
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
+        struct uref *uref = uref_from_uchain(uchain);
+        ulist_delete(uchain);
+        uref_free(uref);        
+    }
+}
+
 /** @internal @This sets the input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -851,15 +868,6 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
 static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
-
-    /* empty buffer */
-    upipe_warn(upipe, "Emptying buffer");
-    upipe_srt_receiver->expected_seqnum = UINT64_MAX;
-    upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
-    struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
-        ulist_delete(uchain);
-    }
 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
@@ -873,8 +881,16 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
     }
 
     uint64_t id;
-    if (ubase_check(uref_flow_get_id(flow_def, &id)))
+    if (ubase_check(uref_flow_get_id(flow_def, &id))) {
+        if (upipe_srt_receiver->socket_id != id)
+            upipe_srt_receiver_empty_buffer(upipe);
+
         upipe_srt_receiver->socket_id = id;
+    }
+    else {
+        /* XXX: Is this reachable in reality? */
+        upipe_srt_receiver_empty_buffer(upipe);
+    }
 
     struct udict_opaque opaque;
     if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.salt"))) {
@@ -1315,6 +1331,7 @@ static void upipe_srt_receiver_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     free(upipe_srt_receiver->acks);
+    upipe_srt_receiver->acks = NULL;
 
     upipe_srt_receiver_clean_output(upipe);
     upipe_srt_receiver_clean_upump_timer(upipe);
@@ -1326,6 +1343,7 @@ static void upipe_srt_receiver_free(struct upipe *upipe)
     upipe_srt_receiver_clean_urefcount(upipe);
     upipe_srt_receiver_clean_urefcount_real(upipe);
     upipe_srt_receiver_clean_sub_outputs(upipe);
+    upipe_srt_receiver_empty_buffer(upipe);
     upipe_srt_receiver_free_void(upipe);
 }
 
