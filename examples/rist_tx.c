@@ -181,7 +181,7 @@ static int start(void)
     static unsigned z = 0;
     z++;
 
-    bool listener = dirpath && *dirpath == '@';
+    bool listener = dirpath && strchr(dirpath, '@');
 
     /* rtp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();

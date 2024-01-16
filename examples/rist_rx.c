@@ -201,7 +201,7 @@ static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 
 static int start(void)
 {
-    bool listener = srcpath && *srcpath == '@';
+    bool listener = srcpath && strchr(srcpath, '@');
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, &uprobe_udp);
     upipe_mgr_release(upipe_udpsrc_mgr);
