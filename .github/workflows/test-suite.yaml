@@ -53,8 +53,8 @@ jobs:
             compiler: gcc
             version: 12
 
-          - name: macos-12-xcode
-            os: macos-12
+          - name: macos-13-xcode
+            os: macos-13
             compiler: xcode
 
     steps:
