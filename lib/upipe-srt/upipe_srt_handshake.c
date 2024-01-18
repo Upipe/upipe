@@ -896,10 +896,13 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         size_t size = ext_size + SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
         uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
 
-        const uint8_t klen = upipe_srt_handshake->sek_len;
 #ifdef UPIPE_HAVE_GCRYPT_H
+        const uint8_t klen = upipe_srt_handshake->sek_len;
+        // XXX: move to bitstream?
+        uint8_t kk = 1; // 3
+        size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
         if (upipe_srt_handshake->password) {
-            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + (8+klen);
+            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
             extension |= SRT_HANDSHAKE_EXT_KMREQ;
         }
 #endif
@@ -950,8 +953,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
             memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
 
-            // XXX: move to bitstream?
-            uint8_t kk = 1;
             out_ext[0] = 0x12;  // S V PT
             out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
             srt_km_set_kk(out_ext, kk);
@@ -961,9 +962,8 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
             uint8_t wrap[8+256/8] = {0};
 
-            size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
-
             gcry_randomize(upipe_srt_handshake->sek[0], klen, GCRY_STRONG_RANDOM);
+            gcry_randomize(upipe_srt_handshake->sek[1], klen, GCRY_STRONG_RANDOM);
             gcry_randomize(upipe_srt_handshake->salt, 16, GCRY_STRONG_RANDOM);
 
             srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
@@ -992,7 +992,10 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                 return false;
             }
 
-            err = gcry_cipher_encrypt(aes, wrap, wrap_len, upipe_srt_handshake->sek[0], klen);
+            uint8_t clear_wrap[2*256/8];
+            memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
+            memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
+            err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
             if (err) {
                 gcry_cipher_close(aes);
                 upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
