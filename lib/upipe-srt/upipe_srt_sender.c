@@ -462,6 +462,7 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
 
     uint64_t isn;
     if (ubase_check(uref_pic_get_number(flow_def, &isn)))
+        if (!upipe_srt_sender->seqnum)
             upipe_srt_sender->seqnum = isn;
 
     struct udict_opaque opaque;
