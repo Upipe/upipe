@@ -1096,13 +1096,13 @@ static uint64_t upipe_srt_receiver_ackack(struct upipe *upipe, uint32_t ack_num,
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
     const size_t n = upipe_srt_receiver->n_acks;
-    const size_t ridx = upipe_srt_receiver->ack_ridx;;
+    const size_t ridx = upipe_srt_receiver->ack_ridx;
 
     //upipe_verbose_va(upipe,"%s(%u), start at %zu", __func__, ack_num, ridx);
 
     size_t max = (ridx > 0) ? (ridx - 1) : (n - 1); // end of loop
 
-    for (size_t i = ridx; ; i++) {
+    for (size_t i = ridx; i != max; i = (i + 1) % n) {
         uint32_t a = upipe_srt_receiver->acks[i].ack_num;
 
         if (upipe_srt_receiver->acks[i].timestamp == UINT64_MAX) { // already acked
@@ -1120,10 +1120,6 @@ static uint64_t upipe_srt_receiver_ackack(struct upipe *upipe, uint32_t ack_num,
             upipe_srt_receiver->ack_ridx = (i+1) % n; // advance
             return rtt;
         }
-
-        i %= n;
-        if (i == max)
-            break;
     }
 
     //upipe_verbose_va(upipe, "%d not found", ack_num);
