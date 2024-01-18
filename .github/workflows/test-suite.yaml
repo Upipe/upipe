@@ -7,7 +7,7 @@ jobs:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     env:
-      MAKEFLAGS: -j3
+      MAKEFLAGS: -j4
 
     strategy:
       fail-fast: false
