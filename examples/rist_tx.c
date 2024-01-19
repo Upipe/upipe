@@ -85,6 +85,8 @@ static struct upipe *upipe_udpsrc;
 static struct upipe *upipe_srt_sender;
 static struct upipe *upipe_srt_sender_sub;
 
+static struct upipe *upipe_srt_handshake;
+
 static struct upump_mgr *upump_mgr;
 static struct uref_mgr *uref_mgr;
 
@@ -207,7 +209,7 @@ static int start(void)
     upipe_attach_uclock(upipe_udpsrc_srt);
 
     struct upipe_mgr *upipe_srt_handshake_mgr = upipe_srt_handshake_mgr_alloc((long)&upipe_udpsrc_srt);
-    struct upipe *upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
+    upipe_srt_handshake = upipe_void_alloc_output(upipe_udpsrc_srt, upipe_srt_handshake_mgr,
             uprobe_pfx_alloc_va(uprobe_alloc(catch_hs, uprobe_use(logger)), loglevel, "srt handshake %u", z));
     upipe_set_option(upipe_srt_handshake, "listener", listener ? "1" : "0");
     if (!ubase_check(upipe_set_option(upipe_srt_handshake, "latency", latency)))
@@ -263,6 +265,16 @@ static int start(void)
     return 0;
 }
 
+static void kmrefresh(struct upump *upump)
+{
+    if (upipe_srt_handshake)
+        upipe_srt_handshake_set_password(upipe_srt_handshake, password, key_length / 8);
+    else {
+        upump_stop(upump);
+        upump_free(upump);
+    }
+}
+
 static void stop(struct upump *upump)
 {
     if (upump) {
@@ -274,6 +286,8 @@ static void stop(struct upump *upump)
     upipe_udpsrc_srt = NULL;
     upipe_release(upipe_udpsrc);
     upipe_udpsrc = NULL;
+
+    upipe_srt_handshake = NULL;
 
     if (restart)
         start();
@@ -358,6 +372,12 @@ int main(int argc, char *argv[])
     int ret = start();
     if (ret)
         return ret;
+
+    if (1) {
+        struct upump *u = upump_alloc_timer(upump_mgr, kmrefresh, NULL,
+                NULL, 5*UCLOCK_FREQ, 5*UCLOCK_FREQ);
+        upump_start(u);
+    }
 
     if (0) {
         restart = false;
