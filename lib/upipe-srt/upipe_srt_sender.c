@@ -102,7 +102,9 @@ struct upipe_srt_sender {
 
     uint8_t salt[16];
     uint8_t sek[2][32];
-    uint8_t sek_len;
+    uint8_t sek_len[2];
+
+    int even_key;
 
     uint64_t last_sent;
 
@@ -476,15 +478,27 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
     if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.even_key"))) {
         if (opaque.size > sizeof(upipe_srt_sender->sek[0]))
             opaque.size = sizeof(upipe_srt_sender->sek[0]);
-        upipe_srt_sender->sek_len = opaque.size;
+        upipe_srt_sender->sek_len[0] = opaque.size;
         memcpy(upipe_srt_sender->sek[0], opaque.v, opaque.size);
     }
 
     if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.odd_key"))) {
         if (opaque.size > sizeof(upipe_srt_sender->sek[1]))
             opaque.size = sizeof(upipe_srt_sender->sek[1]);
-        upipe_srt_sender->sek_len = opaque.size;
+        upipe_srt_sender->sek_len[1] = opaque.size;
         memcpy(upipe_srt_sender->sek[1], opaque.v, opaque.size);
+    }
+
+    int even_key = !upipe_srt_sender->even_key; // switch key
+    upipe_srt_sender->even_key = even_key;
+    if (!upipe_srt_sender->sek_len[even_key] && upipe_srt_sender->sek_len[!even_key]) {
+        upipe_err_va(upipe, "Couldn't switch encryption keys: %s key is absent",
+            even_key ? "even" : "odd");
+        upipe_srt_sender->even_key = !even_key;
+    } else if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
+        upipe_dbg_va(upipe, "Switching to %s key", even_key ? "even" : "odd");
+    } else {
+        upipe_dbg(upipe, "Encryption disabled");
     }
 #endif
 
@@ -572,7 +586,9 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender->seqnum = 0;
     upipe_srt_sender->syn_cookie = 1;
 
-    upipe_srt_sender->sek_len = 0;
+    upipe_srt_sender->sek_len[0] = 0;
+    upipe_srt_sender->sek_len[1] = 0;
+    upipe_srt_sender->even_key = false;
 
     upipe_srt_sender->last_sent = 0;
 
@@ -634,14 +650,15 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
     srt_set_data_packet_retransmit(buf, false);
 
 #ifdef UPIPE_HAVE_GCRYPT_H
-    if (upipe_srt_sender->sek_len) {
+    int key = !upipe_srt_sender->even_key;
+    if (upipe_srt_sender->sek_len[key]) {
         //
         uint8_t *data;
         int s = -1;
         if (ubase_check(uref_block_write(uref, 0, &s, &data))) {
             const uint8_t *salt = upipe_srt_sender->salt;
-            const uint8_t *sek = upipe_srt_sender->sek[0];
-            int key_len = upipe_srt_sender->sek_len;
+            const uint8_t *sek = upipe_srt_sender->sek[key];
+            int key_len = upipe_srt_sender->sek_len[key];
 
             uint8_t iv[16];
             memset(&iv, 0, 16);
@@ -693,7 +710,7 @@ error:
         }
 
         //
-        srt_set_data_packet_encryption(buf, SRT_DATA_ENCRYPTION_EVEN);
+        srt_set_data_packet_encryption(buf, key ? SRT_DATA_ENCRYPTION_ODD : SRT_DATA_ENCRYPTION_EVEN);
     } else
 #endif
         srt_set_data_packet_encryption(buf, SRT_DATA_ENCRYPTION_CLEAR);

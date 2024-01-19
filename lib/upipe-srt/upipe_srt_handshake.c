@@ -110,6 +110,7 @@ struct upipe_srt_handshake {
     uint8_t salt[16];
     uint8_t sek[2][32];
     uint8_t sek_len;
+    bool update_even;
 
     char *password;
 
@@ -337,6 +338,10 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
         upipe_srt_handshake_free_void(upipe);
         return NULL;
     }
+
+    gcry_randomize(upipe_srt_handshake->sek[0], 32, GCRY_STRONG_RANDOM);
+    gcry_randomize(upipe_srt_handshake->sek[1], 32, GCRY_STRONG_RANDOM);
+    gcry_randomize(upipe_srt_handshake->salt, 16, GCRY_STRONG_RANDOM);
 #endif
 
     upipe_srt_handshake_init_urefcount(upipe);
@@ -374,6 +379,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->patch = 0;
 
     upipe_srt_handshake->sek_len = 0;
+    upipe_srt_handshake->update_even = false;
     upipe_srt_handshake->password = NULL;
 
     upipe_throw_ready(upipe);
@@ -413,7 +419,7 @@ static int upipe_srt_handshake_check(struct upipe *upipe, struct uref *flow_form
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_srt_handshake->upump_mgr && !upipe_srt_handshake->upump_timer && !upipe_srt_handshake->listener) {
+    if (upipe_srt_handshake->upump_mgr && !upipe_srt_handshake->upump_keepalive_timeout && !upipe_srt_handshake->upump_timer && !upipe_srt_handshake->listener) {
         upipe_srt_handshake->socket_id = mrand48();
         upipe_srt_handshake->syn_cookie = 0;
         struct upump *upump =
@@ -507,6 +513,11 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
     return UBASE_ERR_INVALID;
 }
 
+#ifdef UPIPE_HAVE_GCRYPT_H
+static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t timestamp);
+#endif
+static void upipe_srt_handshake_finalize(struct upipe *upipe);
+
 /** @internal @This processes control commands on a SRT handshake pipe.
  *
  * @param upipe description structure of the pipe
@@ -563,6 +574,21 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
                     default:
                         upipe_err_va(upipe, "Invalid key length %d, using 128 bits", 8*upipe_srt_handshake->sek_len);
                         upipe_srt_handshake->sek_len = 128/8;
+                }
+                if (upipe_srt_handshake->upump_keepalive_timeout) {
+#ifdef UPIPE_HAVE_GCRYPT_H
+                    // KM refresh
+                    gcry_randomize(upipe_srt_handshake->sek[!upipe_srt_handshake->update_even], upipe_srt_handshake->sek_len, GCRY_STRONG_RANDOM);
+                    upipe_srt_handshake->update_even = !upipe_srt_handshake->update_even;
+
+                    uint64_t now = uclock_now(upipe_srt_handshake->uclock);
+                    uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
+                    struct uref *kmreq = upipe_srt_handshake_make_kmreq(upipe, timestamp);
+                    if (kmreq) {
+                        upipe_srt_handshake_output(&upipe_srt_handshake->upipe, kmreq, NULL);
+                        upipe_srt_handshake_finalize(upipe);
+                    }
+#endif
                 }
             } else {
                 upipe_srt_handshake->password = NULL;
@@ -787,6 +813,98 @@ key_error:
 #endif
 }
 
+#ifdef UPIPE_HAVE_GCRYPT_H
+static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t timestamp)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    const uint8_t klen = upipe_srt_handshake->sek_len;
+    const uint8_t kk = 3;
+    size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
+    struct uref *next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
+            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len);
+    if (!next) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return NULL;
+    }
+
+    uint8_t *out;
+    int output_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(next, 0, &output_size, &out)))) {
+        goto error;
+    }
+
+    srt_set_packet_control(out, true);
+    srt_set_packet_timestamp(out, timestamp);
+    srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
+
+    srt_set_control_packet_type(out, SRT_CONTROL_TYPE_USER);
+    srt_set_control_packet_subtype(out, SRT_HANDSHAKE_EXT_TYPE_KMREQ);
+    srt_set_control_packet_type_specific(out, 0);
+
+    uint8_t *out_ext = &out[SRT_HEADER_SIZE];
+
+    memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
+    // XXX: move to bitstream?
+
+    out_ext[0] = 0x12;  // S V PT
+    out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
+    srt_km_set_kk(out_ext, kk);
+    srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
+    out_ext[10] = 2; // SE
+    out_ext[14] = 4; // slen;
+
+    uint8_t wrap[8+256/8] = {0};
+
+    srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
+    memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
+
+    uint8_t kek[32];
+    gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
+            strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
+            &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
+    if (err) {
+        upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
+        goto error;
+    }
+
+    gcry_cipher_hd_t aes;
+    err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
+    if (err) {
+        upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
+        goto error;
+    }
+
+    err = gcry_cipher_setkey(aes, kek, klen);
+    if (err) {
+        upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
+        goto aes_error;
+    }
+
+    uint8_t clear_wrap[2*256/8];
+    memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
+    memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
+    err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
+    if (err) {
+        upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
+        goto aes_error;
+    }
+
+    gcry_cipher_close(aes);
+
+    memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+
+    uref_block_unmap(next, 0);
+
+    return next;
+
+aes_error:
+    gcry_cipher_close(aes);
+error:
+    uref_free(next);
+    return NULL;
+}
+#endif
+
 static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -899,7 +1017,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 #ifdef UPIPE_HAVE_GCRYPT_H
         const uint8_t klen = upipe_srt_handshake->sek_len;
         // XXX: move to bitstream?
-        uint8_t kk = 1; // 3
+        const uint8_t kk = 3;
         size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
         if (upipe_srt_handshake->password) {
             size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
@@ -961,10 +1079,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             out_ext[14] = 4; // slen;
 
             uint8_t wrap[8+256/8] = {0};
-
-            gcry_randomize(upipe_srt_handshake->sek[0], klen, GCRY_STRONG_RANDOM);
-            gcry_randomize(upipe_srt_handshake->sek[1], klen, GCRY_STRONG_RANDOM);
-            gcry_randomize(upipe_srt_handshake->salt, 16, GCRY_STRONG_RANDOM);
 
             srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
             memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
@@ -1204,86 +1318,9 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
 #ifdef UPIPE_HAVE_GCRYPT_H
             if (upipe_srt_handshake->password) {
-                const uint8_t klen = upipe_srt_handshake->sek_len;
-                uint8_t kk = 1;
-                size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
-                next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
-                        upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len);
-                if (!next)
-                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                else {
-                    uint8_t *out;
-                    int output_size = -1;
-                    if (likely(ubase_check(uref_block_write(next, 0, &output_size, &out)))) {
-                        srt_set_packet_control(out, true);
-                        srt_set_packet_timestamp(out, timestamp);
-                        srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
-
-                        srt_set_control_packet_type(out, SRT_CONTROL_TYPE_USER);
-                        srt_set_control_packet_subtype(out, SRT_HANDSHAKE_EXT_TYPE_KMREQ);
-                        srt_set_control_packet_type_specific(out, 0);
-
-                        uint8_t *out_ext = &out[SRT_HEADER_SIZE];
-
-                        memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
-                        // XXX: move to bitstream?
-
-                        out_ext[0] = 0x12;  // S V PT
-                        out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
-                        srt_km_set_kk(out_ext, kk);
-                        srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
-                        out_ext[10] = 2; // SE
-                        out_ext[14] = 4; // slen;
-
-                        uint8_t wrap[8+256/8] = {0};
-
-
-                        gcry_randomize(upipe_srt_handshake->sek[0], klen, GCRY_STRONG_RANDOM);
-                        gcry_randomize(upipe_srt_handshake->salt, 16, GCRY_STRONG_RANDOM);
-
-                        srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
-                        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
-
-                        uint8_t kek[32];
-                        gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
-                                strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
-                                &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
-                        if (err) {
-                            upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
-                            return false;
-                        }
-
-                        gcry_cipher_hd_t aes;
-                        err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
-                        if (err) {
-                            upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
-                            return false;
-                        }
-
-                        err = gcry_cipher_setkey(aes, kek, klen);
-                        if (err) {
-                            gcry_cipher_close(aes);
-                            upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
-                            return false;
-                        }
-
-                        err = gcry_cipher_encrypt(aes, wrap, wrap_len, upipe_srt_handshake->sek[0], klen);
-                        if (err) {
-                            gcry_cipher_close(aes);
-                            upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
-                            return false;
-                        }
-
-                        gcry_cipher_close(aes);
-
-                        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
-
-                        uref_block_unmap(next, 0);
-                        uref->uchain.next->next = &next->uchain;
-                    } else {
-                        uref_free(next);
-                    }
-                }
+                next = upipe_srt_handshake_make_kmreq(upipe, timestamp);
+                if (next)
+                    uref->uchain.next->next = &next->uchain;
             }
 #endif
         }
@@ -1312,10 +1349,13 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
     size -= SRT_HEADER_SIZE;
 
     if (!srt_check_km(buf, size) || !upipe_srt_handshake_parse_kmreq(upipe, buf, &kk, &wrap, &wrap_len))
-    if (!upipe_srt_handshake_parse_kmreq(upipe, cif, &kk, &wrap, &wrap_len)) {
-        upipe_err_va(upipe, "parse failed");
+        if (!upipe_srt_handshake_parse_kmreq(upipe, cif, &kk, &wrap, &wrap_len)) {
+            upipe_err_va(upipe, "parse failed");
+            return NULL;
+        }
+
+    if (subtype == SRT_HANDSHAKE_EXT_TYPE_KMRSP)
         return NULL;
-    }
 
     struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
             upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len);
