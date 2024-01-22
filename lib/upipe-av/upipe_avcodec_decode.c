@@ -77,6 +77,10 @@
 
 #define EXPECTED_FLOW_DEF "block."
 
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(59, 63, 100)
+#define USE_COPY_OPAQUE
+#endif
+
 /** @hidden */
 static int upipe_avcdec_check(struct upipe *upipe, struct uref *flow_format);
 /** @hidden */
@@ -401,9 +405,13 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         upipe_avcdec->ubuf_mgr = NULL;
     }
 
+    bool use_ubuf_av = upipe_avcdec->uref == NULL ||
+        frame->format == upipe_avcdec->hw_pix_fmt ||
+        !(context->codec->capabilities & AV_CODEC_CAP_DR1);
+
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
         upipe_avcdec->flow_def_format = uref_dup(flow_def_attr);
-        if (frame->format == upipe_avcdec->hw_pix_fmt) {
+        if (use_ubuf_av) {
             upipe_avcdec->ubuf_mgr = ubuf_av_mgr_alloc();
             upipe_avcdec->flow_def_provided = flow_def_attr;
             if (upipe_avcdec->ubuf_mgr == NULL) {
@@ -423,8 +431,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
 
     /* Allocate a ubuf */
     struct ubuf *ubuf;
-    if (frame->format == upipe_avcdec->hw_pix_fmt ||
-        !(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
+    if (use_ubuf_av) {
         ubuf = ubuf_pic_av_alloc(upipe_avcdec->ubuf_mgr, frame);
         if (unlikely(ubuf == NULL)) {
             upipe_err_va(upipe, "cannot alloc ubuf for %s frame",
@@ -449,8 +456,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (frame->format == upipe_avcdec->hw_pix_fmt ||
-        !(context->codec->capabilities & AV_CODEC_CAP_DR1))
+    if (use_ubuf_av)
         return 0;
 
     /* Direct rendering */
@@ -499,15 +505,10 @@ static void upipe_av_uref_pic_free(void *opaque, uint8_t *data)
 
 static void upipe_av_uref_sound_free(void *opaque, uint8_t *data)
 {
-    struct uref *uref = opaque;
-
-    struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
-    assert(flow_def_attr);
-
+    AVBufferRef *opaque_ref = opaque;
+    struct uref *uref = av_buffer_get_opaque(opaque_ref);
     uref_sound_unmap(uref, 0, -1, AV_NUM_DATA_POINTERS);
-
-    uref_free(flow_def_attr);
-    uref_free(uref);
+    av_buffer_unref(&opaque_ref);
 }
 
 /** @internal @This is called by avcodec when allocating a new audio buffer.
@@ -521,18 +522,40 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
 {
     struct upipe *upipe = context->opaque;
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    struct uref *uref;
+    bool internal_frame = false;
 
-    if (unlikely(upipe_avcdec->uref == NULL))
-        return -1;
+    if (frame->opaque_ref == NULL) {
+        if (unlikely(upipe_avcdec->uref == NULL)) {
+            upipe_warn(upipe, "get_buffer called without uref");
+            return -1;
+        }
 
-    struct uref *uref = uref_dup(upipe_avcdec->uref);
-    frame->opaque = uref;
+        uref = uref_dup(upipe_avcdec->uref);
+        if (uref == NULL) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return -1;
+        }
+        frame->opaque_ref = av_buffer_create(NULL, 0, buffer_uref_free,
+                                             uref, 0);
+        if (frame->opaque_ref == NULL) {
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            uref_free(uref);
+            return -1;
+        }
+        internal_frame = true;
+    }
+
+    uref = av_buffer_get_opaque(frame->opaque_ref);
 
     uint64_t framenum = 0;
-    uref_pic_get_number(frame->opaque, &framenum);
+    uref_pic_get_number(uref, &framenum);
 
     upipe_verbose_va(upipe, "Allocating frame for %"PRIu64" (%p)",
-                     framenum, frame->opaque);
+                     framenum, uref);
+
+    if (internal_frame && !(context->codec->capabilities & AV_CODEC_CAP_DR1))
+        return avcodec_default_get_buffer2(context, frame, flags);
 
     /* Check if we have a new sample format. */
     if (unlikely(context->sample_fmt != upipe_avcdec->sample_fmt ||
@@ -567,23 +590,47 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
                                                  context->frame_size))
     UBASE_FATAL(upipe, uref_sound_flow_set_align(flow_def_attr, 32))
 
+    bool use_ubuf_av = upipe_avcdec->uref == NULL;
+
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
-        if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
-            uref_free(uref);
-            return -1;
+        if (use_ubuf_av) {
+            upipe_avcdec->ubuf_mgr = ubuf_av_mgr_alloc();
+            upipe_avcdec->flow_def_provided = flow_def_attr;
+            if (upipe_avcdec->ubuf_mgr == NULL) {
+                uref_free(uref);
+                return -1;
+            }
+        } else {
+            if (unlikely(!upipe_avcdec_demand_ubuf_mgr(upipe, flow_def_attr))) {
+                uref_free(uref);
+                return -1;
+            }
         }
     } else
         uref_free(flow_def_attr);
 
     flow_def_attr = uref_dup(upipe_avcdec->flow_def_provided);
 
-    struct ubuf *ubuf = ubuf_sound_alloc(upipe_avcdec->ubuf_mgr,
-                                         frame->nb_samples);
-    if (unlikely(ubuf == NULL)) {
-        uref_free(uref);
-        uref_free(flow_def_attr);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return -1;
+    struct ubuf *ubuf;
+    if (use_ubuf_av) {
+        ubuf = ubuf_sound_av_alloc(upipe_avcdec->ubuf_mgr, frame);
+        if (unlikely(ubuf == NULL)) {
+            upipe_err(upipe, "cannot alloc sound ubuf");
+            uref_free(uref);
+            uref_free(flow_def_attr);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return -1;
+        }
+        av_buffer_unref(&frame->opaque_ref);
+    } else {
+        ubuf = ubuf_sound_alloc(upipe_avcdec->ubuf_mgr,
+                                frame->nb_samples);
+        if (unlikely(ubuf == NULL)) {
+            uref_free(uref);
+            uref_free(flow_def_attr);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return -1;
+        }
     }
     uref_attach_ubuf(uref, ubuf);
 
@@ -591,8 +638,8 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
      * later. */
     uref->uchain.next = uref_to_uchain(flow_def_attr);
 
-    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1))
-        return avcodec_default_get_buffer2(context, frame, 0);
+    if (use_ubuf_av)
+        return 0;
 
     /* Direct rendering */
     if (unlikely(!ubase_check(ubuf_sound_write_uint8_t(ubuf, 0, -1, frame->data,
@@ -608,7 +655,7 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
 
     frame->buf[0] = av_buffer_create(frame->data[0],
             frame->linesize[0] * context->channels, upipe_av_uref_sound_free,
-            uref, 0);
+            av_buffer_ref(frame->opaque_ref), 0);
 
     if (!av_sample_fmt_is_planar(context->sample_fmt))
         frame->linesize[0] *= context->channels;
@@ -674,12 +721,16 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             context->get_buffer2 = NULL;
             break;
         case AVMEDIA_TYPE_VIDEO:
+#ifndef USE_COPY_OPAQUE
             context->get_buffer2 = upipe_avcdec_get_buffer_pic;
+#endif
             if (upipe_avcdec->hw_pix_fmt != AV_PIX_FMT_NONE)
                 context->get_format = upipe_avcodec_get_format;
             break;
         case AVMEDIA_TYPE_AUDIO:
+#ifndef USE_COPY_OPAQUE
             context->get_buffer2 = upipe_avcdec_get_buffer_sound;
+#endif
             break;
         default:
             /* This should not happen */
@@ -713,6 +764,10 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
                         av_hwdevice_get_type_name(upipe_avcdec->hw_device_type),
                         upipe_avcdec->hw_device ?: "default");
     }
+
+#ifdef USE_COPY_OPAQUE
+    context->flags |= AV_CODEC_FLAG_COPY_OPAQUE;
+#endif
 
     /* open new context */
     if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
@@ -986,6 +1041,14 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     struct uref *uref = upipe_avcdec->uref;
     int width = upipe_avcdec->context->width;
     int height = upipe_avcdec->context->height;
+
+#ifdef USE_COPY_OPAQUE
+    uref = uref_dup(av_buffer_get_opaque(upipe_avcdec->avpkt->opaque_ref));
+    if (unlikely(uref == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+#endif
 
     if (!width || !height) {
         upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
@@ -1274,7 +1337,7 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVCodecContext *context = upipe_avcdec->context;
     AVFrame *frame = upipe_avcdec->frame;
-    struct uref *uref = frame->opaque;
+    struct uref *uref = av_buffer_get_opaque(frame->opaque_ref);
     struct uref *flow_def_attr = uref_from_uchain(uref->uchain.next);
 
     uint64_t framenum = 0;
@@ -1283,34 +1346,32 @@ static void upipe_avcdec_output_sound(struct upipe *upipe,
     upipe_verbose_va(upipe, "%"PRIu64"\t - Frame decoded ! %"PRIu64" (%p)",
                      upipe_avcdec->counter, framenum, uref);
 
-    /* In case it has been reduced. */
-    UBASE_ERROR(upipe, uref_sound_resize(uref, 0, frame->nb_samples))
+    /* allocate new ubuf with wrapped avframe */
+    bool use_ubuf_av = uref->ubuf == NULL;
+    if (use_ubuf_av) {
+        int ret;
+        if (unlikely((ret = upipe_avcdec_get_buffer_sound(context, frame, 0)) < 0)) {
+            upipe_err_va(upipe, "couldn't get frame buffer: %s", av_err2str(ret));
+            upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+            return;
+        }
+    }
 
+    flow_def_attr = uref_from_uchain(uref->uchain.next);
     /* Duplicate uref because it is freed in _release, because the ubuf
      * is still in use by avcodec. */
+    struct uref *old_uref = uref;
     uref = uref_dup(uref);
     if (unlikely(uref == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
 
-    if (!(context->codec->capabilities & AV_CODEC_CAP_DR1)) {
-        /* Not direct rendering, copy data. */
-        uint8_t *buffers[AV_NUM_DATA_POINTERS];
-        if (unlikely(!ubase_check(uref_sound_write_uint8_t(uref, 0, -1,
-                                        buffers, AV_NUM_DATA_POINTERS)))) {
-            uref_free(flow_def_attr);
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-        int err = av_samples_copy(buffers, frame->data, 0, 0, frame->nb_samples,
-                                  context->channels, context->sample_fmt);
-        UBASE_ERROR(upipe, uref_sound_unmap(uref, 0, -1,
-                                            AV_NUM_DATA_POINTERS))
-        if (err < 0)
-            upipe_warn_va(upipe, "av_samples_copy error %d", err);
-    }
+    if (use_ubuf_av)
+        ubuf_free(uref_detach_ubuf(old_uref));
+
+    /* In case it has been reduced. */
+    uref_sound_resize(uref, 0, frame->nb_samples);
 
     /* samples in uref */
     UBASE_FATAL(upipe, uref_sound_flow_set_samples(uref, frame->nb_samples))
@@ -1434,10 +1495,16 @@ static bool upipe_avcdec_decode_avpkt(struct upipe *upipe, AVPacket *avpkt,
 static void upipe_avcdec_store_uref(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+
+#ifdef USE_COPY_OPAQUE
+    upipe_avcdec->avpkt->opaque_ref =
+        av_buffer_create(NULL, 0, buffer_uref_free, uref, 0);
+#else
     if (upipe_avcdec->uref != NULL && upipe_avcdec->uref->uchain.next != NULL)
         uref_free(uref_from_uchain(upipe_avcdec->uref->uchain.next));
     uref_free(upipe_avcdec->uref);
     upipe_avcdec->uref = uref;
+#endif
 }
 
 /** @internal @This decodes packets.
