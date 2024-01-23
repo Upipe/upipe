@@ -42,6 +42,7 @@
 #include "upipe/upump.h"
 #include "upump-ev/upump_ev.h"
 #include "upipe-gl/upipe_glx_sink.h"
+#include "upipe-gl/uprobe_gl_sink.h"
 #include "upipe-gl/uprobe_gl_sink_cube.h"
 
 #include <stdio.h>
@@ -185,9 +186,10 @@ int main(int argc, char **argv)
     /* glx sink */
     struct upipe_mgr *glx_mgr = upipe_glx_sink_mgr_alloc();
     for (i=0; i < SINK_NUM; i++) {
-        glx_sink[i] = upipe_void_alloc(glx_mgr, uprobe_gl_sink_cube_alloc(
-                uprobe_pfx_alloc_va(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                                    "glx %d", i)));
+        glx_sink[i] = upipe_void_alloc(glx_mgr, uprobe_gl_sink_alloc(
+                    uprobe_gl_sink_cube_alloc(
+                        uprobe_pfx_alloc_va(uprobe_use(logger),
+                            UPROBE_LOG_LEVEL, "glx %d", i))));
         assert(glx_sink[i]);
         ubase_assert(upipe_set_flow_def(glx_sink[i], flow_def));
         upipe_glx_sink_init(glx_sink[i], 0, 0, 640, 480);
