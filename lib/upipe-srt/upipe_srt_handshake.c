@@ -66,7 +66,7 @@ struct upipe_srt_handshake {
 
     struct upump_mgr *upump_mgr;
     struct upump *upump_timer;
-    struct upump *upump_timeout;
+    struct upump *upump_handshake_timeout;
     struct upump *upump_keepalive_timeout;
     struct uclock *uclock;
     struct urequest uclock_request;
@@ -137,7 +137,7 @@ UPIPE_HELPER_VOID(upipe_srt_handshake)
 UPIPE_HELPER_OUTPUT(upipe_srt_handshake, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UPUMP_MGR(upipe_srt_handshake, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_timer, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_timeout, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_handshake_timeout, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_keepalive_timeout, upump_mgr)
 UPIPE_HELPER_UCLOCK(upipe_srt_handshake, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
@@ -281,7 +281,7 @@ static void upipe_srt_handshake_timeout(struct upump *upump)
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
     upipe_err(upipe, "Connection timed out");
-    upipe_srt_handshake_set_upump_timeout(upipe, NULL);
+    upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
     upipe_srt_handshake->expect_conclusion = false;
 }
 
@@ -347,7 +347,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_handshake_init_upump_mgr(upipe);
     upipe_srt_handshake_init_upump_timer(upipe);
-    upipe_srt_handshake_init_upump_timeout(upipe);
+    upipe_srt_handshake_init_upump_handshake_timeout(upipe);
     upipe_srt_handshake_init_upump_keepalive_timeout(upipe);
     upipe_srt_handshake_init_uclock(upipe);
     upipe_srt_handshake_require_uclock(upipe);
@@ -523,7 +523,7 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_srt_handshake_set_upump_timer(upipe, NULL);
-            upipe_srt_handshake_set_upump_timeout(upipe, NULL);
+            upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
             upipe_srt_handshake_set_upump_keepalive_timeout(upipe, NULL);
             return upipe_srt_handshake_attach_upump_mgr(upipe);
 
@@ -647,7 +647,7 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     upipe_srt_handshake->expect_conclusion = false;
-    upipe_srt_handshake_set_upump_timeout(upipe, NULL);
+    upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
 
     struct uref *flow_def;
     if (ubase_check(upipe_srt_handshake_get_flow_def(upipe, &flow_def))) {
@@ -806,7 +806,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     uint32_t syn_cookie = srt_get_handshake_syn_cookie(cif);
     uint32_t dst_socket_id = srt_get_packet_dst_socket_id(buf);
 
-    if (!upipe_srt_handshake->upump_timeout) {
+    if (!upipe_srt_handshake->upump_handshake_timeout) {
         /* connection has to succeed within 3 seconds */
         struct upump *upump =
             upump_alloc_timer(upipe_srt_handshake->upump_mgr,
@@ -814,7 +814,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                               upipe, upipe->refcount,
                               3 * UCLOCK_FREQ, 0);
         upump_start(upump);
-        upipe_srt_handshake_set_upump_timeout(upipe, upump);
+        upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
     }
 
     if (!upipe_srt_handshake->listener) {
@@ -1519,7 +1519,7 @@ static void upipe_srt_handshake_free(struct upipe *upipe)
 
     upipe_srt_handshake_clean_output(upipe);
     upipe_srt_handshake_clean_upump_timer(upipe);
-    upipe_srt_handshake_clean_upump_timeout(upipe);
+    upipe_srt_handshake_clean_upump_handshake_timeout(upipe);
     upipe_srt_handshake_clean_upump_keepalive_timeout(upipe);
     upipe_srt_handshake_clean_upump_mgr(upipe);
     upipe_srt_handshake_clean_uclock(upipe);
