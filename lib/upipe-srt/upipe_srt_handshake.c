@@ -281,7 +281,7 @@ static void upipe_srt_handshake_timeout(struct upump *upump)
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
     upipe_err(upipe, "Connection timed out");
-    upipe_srt_handshake_set_upump_keepalive_timeout(upipe, NULL);
+    upipe_srt_handshake_set_upump_timeout(upipe, NULL);
     upipe_srt_handshake->expect_conclusion = false;
 }
 
