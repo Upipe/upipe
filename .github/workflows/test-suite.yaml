@@ -64,7 +64,7 @@ jobs:
           sudo chmod +x /usr/local/bin/set-env
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install compiler (gcc)
         if: runner.os == 'Linux' && matrix.compiler == 'gcc'
@@ -205,7 +205,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         env:
