@@ -53,9 +53,14 @@ jobs:
             compiler: gcc
             version: 14
 
-          - name: macos-13-xcode
+          - name: macos-13-amd64-xcode
             os: macos-13
             compiler: xcode
+
+          - name: macos-14-arm64-xcode
+            os: macos-14
+            compiler: xcode
+            luajit: false
 
     steps:
       - name: Set up env
@@ -156,7 +161,7 @@ jobs:
           BREW_PREFIX="$(brew --prefix)"
           set-env HOST_CC "clang"
           set-env HOST_CXX "clang++"
-          set-env CFLAGS "-Wno-error=unused-command-line-argument -Wno-error=deprecated-declarations -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-optimize-sibling-calls -I$BREW_PREFIX/include"
+          set-env CFLAGS "-Wno-error=deprecated-declarations -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fsanitize-recover=all -fno-omit-frame-pointer -fno-optimize-sibling-calls -I$BREW_PREFIX/include"
           set-env LDFLAGS "-fsanitize=undefined -fsanitize=address -L$BREW_PREFIX/lib"
           set-env DISABLE_VALGRIND "1"
           set-env INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
@@ -167,10 +172,6 @@ jobs:
           git clone --depth 1 https://code.videolan.org/videolan/bitstream.git
           make -C bitstream install PREFIX="$PWD/usr-bitstream"
           set-env PKG_CONFIG_PATH "$PKG_CONFIG_PATH:$PWD/usr-bitstream/share/pkgconfig"
-          if [ "${{ matrix.static }}" = "true" ]; then
-            STATIC="--disable-shared"
-          fi
-          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g -gdwarf-4 -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
 
       - name: Build and install libamt
         if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
@@ -199,6 +200,14 @@ jobs:
       - name: Configure
         run: |
           autoreconf -i
+          if [ "${{ matrix.static }}" = "true" ]; then
+            STATIC="--disable-shared"
+          fi
+          if [ "${{ matrix.luajit }}" != "false" ]; then
+            LUAJIT="--enable-luajit"
+          fi
+          CONFIGURE_FLAGS="$LUAJIT $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g -gdwarf-4 -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          set-env CONFIGURE_FLAGS "$CONFIGURE_FLAGS"
           eval ./configure $CONFIGURE_FLAGS
 
       - name: Archive config log
