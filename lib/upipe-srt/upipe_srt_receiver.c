@@ -825,7 +825,7 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_srt_receiver->upump_mgr && !upipe_srt_receiver->upump_timer) {
+    if (upipe_srt_receiver->upump_mgr && !upipe_srt_receiver->upump_timer && upipe_srt_receiver->control) {
         struct upump *upump =
             upump_alloc_timer(upipe_srt_receiver->upump_mgr,
                               upipe_srt_receiver_timer,
