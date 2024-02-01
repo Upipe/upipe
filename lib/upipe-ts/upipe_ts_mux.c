@@ -348,6 +348,8 @@ struct upipe_ts_mux {
     size_t mtu;
     /** size of the TB buffer */
     size_t tb_size;
+    /** force PES alignment */
+    bool force_pes_alignment;
 
     /** list of PIDs carrying PSI */
     struct uchain psi_pids;
@@ -1367,6 +1369,10 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         }
     }
     UBASE_FATAL(upipe, uref_ts_flow_set_pid(flow_def_dup, pid));
+    if (upipe_ts_mux->force_pes_alignment && !pes_alignment) {
+        upipe_notice(upipe, "forcing PES alignment");
+        pes_alignment = true;
+    }
 
     if (!ubase_ncmp(def, "void.scte35.")) { /* SCTE-35 */
         input->cr_sys = UINT64_MAX;
@@ -2864,6 +2870,7 @@ static struct upipe *upipe_ts_mux_alloc(struct upipe_mgr *mgr,
     upipe_ts_mux->required_octetrate = 0;
     upipe_ts_mux->octetrate_in_progress = false;
     upipe_ts_mux->interval = 0;
+    upipe_ts_mux->force_pes_alignment = false;
 
     ulist_init(&upipe_ts_mux->psi_pids);
     ulist_init(&upipe_ts_mux->psi_pids_splice);
@@ -4644,6 +4651,20 @@ static int _upipe_ts_mux_get_pes_min_duration(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This forces the PES alignment on all outputs.
+ *
+ * @param upipe description structure of the pipe
+ * @param force true if all the output PES must be align
+ * @return an error code
+ */
+static int _upipe_ts_mux_force_pes_alignment(struct upipe *upipe,
+                                             bool force)
+{
+    struct upipe_ts_mux *mux = upipe_ts_mux_from_upipe(upipe);
+    mux->force_pes_alignment = force;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the default minimum PES duration.
  *
  * @param upipe description structure of the pipe
@@ -4908,6 +4929,11 @@ static int _upipe_ts_mux_control(struct upipe *upipe, int command, va_list args)
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
             uint64_t *duration = va_arg(args, uint64_t *);
             return _upipe_ts_mux_get_pes_min_duration(upipe, duration);
+        }
+        case UPIPE_TS_MUX_FORCE_PES_ALIGNMENT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_MUX_SIGNATURE)
+            int force = va_arg(args, int);
+            return _upipe_ts_mux_force_pes_alignment(upipe, !!force);
         }
 
         case UPIPE_TS_MUX_GET_VERSION:
