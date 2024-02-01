@@ -173,6 +173,8 @@ enum upipe_ts_mux_command {
     UPIPE_TS_MUX_SET_PES_MIN_DURATION,
     /** returns the default minimum PES duration (uint64_t *) */
     UPIPE_TS_MUX_GET_PES_MIN_DURATION,
+    /** forces PES alignment (int) */
+    UPIPE_TS_MUX_FORCE_PES_ALIGNMENT,
 
     /** ts_encaps commands begin here */
     UPIPE_TS_MUX_ENCAPS = UPIPE_CONTROL_LOCAL + 0x1000,
@@ -779,6 +781,19 @@ static inline int upipe_ts_mux_set_pes_min_duration(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_MUX_SET_PES_MIN_DURATION,
                          UPIPE_TS_MUX_SIGNATURE, duration);
+}
+
+/** @@This forces the PES alignment on all outputs.
+ *
+ * @param upipe description structure of the pipe
+ * @param force true if all the output PES must be align
+ * @return an error code
+ */
+static inline int upipe_ts_mux_force_pes_alignment(struct upipe *upipe,
+                                                   bool force)
+{
+    return upipe_control(upipe, UPIPE_TS_MUX_FORCE_PES_ALIGNMENT,
+                         UPIPE_TS_MUX_SIGNATURE, force ? 1 : 0);
 }
 
 /** @This stops updating a PSI table upon sub removal.
