@@ -953,451 +953,484 @@ error:
 }
 #endif
 
+struct hs_packet {
+    uint8_t *ext_buf;
+    uint32_t version;
+    uint16_t encryption;
+    uint16_t extension;
+    uint32_t syn_cookie;
+    uint32_t dst_socket_id;
+    uint32_t remote_socket_id;
+    uint32_t isn;
+    uint32_t mtu;
+    uint32_t mfw;
+};
+
+static struct uref *upipe_srt_handshake_handle_hs_caller_conclusion(struct upipe *upipe, int size, uint32_t timestamp, const struct hs_packet *hs_packet)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+
+    upipe_srt_handshake_set_upump_timer(upipe, NULL);
+    upipe_srt_handshake->remote_socket_id = hs_packet->remote_socket_id;
+
+    /* At least HSREQ is expected */
+    if (size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
+        upipe_err_va(upipe, "Malformed conclusion handshake (size %u)", size);
+        upipe_srt_handshake->expect_conclusion = false;
+        return NULL;
+    }
+
+    uint8_t *ext = hs_packet->ext_buf;
+
+    while (size >= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) {
+        uint16_t ext_type = srt_get_handshake_extension_type(ext);
+        uint16_t ext_len = 4 * srt_get_handshake_extension_len(ext);
+
+        size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+
+        if (ext_len > size) {
+            upipe_err_va(upipe, "Malformed extension: %u > %u", ext_len, size);
+            break;
+        }
+
+        if (ext_type == SRT_HANDSHAKE_EXT_TYPE_HSRSP) {
+            if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE)
+                upipe_srt_handshake_parse_hsreq(upipe, ext);
+            else
+                upipe_err_va(upipe, "Malformed HSRSP: %u < %u\n", ext_len,
+                        SRT_HANDSHAKE_HSREQ_SIZE);
+        }
+
+        ext += ext_len;
+        size -= ext_len;
+    }
+
+    upipe_srt_handshake_finalize(upipe);
+    return NULL;
+}
+
+static struct uref *upipe_srt_handshake_handle_hs_caller_induction(struct upipe *upipe, int size, uint32_t timestamp, const struct hs_packet *hs_packet)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+
+    if (hs_packet->version != SRT_HANDSHAKE_VERSION || hs_packet->dst_socket_id != upipe_srt_handshake->socket_id) {
+        upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
+                hs_packet->dst_socket_id, upipe_srt_handshake->socket_id);
+        return NULL;
+    }
+
+    if (!upipe_srt_handshake->upump_handshake_timeout) {
+        /* connection has to succeed within 3 seconds */
+        struct upump *upump =
+            upump_alloc_timer(upipe_srt_handshake->upump_mgr,
+                    upipe_srt_handshake_timeout,
+                    upipe, upipe->refcount,
+                    3 * UCLOCK_FREQ, 0);
+        upump_start(upump);
+        upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
+    }
+
+    upipe_srt_handshake->mtu = hs_packet->mtu;
+    upipe_srt_handshake->mfw = hs_packet->mfw;
+    upipe_srt_handshake->isn = hs_packet->isn;
+
+    upipe_dbg_va(upipe, "mtu %u mfw %u isn %u", upipe_srt_handshake->mtu, upipe_srt_handshake->mfw, upipe_srt_handshake->isn);
+    upipe_verbose_va(upipe, "cookie %08x", hs_packet->syn_cookie);
+
+    upipe_srt_handshake->syn_cookie = hs_packet->syn_cookie;
+    const size_t ext_size = SRT_HANDSHAKE_HSREQ_SIZE;
+    size = ext_size + SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+    uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
+
+#ifdef UPIPE_HAVE_GCRYPT_H
+    const uint8_t klen = upipe_srt_handshake->sek_len;
+    // XXX: move to bitstream?
+    const uint8_t kk = 3;
+    size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
+    if (upipe_srt_handshake->password) {
+        size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
+        extension |= SRT_HANDSHAKE_EXT_KMREQ;
+    }
+#endif
+    if (upipe_srt_handshake->stream_id) {
+        size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + upipe_srt_handshake->stream_id_len;
+        extension |= SRT_HANDSHAKE_EXT_CONFIG;
+    }
+
+    uint8_t *out_cif;
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif);
+    if (!uref)
+        return NULL;
+
+    uint8_t *out_ext = srt_get_handshake_extension_buf(out_cif);
+
+    srt_set_handshake_extension(out_cif, extension);
+    srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_CONCLUSION);
+    srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_HSREQ);
+    srt_set_handshake_extension_len(out_ext, ext_size / 4);
+    size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+    out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+
+    srt_set_handshake_extension_srt_version(out_ext, 2, 2, 2); // made up version
+    uint32_t flags = SRT_HANDSHAKE_EXT_FLAG_CRYPT | SRT_HANDSHAKE_EXT_FLAG_PERIODICNAK
+        | SRT_HANDSHAKE_EXT_FLAG_REXMITFLG | SRT_HANDSHAKE_EXT_FLAG_TSBPDSND | SRT_HANDSHAKE_EXT_FLAG_TSBPDRCV | SRT_HANDSHAKE_EXT_FLAG_TLPKTDROP;
+    srt_set_handshake_extension_srt_flags(out_ext, flags);
+
+    srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
+    srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
+    size -= ext_size;
+    out_ext += ext_size;
+
+    if (upipe_srt_handshake->stream_id) {
+        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_SID);
+        srt_set_handshake_extension_len(out_ext, upipe_srt_handshake->stream_id_len / 4);
+        size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        memcpy(out_ext, upipe_srt_handshake->stream_id, upipe_srt_handshake->stream_id_len);
+        size -= upipe_srt_handshake->stream_id_len;
+        out_ext += upipe_srt_handshake->stream_id_len;
+    }
+
+#ifdef UPIPE_HAVE_GCRYPT_H
+    if (upipe_srt_handshake->password) {
+        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_KMREQ);
+        srt_set_handshake_extension_len(out_ext, (size - SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) / 4);
+        size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+
+        memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
+
+        out_ext[0] = 0x12;  // S V PT
+        out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
+        srt_km_set_kk(out_ext, kk);
+        srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
+        out_ext[10] = 2; // SE
+        out_ext[14] = 4; // slen;
+
+        uint8_t wrap[8+256/8] = {0};
+
+        srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
+        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
+
+        uint8_t kek[32];
+        gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
+                strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
+                &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
+        if (err) {
+            upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
+            return false;
+        }
+
+        gcry_cipher_hd_t aes;
+        err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
+        if (err) {
+            upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
+            return false;
+        }
+
+        err = gcry_cipher_setkey(aes, kek, klen);
+        if (err) {
+            gcry_cipher_close(aes);
+            upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
+            return false;
+        }
+
+        uint8_t clear_wrap[2*256/8];
+        memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
+        memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
+        err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
+        if (err) {
+            gcry_cipher_close(aes);
+            upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
+            return false;
+        }
+
+        gcry_cipher_close(aes);
+
+        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+    }
+#endif
+
+    upipe_srt_handshake->expect_conclusion = true;
+
+    uref_block_unmap(uref, 0);
+    return uref;
+}
+
+static struct uref *upipe_srt_handshake_handle_hs_listener_induction(struct upipe *upipe, int size, uint32_t timestamp, const struct hs_packet *hs_packet)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+
+    if (hs_packet->version != SRT_HANDSHAKE_VERSION_MIN || hs_packet->encryption != SRT_HANDSHAKE_CIPHER_NONE ||
+            hs_packet->extension != SRT_HANDSHAKE_EXT_KMREQ ||
+            hs_packet->syn_cookie != 0 || hs_packet->dst_socket_id != 0) {
+        upipe_err_va(upipe, "Malformed first handshake syn %u dst_id %u", hs_packet->syn_cookie, hs_packet->dst_socket_id);
+        return NULL;
+    }
+
+    if (!upipe_srt_handshake->upump_handshake_timeout) {
+        /* connection has to succeed within 3 seconds */
+        struct upump *upump =
+            upump_alloc_timer(upipe_srt_handshake->upump_mgr,
+                    upipe_srt_handshake_timeout,
+                    upipe, upipe->refcount,
+                    3 * UCLOCK_FREQ, 0);
+        upump_start(upump);
+        upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
+    }
+
+    timestamp = 0;
+    upipe_srt_handshake->remote_socket_id = hs_packet->remote_socket_id;
+    upipe_srt_handshake->socket_id = mrand48();
+    upipe_srt_handshake->syn_cookie = mrand48();
+
+    uint8_t *out_cif;
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+    if (!uref)
+        return NULL;
+
+    srt_set_handshake_extension(out_cif, SRT_MAGIC_CODE);
+    srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_INDUCTION);
+
+    upipe_srt_handshake->expect_conclusion = true;
+
+    uref_block_unmap(uref, 0);
+    return uref;
+}
+
+static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upipe *upipe, int size, uint32_t timestamp, const struct hs_packet *hs_packet)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+
+    if (hs_packet->syn_cookie != upipe_srt_handshake->syn_cookie
+            || hs_packet->dst_socket_id != 0) {
+        upipe_err(upipe, "Malformed conclusion handshake");
+        upipe_srt_handshake->expect_conclusion = false;
+        return NULL;
+    }
+
+    /* At least HSREQ is expected */
+    if (hs_packet->version == SRT_HANDSHAKE_VERSION && size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
+        upipe_err(upipe, "Malformed conclusion handshake (size)");
+        upipe_srt_handshake->expect_conclusion = false;
+        return NULL;
+    }
+
+    upipe_srt_handshake->isn = hs_packet->isn;
+
+    uint8_t *ext = hs_packet->ext_buf;
+
+    uint8_t kk = 0;
+    const uint8_t *wrap;
+    uint8_t wrap_len = 0;
+
+    while (size >= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) {
+        uint16_t ext_type = srt_get_handshake_extension_type(ext);
+        uint16_t ext_len = 4 * srt_get_handshake_extension_len(ext);
+
+        size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+
+        if (ext_len > size) {
+            upipe_err_va(upipe, "Malformed extension: %u > %u", ext_len, size);
+            break;
+        }
+
+        if (ext_type == SRT_HANDSHAKE_EXT_TYPE_HSREQ) {
+            if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE)
+                upipe_srt_handshake_parse_hsreq(upipe, ext);
+            else
+                upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
+                        SRT_HANDSHAKE_HSREQ_SIZE);
+        } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
+            if (!srt_check_km(ext, ext_len) || !upipe_srt_handshake_parse_kmreq(upipe, ext, &kk, &wrap, &wrap_len))
+                upipe_err(upipe, "Malformed KMREQ");
+        }
+
+        ext += ext_len;
+        size -= ext_len;
+    }
+
+    int extension = 0;
+    if (hs_packet->version == SRT_HANDSHAKE_VERSION) {
+        extension = SRT_HANDSHAKE_EXT_HSREQ;
+        size = SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE;
+    }
+    if (wrap_len) {
+        size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
+        extension |= SRT_HANDSHAKE_EXT_KMREQ;
+    }
+    if (upipe_srt_handshake->stream_id) {
+        size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + upipe_srt_handshake->stream_id_len;
+        extension |= SRT_HANDSHAKE_EXT_CONFIG;
+    }
+
+    uint8_t *out_cif;
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif);
+    if (!uref)
+        return NULL;
+
+    if (extension)
+        srt_set_handshake_extension(out_cif, extension);
+    else
+        srt_set_handshake_extension(out_cif, 2 /* SRT_DGRAM */);
+    srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_CONCLUSION);
+
+    uint8_t *out_ext = srt_get_handshake_extension_buf(out_cif);
+    if (hs_packet->version == SRT_HANDSHAKE_VERSION) {
+        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_HSRSP);
+        srt_set_handshake_extension_len(out_ext, SRT_HANDSHAKE_HSREQ_SIZE / 4);
+        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
+                upipe_srt_handshake->minor, upipe_srt_handshake->patch);
+        srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
+        srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
+        srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
+
+        out_ext += SRT_HANDSHAKE_HSREQ_SIZE;
+    } else
+        srt_set_handshake_version(out_cif, SRT_HANDSHAKE_VERSION_MIN);
+
+    if (upipe_srt_handshake->stream_id) {
+        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_SID);
+        srt_set_handshake_extension_len(out_ext, upipe_srt_handshake->stream_id_len / 4);
+        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        memcpy(out_ext, upipe_srt_handshake->stream_id, upipe_srt_handshake->stream_id_len);
+        out_ext += upipe_srt_handshake->stream_id_len;
+    }
+
+    if (wrap_len) {
+        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_KMRSP);
+        srt_set_handshake_extension_len(out_ext, (SRT_KMREQ_COMMON_SIZE + wrap_len) / 4);
+        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
+        memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
+        // XXX: move to bitstream?
+
+        out_ext[0] = 0x12;  // S V PT
+        out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
+        srt_km_set_kk(out_ext, kk);
+        srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
+        out_ext[10] = 2; // SE
+        out_ext[14] = 4; // slen;
+        srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
+        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
+        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+    }
+
+    if (hs_packet->version == SRT_HANDSHAKE_VERSION_MIN) {
+        struct uref *next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
+                upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_HANDSHAKE_HSREQ_SIZE);
+        if (!next)
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        else {
+            uint8_t *out;
+            int output_size = -1;
+            if (likely(ubase_check(uref_block_write(next, 0, &output_size, &out)))) {
+                srt_set_packet_control(out, true);
+                srt_set_packet_timestamp(out, timestamp);
+                srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
+
+                srt_set_control_packet_type(out, SRT_CONTROL_TYPE_USER);
+                srt_set_control_packet_subtype(out, SRT_HANDSHAKE_EXT_TYPE_HSREQ);
+                srt_set_control_packet_type_specific(out, 0);
+
+                uint8_t *out_ext = &out[SRT_HEADER_SIZE];
+                srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
+                        upipe_srt_handshake->minor, upipe_srt_handshake->patch);
+                srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
+                srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
+                srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
+
+                uref_block_unmap(next, 0);
+                uref->uchain.next = &next->uchain;
+            } else {
+                uref_free(next);
+            }
+        }
+
+#ifdef UPIPE_HAVE_GCRYPT_H
+        if (upipe_srt_handshake->password) {
+            next = upipe_srt_handshake_make_kmreq(upipe, timestamp);
+            if (next)
+                uref->uchain.next->next = &next->uchain;
+        }
+#endif
+    }
+
+    upipe_srt_handshake_finalize(upipe);
+
+    uref_block_unmap(uref, 0);
+    return uref;
+}
+
 static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
 
-    uint8_t *out_cif;
+    struct hs_packet hs_packet;
+
     const uint8_t *cif = srt_get_control_packet_cif(buf);
-    if (!srt_check_handshake(cif, size - SRT_HEADER_SIZE)) {
+    size -= SRT_HEADER_SIZE;
+    if (!srt_check_handshake(cif, size)) {
         upipe_err(upipe, "Malformed handshake");
         return NULL;
     }
 
-    uint32_t version = srt_get_handshake_version(cif);
-    uint16_t encryption = srt_get_handshake_encryption(cif);
-    uint16_t extension = srt_get_handshake_extension(cif);
+    hs_packet.version = srt_get_handshake_version(cif);
+    hs_packet.encryption = srt_get_handshake_encryption(cif);
+    hs_packet.extension = srt_get_handshake_extension(cif);
+    hs_packet.syn_cookie = srt_get_handshake_syn_cookie(cif);
+    hs_packet.dst_socket_id = srt_get_packet_dst_socket_id(buf);
+    hs_packet.remote_socket_id = srt_get_handshake_socket_id(cif);
+    hs_packet.mtu = srt_get_handshake_mtu(cif);
+    hs_packet.mfw = srt_get_handshake_mfw(cif);
+    hs_packet.isn = srt_get_handshake_isn(cif);
+    hs_packet.ext_buf = srt_get_handshake_extension_buf((uint8_t*)cif);
+
+    size -= SRT_HANDSHAKE_CIF_SIZE;
+
     uint32_t hs_type = srt_get_handshake_type(cif);
-    uint32_t syn_cookie = srt_get_handshake_syn_cookie(cif);
-    uint32_t dst_socket_id = srt_get_packet_dst_socket_id(buf);
-
-    if (!upipe_srt_handshake->listener) {
-        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
-            upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
-            upipe_srt_handshake->expect_conclusion = false;
-            return NULL;
-        }
-
-        if (upipe_srt_handshake->expect_conclusion) {
-            if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
-                upipe_err_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
-                return NULL;
-            }
-
-            upipe_srt_handshake_set_upump_timer(upipe, NULL);
-            upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
-
-            /* At least HSREQ is expected */
-            size -= SRT_HEADER_SIZE + SRT_HANDSHAKE_CIF_SIZE;
-            if (size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
-                upipe_err_va(upipe, "Malformed conclusion handshake (size %u)", size);
-                upipe_srt_handshake->expect_conclusion = false;
-                return NULL;
-            }
-
-            uint8_t *ext = srt_get_handshake_extension_buf((uint8_t*)cif);
-
-            while (size >= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) {
-                uint16_t ext_type = srt_get_handshake_extension_type(ext);
-                uint16_t ext_len = 4 * srt_get_handshake_extension_len(ext);
-
-                size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-                ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-
-                if (ext_len > size) {
-                    upipe_err_va(upipe, "Malformed extension: %u > %u", ext_len, size);
-                    break;
-                }
-
-                if (ext_type == SRT_HANDSHAKE_EXT_TYPE_HSRSP) {
-                    if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE)
-                        upipe_srt_handshake_parse_hsreq(upipe, ext);
-                    else
-                        upipe_err_va(upipe, "Malformed HSRSP: %u < %u\n", ext_len,
-                                SRT_HANDSHAKE_HSREQ_SIZE);
-                }
-
-                ext += ext_len;
-                size -= ext_len;
-            }
-
-            upipe_srt_handshake_finalize(upipe);
-            return NULL;
-        }
-
-        /* */
-
-        if (upipe_srt_handshake->upump_keepalive_timeout) {
-            upipe_dbg(upipe, "Ignore handshake, already connected");
-            return NULL;
-        }
-
-        if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
-            upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
-            return NULL;
-        }
-
-        if (version != SRT_HANDSHAKE_VERSION || dst_socket_id != upipe_srt_handshake->socket_id) {
-            upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
-                    dst_socket_id, upipe_srt_handshake->socket_id);
-            return NULL;
-        }
-
-        if (!upipe_srt_handshake->upump_handshake_timeout) {
-            /* connection has to succeed within 3 seconds */
-            struct upump *upump =
-                upump_alloc_timer(upipe_srt_handshake->upump_mgr,
-                        upipe_srt_handshake_timeout,
-                        upipe, upipe->refcount,
-                        3 * UCLOCK_FREQ, 0);
-            upump_start(upump);
-            upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
-        }
-
-        upipe_srt_handshake->mtu = srt_get_handshake_mtu(cif);
-        upipe_srt_handshake->mfw = srt_get_handshake_mfw(cif);
-        upipe_srt_handshake->isn = srt_get_handshake_isn(cif);
-
-        upipe_dbg_va(upipe, "mtu %u mfw %u isn %u", upipe_srt_handshake->mtu, upipe_srt_handshake->mfw, upipe_srt_handshake->isn);
-        upipe_verbose_va(upipe, "cookie %08x", syn_cookie);
-
-        upipe_srt_handshake->syn_cookie = syn_cookie;
-        const size_t ext_size = SRT_HANDSHAKE_HSREQ_SIZE;
-        size_t size = ext_size + SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-        uint16_t extension = SRT_HANDSHAKE_EXT_HSREQ;
-
-#ifdef UPIPE_HAVE_GCRYPT_H
-        const uint8_t klen = upipe_srt_handshake->sek_len;
-        // XXX: move to bitstream?
-        const uint8_t kk = 3;
-        size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
-        if (upipe_srt_handshake->password) {
-            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
-            extension |= SRT_HANDSHAKE_EXT_KMREQ;
-        }
-#endif
-        if (upipe_srt_handshake->stream_id) {
-            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + upipe_srt_handshake->stream_id_len;
-            extension |= SRT_HANDSHAKE_EXT_CONFIG;
-        }
-
-        struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif);
-        if (!uref)
-            return NULL;
-
-        uint8_t *out_ext = srt_get_handshake_extension_buf(out_cif);
-
-        srt_set_handshake_extension(out_cif, extension);
-        srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_CONCLUSION);
-        srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_HSREQ);
-        srt_set_handshake_extension_len(out_ext, ext_size / 4);
-        size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-        out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-
-        srt_set_handshake_extension_srt_version(out_ext, 2, 2, 2); // made up version
-        uint32_t flags = SRT_HANDSHAKE_EXT_FLAG_CRYPT | SRT_HANDSHAKE_EXT_FLAG_PERIODICNAK
-            | SRT_HANDSHAKE_EXT_FLAG_REXMITFLG | SRT_HANDSHAKE_EXT_FLAG_TSBPDSND | SRT_HANDSHAKE_EXT_FLAG_TSBPDRCV | SRT_HANDSHAKE_EXT_FLAG_TLPKTDROP;
-        srt_set_handshake_extension_srt_flags(out_ext, flags);
-
-        srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
-        srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
-        size -= ext_size;
-        out_ext += ext_size;
-
-        if (upipe_srt_handshake->stream_id) {
-            srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_SID);
-            srt_set_handshake_extension_len(out_ext, upipe_srt_handshake->stream_id_len / 4);
-            size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            memcpy(out_ext, upipe_srt_handshake->stream_id, upipe_srt_handshake->stream_id_len);
-            size -= upipe_srt_handshake->stream_id_len;
-            out_ext += upipe_srt_handshake->stream_id_len;
-        }
-
-#ifdef UPIPE_HAVE_GCRYPT_H
-        if (upipe_srt_handshake->password) {
-            srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_KMREQ);
-            srt_set_handshake_extension_len(out_ext, (size - SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) / 4);
-            size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-
-            memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
-
-            out_ext[0] = 0x12;  // S V PT
-            out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
-            srt_km_set_kk(out_ext, kk);
-            srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
-            out_ext[10] = 2; // SE
-            out_ext[14] = 4; // slen;
-
-            uint8_t wrap[8+256/8] = {0};
-
-            srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
-            memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
-
-            uint8_t kek[32];
-            gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
-                    strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
-                    &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
-            if (err) {
-                upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
-                return false;
-            }
-
-            gcry_cipher_hd_t aes;
-            err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
-            if (err) {
-                upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
-                return false;
-            }
-
-            err = gcry_cipher_setkey(aes, kek, klen);
-            if (err) {
-                gcry_cipher_close(aes);
-                upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
-                return false;
-            }
-
-            uint8_t clear_wrap[2*256/8];
-            memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
-            memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
-            err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
-            if (err) {
-                gcry_cipher_close(aes);
-                upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
-                return false;
-            }
-
-            gcry_cipher_close(aes);
-
-            memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
-        }
-#endif
-
-        upipe_srt_handshake->expect_conclusion = true;
-
-        uref_block_unmap(uref, 0);
-        return uref;
+    if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
+        upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+        upipe_srt_handshake->expect_conclusion = false;
+        return NULL;
     }
 
-    if (!upipe_srt_handshake->expect_conclusion) {
-        if (upipe_srt_handshake->upump_keepalive_timeout) {
-            upipe_dbg(upipe, "Ignore handshake, already connected");
-            return NULL;
-        }
-
-        if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
-            upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
-            return NULL;
-        }
-
-        if (version != SRT_HANDSHAKE_VERSION_MIN || encryption != SRT_HANDSHAKE_CIPHER_NONE ||
-                extension != SRT_HANDSHAKE_EXT_KMREQ ||
-                syn_cookie != 0 || dst_socket_id != 0) {
-            upipe_err_va(upipe, "Malformed first handshake syn %u dst_id %u", syn_cookie, dst_socket_id);
-            return NULL;
-        }
-
-        if (!upipe_srt_handshake->upump_handshake_timeout) {
-            /* connection has to succeed within 3 seconds */
-            struct upump *upump =
-                upump_alloc_timer(upipe_srt_handshake->upump_mgr,
-                        upipe_srt_handshake_timeout,
-                        upipe, upipe->refcount,
-                        3 * UCLOCK_FREQ, 0);
-            upump_start(upump);
-            upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
-        }
-
-        upipe_srt_handshake->establish_time = now;
-        timestamp = 0;
-        upipe_srt_handshake->remote_socket_id = srt_get_handshake_socket_id(cif);
-        upipe_srt_handshake->socket_id = mrand48();
-        upipe_srt_handshake->syn_cookie = mrand48();
-
-        struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
-        if (!uref)
-            return NULL;
-
-        srt_set_handshake_extension(out_cif, SRT_MAGIC_CODE);
-        srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_INDUCTION);
-
-        upipe_srt_handshake->expect_conclusion = true;
-
-        uref_block_unmap(uref, 0);
-        return uref;
-    } else {
-        if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
-            upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
-            upipe_srt_handshake->expect_conclusion = false;
-            return NULL;
-        }
-
+    if (upipe_srt_handshake->expect_conclusion) {
         if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
             upipe_err_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
             return NULL;
         }
-
-        if (syn_cookie != upipe_srt_handshake->syn_cookie
-                || dst_socket_id != 0) {
-            upipe_err(upipe, "Malformed conclusion handshake");
-            upipe_srt_handshake->expect_conclusion = false;
+    } else {
+        if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
+            upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
             return NULL;
         }
 
-        /* At least HSREQ is expected */
-        size -= SRT_HEADER_SIZE + SRT_HANDSHAKE_CIF_SIZE;
-        if (version == SRT_HANDSHAKE_VERSION && size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
-            upipe_err(upipe, "Malformed conclusion handshake (size)");
-            upipe_srt_handshake->expect_conclusion = false;
+        if (upipe_srt_handshake->upump_keepalive_timeout) {
+            upipe_dbg(upipe, "Ignore handshake, already connected");
             return NULL;
         }
+    }
 
-        upipe_srt_handshake->isn = srt_get_handshake_isn(cif);
+    if (!upipe_srt_handshake->listener) {
 
-        uint8_t *ext = srt_get_handshake_extension_buf((uint8_t*)cif);
-
-        uint8_t kk = 0;
-        const uint8_t *wrap;
-        uint8_t wrap_len = 0;
-
-        while (size >= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) {
-            uint16_t ext_type = srt_get_handshake_extension_type(ext);
-            uint16_t ext_len = 4 * srt_get_handshake_extension_len(ext);
-
-            size -= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-
-            if (ext_len > size) {
-                upipe_err_va(upipe, "Malformed extension: %u > %u", ext_len, size);
-                break;
-            }
-
-            if (ext_type == SRT_HANDSHAKE_EXT_TYPE_HSREQ) {
-                if (ext_len >= SRT_HANDSHAKE_HSREQ_SIZE)
-                    upipe_srt_handshake_parse_hsreq(upipe, ext);
-                else
-                    upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
-                            SRT_HANDSHAKE_HSREQ_SIZE);
-            } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
-                if (!srt_check_km(ext, ext_len) || !upipe_srt_handshake_parse_kmreq(upipe, ext, &kk, &wrap, &wrap_len))
-                    upipe_err(upipe, "Malformed KMREQ");
-            }
-
-            ext += ext_len;
-            size -= ext_len;
+        if (upipe_srt_handshake->expect_conclusion) {
+            return upipe_srt_handshake_handle_hs_caller_conclusion(upipe, size, timestamp, &hs_packet);
+        } else {
+            return upipe_srt_handshake_handle_hs_caller_induction(upipe, size, timestamp, &hs_packet);
         }
-
-        extension = 0;
-        if (version == SRT_HANDSHAKE_VERSION) {
-            extension = SRT_HANDSHAKE_EXT_HSREQ;
-            size = SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE;
+    } else { /* listener */
+        if (upipe_srt_handshake->expect_conclusion) {
+            return upipe_srt_handshake_handle_hs_listener_conclusion(upipe, size, timestamp, &hs_packet);
+        } else {
+            struct uref *uref = upipe_srt_handshake_handle_hs_listener_induction(upipe, size, timestamp, &hs_packet);
+            if (uref)
+                upipe_srt_handshake->establish_time = now;
+            return uref;
         }
-        if (wrap_len) {
-            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
-            extension |= SRT_HANDSHAKE_EXT_KMREQ;
-        }
-        if (upipe_srt_handshake->stream_id) {
-            size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + upipe_srt_handshake->stream_id_len;
-            extension |= SRT_HANDSHAKE_EXT_CONFIG;
-        }
-
-        struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif);
-        if (!uref)
-            return NULL;
-
-        if (extension)
-            srt_set_handshake_extension(out_cif, extension);
-        else
-            srt_set_handshake_extension(out_cif, 2 /* SRT_DGRAM */);
-        srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_CONCLUSION);
-
-        uint8_t *out_ext = srt_get_handshake_extension_buf(out_cif);
-        if (version == SRT_HANDSHAKE_VERSION) {
-            srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_HSRSP);
-            srt_set_handshake_extension_len(out_ext, SRT_HANDSHAKE_HSREQ_SIZE / 4);
-            out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
-                    upipe_srt_handshake->minor, upipe_srt_handshake->patch);
-            srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
-            srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
-            srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
-
-            out_ext += SRT_HANDSHAKE_HSREQ_SIZE;
-        } else
-            srt_set_handshake_version(out_cif, SRT_HANDSHAKE_VERSION_MIN);
-
-        if (upipe_srt_handshake->stream_id) {
-            srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_SID);
-            srt_set_handshake_extension_len(out_ext, upipe_srt_handshake->stream_id_len / 4);
-            out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            memcpy(out_ext, upipe_srt_handshake->stream_id, upipe_srt_handshake->stream_id_len);
-            out_ext += upipe_srt_handshake->stream_id_len;
-        }
-
-        if (wrap_len) {
-            srt_set_handshake_extension_type(out_ext, SRT_HANDSHAKE_EXT_TYPE_KMRSP);
-            srt_set_handshake_extension_len(out_ext, (SRT_KMREQ_COMMON_SIZE + wrap_len) / 4);
-            out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
-            memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
-            // XXX: move to bitstream?
-
-            out_ext[0] = 0x12;  // S V PT
-            out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
-            srt_km_set_kk(out_ext, kk);
-            srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
-            out_ext[10] = 2; // SE
-            out_ext[14] = 4; // slen;
-            srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
-            memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
-            memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
-        }
-
-        if (version == SRT_HANDSHAKE_VERSION_MIN) {
-            struct uref *next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
-                    upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_HANDSHAKE_HSREQ_SIZE);
-            if (!next)
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            else {
-                uint8_t *out;
-                int output_size = -1;
-                if (likely(ubase_check(uref_block_write(next, 0, &output_size, &out)))) {
-                    srt_set_packet_control(out, true);
-                    srt_set_packet_timestamp(out, timestamp);
-                    srt_set_packet_dst_socket_id(out, upipe_srt_handshake->remote_socket_id);
-
-                    srt_set_control_packet_type(out, SRT_CONTROL_TYPE_USER);
-                    srt_set_control_packet_subtype(out, SRT_HANDSHAKE_EXT_TYPE_HSREQ);
-                    srt_set_control_packet_type_specific(out, 0);
-
-                    uint8_t *out_ext = &out[SRT_HEADER_SIZE];
-                    srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
-                            upipe_srt_handshake->minor, upipe_srt_handshake->patch);
-                    srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
-                    srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
-                    srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
-
-                    uref_block_unmap(next, 0);
-                    uref->uchain.next = &next->uchain;
-                } else {
-                    uref_free(next);
-                }
-            }
-
-#ifdef UPIPE_HAVE_GCRYPT_H
-            if (upipe_srt_handshake->password) {
-                next = upipe_srt_handshake_make_kmreq(upipe, timestamp);
-                if (next)
-                    uref->uchain.next->next = &next->uchain;
-            }
-#endif
-        }
-
-        upipe_srt_handshake_finalize(upipe);
-
-        uref_block_unmap(uref, 0);
-        return uref;
     }
 }
 
