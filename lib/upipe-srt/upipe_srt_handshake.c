@@ -65,10 +65,10 @@ struct upipe_srt_handshake {
     struct urefcount urefcount;
 
     struct upump_mgr *upump_mgr;
-    struct upump *upump_timer;
-    struct upump *upump_handshake_timeout;
-    struct upump *upump_keepalive_timeout;
-    struct upump *upump_kmreq;
+    struct upump *upump_timer; /* send handshakes every 250ms until connected */
+    struct upump *upump_handshake_timeout; /* abort connection if not successful */
+    struct upump *upump_keepalive_timeout; /* reset connection if no keep alive in 10s */
+    struct upump *upump_kmreq; /* re-send key update if not acknowledged */
     struct uclock *uclock;
     struct urequest uclock_request;
 
