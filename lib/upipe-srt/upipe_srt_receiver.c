@@ -521,7 +521,10 @@ next:
 
                 uref_block_unmap(uref, 0);
                 upipe_srt_receiver->last_ack = now;
-                assert(upipe_srt_receiver->control);
+                if (!upipe_srt_receiver->control) {
+                    uref_free(uref);
+                    return;
+                }
                 upipe_srt_receiver->last_sent = now;
                 upipe_srt_receiver_output_output(upipe_srt_receiver->control, uref, NULL);
 
@@ -1186,7 +1189,11 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     }
 
     /* data */
-    assert(upipe_srt_receiver->control);
+    if (!upipe_srt_receiver->control) {
+        ubase_assert(uref_block_unmap(uref, 0));
+        uref_free(uref);
+        return;
+    }
 
     uint32_t seqnum = srt_get_data_packet_seq(buf);
     uint32_t position = srt_get_data_packet_position(buf);
