@@ -19,10 +19,8 @@
  */
 
 /* FIXME: Copied from a single instance of configuring FFmpeg on aarch64 */
+#include "config.h"
 #define CONFIG_PIC 1
-#define EXTERN_ASM
-#define HAVE_AS_FUNC 1
-#define HAVE_SECTION_DATA_REL_RO 1
 
 #ifdef __ELF__
 #   define ELF
