@@ -1180,12 +1180,36 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         /* Decode palettized to bgra */
         for (int i = 0; i < sub->num_rects; i++) {
             AVSubtitleRect *r = sub->rects[i];
-            uint8_t *dst = buf + 4 * ((width * r->y) + r->x);
+            int x = r->x, y = r->y, w = r->w, h = r->h;
+
+            if (x >= width) {
+                upipe_warn_va(upipe, "x (%i/%i) is out of the picture",
+                              x, width);
+                continue;
+            }
+            if (y >= height) {
+                upipe_warn_va(upipe, "y (%i/%i) is out of the picture",
+                              y, height);
+                continue;
+            }
+
+            if (x + w > width) {
+                upipe_warn_va(upipe, "crop subtitle width %i -> %i",
+                              w, width - x);
+                w = width - x;
+            }
+            if (y + h > height) {
+                upipe_warn_va(upipe, "crop subtitle height %i -> %i",
+                              h, height - y);
+                h = height - y;
+            }
+
+            uint8_t *dst = buf + 4 * ((width * y) + x);
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
 
-            for (int i = 0; i < r->h; i++) {
-                for (int j = 0; j < r->w; j++) {
+            for (int i = 0; i < h; i++) {
+                for (int j = 0; j < w; j++) {
                     uint8_t idx = src[j];
                     if (unlikely(idx >= r->nb_colors)) {
                         upipe_err_va(upipe, "Invalid palette index %" PRIu8, idx);
@@ -1196,7 +1220,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                 }
 
                 dst += width * 4;
-                src += r->w;
+                src += w;
             }
         }
 
