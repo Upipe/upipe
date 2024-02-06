@@ -156,7 +156,7 @@ jobs:
           if [ "${{ matrix.static }}" = "true" ]; then
             STATIC="--disable-shared"
           fi
-          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g -gdwarf-4 $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g -gdwarf-4 -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
 
       - name: Build and install libamt
         if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
