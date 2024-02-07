@@ -112,7 +112,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p)
 {
     struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
-    uint8_t buffer[TS_HEADER_SIZE];
+    uint8_t buffer[TS_HEADER_SIZE_PCR];
     const uint8_t *ts_header = uref_block_peek(uref, 0, TS_HEADER_SIZE,
                                                buffer);
     if (unlikely(ts_header == NULL)) {
@@ -131,12 +131,13 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     bool discontinuity = upipe_ts_decaps->last_cc == -1;
     bool random = false;
     if (unlikely(has_adaptation)) {
-        uint8_t af_length;
-        if (unlikely(!ubase_check(uref_block_extract(uref, 0, 1, &af_length)))) {
+        uint8_t *af = buffer + TS_HEADER_SIZE;
+        if (unlikely(!ubase_check(uref_block_extract(uref, 0, 1, af)))) {
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
+        uint8_t af_length = af[0];
 
         if (unlikely((!has_payload && af_length != 183) || af_length > 183)) {
             upipe_warn(upipe, "invalid adaptation field received");
@@ -145,25 +146,23 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
         }
 
         if (af_length) {
-            uint8_t af_header;
-            if (unlikely(!ubase_check(uref_block_extract(uref, 1, 1, &af_header)))) {
+            if (unlikely(!ubase_check(uref_block_extract(uref, 1, 1, af + 1)))) {
                 uref_free(uref);
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return;
             }
 
-            if (unlikely(!discontinuity &&
-                     tsaf_has_discontinuity(&af_header - 1 - TS_HEADER_SIZE))) {
+            if (unlikely(!discontinuity && tsaf_has_discontinuity(buffer))) {
                 upipe_warn(upipe, "discontinuity flagged");
                 discontinuity = true;
             }
 
-            random = tsaf_has_randomaccess(&af_header - 1 - TS_HEADER_SIZE);
+            random = tsaf_has_randomaccess(buffer);
 
-            if (tsaf_has_pcr(&af_header - 1 - TS_HEADER_SIZE)) {
-                uint8_t buffer2[TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF];
+            if (tsaf_has_pcr(buffer)) {
+                uint8_t *af_pcr = buffer + TS_HEADER_SIZE_AF;
                 const uint8_t *pcr = uref_block_peek(uref, 2,
-                        TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, buffer2);
+                        TS_HEADER_SIZE_PCR - TS_HEADER_SIZE_AF, af_pcr);
                 if (unlikely(pcr == NULL)) {
                     uref_free(uref);
                     upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -172,7 +171,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
                 uint64_t pcrval = (tsaf_get_pcr(pcr - TS_HEADER_SIZE_AF) * 300 +
                                    tsaf_get_pcrext(pcr - TS_HEADER_SIZE_AF));
                 pcrval *= UCLOCK_FREQ / 27000000;
-                UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 2, buffer2, pcr))
+                UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 2, af_pcr, pcr))
 
                 uref_clock_set_ref(uref);
                 upipe_throw_clock_ref(upipe, uref, pcrval,
