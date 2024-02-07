@@ -103,6 +103,7 @@ jobs:
             set-env CFLAGS "$SAN"
             set-env CXXFLAGS "$SAN"
             set-env LDFLAGS "$SAN"
+            set-env UBSAN_OPTIONS "print_stacktrace=1"
           fi
 
       - name: Install compiler (clang)
@@ -147,6 +148,7 @@ jobs:
           set-env LDFLAGS "-fsanitize=undefined -fsanitize=address"
           set-env DISABLE_VALGRIND "1"
           set-env INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
+          set-env UBSAN_OPTIONS "print_stacktrace=1"
 
       - name: Install bitstream
         run: |
