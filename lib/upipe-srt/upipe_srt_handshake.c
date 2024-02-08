@@ -111,6 +111,7 @@ struct upipe_srt_handshake {
     uint8_t salt[16];
     uint8_t sek[2][32];
     uint8_t sek_len;
+    uint8_t kk;
     bool update_even;
 
     struct uref *kmreq;
@@ -411,6 +412,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->patch = 0;
 
     upipe_srt_handshake->sek_len = 0;
+    upipe_srt_handshake->kk = 3;
     upipe_srt_handshake->update_even = false;
     upipe_srt_handshake->kmreq = NULL;
     upipe_srt_handshake->password = NULL;
@@ -598,6 +600,7 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
             upipe_srt_handshake->sek_len = va_arg(args, int);
             free(upipe_srt_handshake->password);
             if (password) {
+                upipe_srt_handshake->kk = 3;
                 upipe_srt_handshake->password = strdup(password);
                 switch (upipe_srt_handshake->sek_len) {
                     case 128/8:
@@ -778,7 +781,7 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
             upipe_srt_handshake->receiver_tsbpd_delay, upipe_srt_handshake->sender_tsbpd_delay);
 }
 
-static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, uint8_t *kk, const uint8_t **wrap, uint8_t *wrap_len)
+static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const uint8_t **wrap, uint8_t *wrap_len)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     if (!upipe_srt_handshake->password) {
@@ -788,7 +791,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
 
 #ifdef UPIPE_HAVE_GCRYPT_H
 
-    *kk = srt_km_get_kk(ext);
+    upipe_srt_handshake->kk = srt_km_get_kk(ext);
     uint8_t cipher = srt_km_get_cipher(ext);
     if (cipher != SRT_KMREQ_CIPHER_AES) {
         upipe_err_va(upipe, "Unsupported cipher %u", cipher);
@@ -814,7 +817,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
         return false;
     }
 
-    *wrap_len = ((*kk == 3) ? 2 : 1) * klen + 8;
+    *wrap_len = ((upipe_srt_handshake->kk == 3) ? 2 : 1) * klen + 8;
 
     uint8_t osek[64]; /* 2x 256 bits keys */
 
@@ -831,7 +834,7 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
         goto key_error;
     }
 
-    err = gcry_cipher_decrypt(aes, osek, ((*kk == 3) ? 2 : 1) * klen, *wrap, *wrap_len);
+    err = gcry_cipher_decrypt(aes, osek, ((upipe_srt_handshake->kk == 3) ? 2 : 1) * klen, *wrap, *wrap_len);
     if (err) {
         upipe_err_va(upipe, "Couldn't decrypt session key (%s)", gcry_strerror(err));
         goto key_error;
@@ -841,11 +844,11 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
 
     upipe_srt_handshake->sek_len = klen;
 
-    if (*kk == 3) {
+    if (upipe_srt_handshake->kk == 3) {
         memcpy(upipe_srt_handshake->sek[0], osek, klen);
         memcpy(upipe_srt_handshake->sek[1], &osek[klen], klen);
     } else {
-        memcpy(upipe_srt_handshake->sek[(*kk & (1<<0)) ? 0 : 1], osek, klen);
+        memcpy(upipe_srt_handshake->sek[(upipe_srt_handshake->kk & (1<<0)) ? 0 : 1], osek, klen);
     }
 
     return true;
@@ -862,13 +865,31 @@ key_error:
 #endif
 }
 
+static void make_km_msg(struct upipe *upipe, uint8_t *out_ext, const uint8_t *wrap, size_t wrap_len)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    const uint8_t klen = upipe_srt_handshake->sek_len;
+
+    memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
+
+    out_ext[0] = 0x12;  // S V PT
+    out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
+    srt_km_set_kk(out_ext, upipe_srt_handshake->kk);
+    srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
+    out_ext[10] = 2; // SE
+    out_ext[14] = 4; // slen;
+
+    srt_km_set_klen(out_ext, klen / 4);
+    memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
+    memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+}
+
 #ifdef UPIPE_HAVE_GCRYPT_H
 static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t timestamp)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
     const uint8_t klen = upipe_srt_handshake->sek_len;
-    const uint8_t kk = 3;
-    size_t wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
+    size_t wrap_len = ((upipe_srt_handshake->kk == 3) ? 2 : 1) * klen + 8;
     struct uref *next = uref_block_alloc(upipe_srt_handshake->uref_mgr,
             upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len);
     if (!next) {
@@ -891,21 +912,7 @@ static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t
     srt_set_control_packet_type_specific(out, 0);
 
     uint8_t *out_ext = &out[SRT_HEADER_SIZE];
-
-    memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
-    // XXX: move to bitstream?
-
-    out_ext[0] = 0x12;  // S V PT
-    out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
-    srt_km_set_kk(out_ext, kk);
-    srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
-    out_ext[10] = 2; // SE
-    out_ext[14] = 4; // slen;
-
     uint8_t wrap[8+256/8] = {0};
-
-    srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
-    memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
 
     uint8_t kek[32];
     gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
@@ -940,7 +947,7 @@ static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t
 
     gcry_cipher_close(aes);
 
-    memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+    make_km_msg(upipe, out_ext, wrap, wrap_len);
 
     uref_block_unmap(next, 0);
 
@@ -991,19 +998,7 @@ static void build_hs(struct upipe *upipe, uint8_t *out_cif, int extension, bool 
         srt_set_handshake_extension_len(out_ext, (SRT_KMREQ_COMMON_SIZE + wrap_len) / 4);
         out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
 
-        memset(out_ext, 0, SRT_KMREQ_COMMON_SIZE);
-
-        out_ext[0] = 0x12;  // S V PT
-        out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
-        const uint8_t kk = 3;
-        srt_km_set_kk(out_ext, kk);
-        srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
-        out_ext[10] = 2; // SE
-        out_ext[14] = 4; // slen;
-
-        srt_km_set_klen(out_ext, upipe_srt_handshake->sek_len / 4);
-        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
-        memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+        make_km_msg(upipe, out_ext, wrap, wrap_len);
     }
 }
 
@@ -1084,10 +1079,7 @@ static struct uref *upipe_srt_handshake_handle_hs_caller_induction(struct upipe 
 #ifdef UPIPE_HAVE_GCRYPT_H
     if (upipe_srt_handshake->password) {
         const uint8_t klen = upipe_srt_handshake->sek_len;
-        // XXX: move to bitstream?
-        const uint8_t kk = 3;
-
-        wrap_len = ((kk == 3) ? 2 : 1) * klen + 8;
+        wrap_len = ((upipe_srt_handshake->kk == 3) ? 2 : 1) * klen + 8;
 
         uint8_t kek[32];
         gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
@@ -1189,7 +1181,6 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 
     uint8_t *ext = hs_packet->ext_buf;
 
-    uint8_t kk = 0;
     const uint8_t *wrap;
     uint8_t wrap_len = 0;
 
@@ -1212,7 +1203,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
                 upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
                         SRT_HANDSHAKE_HSREQ_SIZE);
         } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
-            if (!srt_check_km(ext, ext_len) || !upipe_srt_handshake_parse_kmreq(upipe, ext, &kk, &wrap, &wrap_len))
+            if (!srt_check_km(ext, ext_len) || !upipe_srt_handshake_parse_kmreq(upipe, ext, &wrap, &wrap_len))
                 upipe_err(upipe, "Malformed KMREQ");
         }
 
@@ -1399,15 +1390,14 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
     if (subtype != SRT_HANDSHAKE_EXT_TYPE_KMRSP && subtype != SRT_HANDSHAKE_EXT_TYPE_KMREQ)
         return NULL;
 
-    uint8_t kk = 0;
     const uint8_t *wrap;
     uint8_t wrap_len = 0;
 
     const uint8_t *cif = srt_get_control_packet_cif(buf);
     size -= SRT_HEADER_SIZE;
 
-    if (!srt_check_km(buf, size) || !upipe_srt_handshake_parse_kmreq(upipe, buf, &kk, &wrap, &wrap_len))
-        if (!upipe_srt_handshake_parse_kmreq(upipe, cif, &kk, &wrap, &wrap_len)) {
+    if (!srt_check_km(buf, size) || !upipe_srt_handshake_parse_kmreq(upipe, buf, &wrap, &wrap_len))
+        if (!upipe_srt_handshake_parse_kmreq(upipe, cif, &wrap, &wrap_len)) {
             upipe_err_va(upipe, "parse failed");
             return NULL;
         }
@@ -1443,15 +1433,7 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
     memset(extra, 0, SRT_KMREQ_COMMON_SIZE);
 
     if (wrap_len) {
-        extra[0] = 0x12;  // S V PT
-        extra[1] = 0x20; extra[2] = 0x29; // Sign
-        srt_km_set_kk(extra, kk);
-        srt_km_set_cipher(extra, SRT_KMREQ_CIPHER_AES);
-        extra[10] = 2; // SE
-        extra[14] = 4; // slen;
-        srt_km_set_klen(extra, upipe_srt_handshake->sek_len / 4);
-        memcpy(&extra[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
-        memcpy(&extra[SRT_KMREQ_COMMON_SIZE], wrap, wrap_len);
+        make_km_msg(upipe, extra, wrap, wrap_len);
     }
     upipe_srt_handshake_finalize(upipe);
 
