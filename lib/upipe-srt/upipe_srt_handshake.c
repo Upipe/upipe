@@ -1214,8 +1214,8 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 
     int extension = 0;
     if (hs_packet->version == SRT_HANDSHAKE_VERSION) {
-        extension = SRT_HANDSHAKE_EXT_HSREQ;
-        size = SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE;
+        extension |= SRT_HANDSHAKE_EXT_HSREQ;
+        size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE;
     }
     if (wrap_len) {
         size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
