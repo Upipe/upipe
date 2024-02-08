@@ -738,15 +738,21 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
             if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.salt")))
                 upipe_err(upipe, "damn");
 
-            opaque.v = upipe_srt_handshake->sek[0];
-            opaque.size = upipe_srt_handshake->sek_len;
-            if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.even_key")))
-                upipe_err(upipe, "damn");
+            uint8_t kk = upipe_srt_handshake->kk;
 
-            opaque.v = upipe_srt_handshake->sek[1];
-            opaque.size = upipe_srt_handshake->sek_len;
-            if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.odd_key")))
-                upipe_err(upipe, "damn");
+            if (kk & (1<<0)) {
+                opaque.v = upipe_srt_handshake->sek[0];
+                opaque.size = upipe_srt_handshake->sek_len;
+                if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.even_key")))
+                    upipe_err(upipe, "damn");
+            }
+
+            if (kk & (1<<1)) {
+                opaque.v = upipe_srt_handshake->sek[1];
+                opaque.size = upipe_srt_handshake->sek_len;
+                if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.odd_key")))
+                    upipe_err(upipe, "damn");
+            }
 
             uref_pic_set_number(flow_def, upipe_srt_handshake->isn);
             upipe_srt_handshake_store_flow_def(upipe, flow_def);
