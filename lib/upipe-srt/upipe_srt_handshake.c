@@ -411,6 +411,8 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->minor = 0;
     upipe_srt_handshake->patch = 0;
 
+    upipe_srt_handshake->socket_id = 0;
+
     upipe_srt_handshake->sek_len = 0;
     upipe_srt_handshake->kk = 3;
     upipe_srt_handshake->update_even = false;
