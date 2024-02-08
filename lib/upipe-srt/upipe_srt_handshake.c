@@ -407,9 +407,10 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->flags = SRT_HANDSHAKE_EXT_FLAG_CRYPT | SRT_HANDSHAKE_EXT_FLAG_PERIODICNAK
         | SRT_HANDSHAKE_EXT_FLAG_REXMITFLG | SRT_HANDSHAKE_EXT_FLAG_TSBPDSND | SRT_HANDSHAKE_EXT_FLAG_TSBPDRCV | SRT_HANDSHAKE_EXT_FLAG_TLPKTDROP;
 
-    upipe_srt_handshake->major = 0;
-    upipe_srt_handshake->minor = 0;
-    upipe_srt_handshake->patch = 0;
+    /* made up version */
+    upipe_srt_handshake->major = 2;
+    upipe_srt_handshake->minor = 2;
+    upipe_srt_handshake->patch = 2;
 
     upipe_srt_handshake->socket_id = 0;
 
@@ -995,7 +996,8 @@ static void build_hs(struct upipe *upipe, uint8_t *out_cif, int extension, bool 
         srt_set_handshake_extension_len(out_ext, ext_size / 4);
         out_ext += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE;
 
-        srt_set_handshake_extension_srt_version(out_ext, 2, 2, 2); // made up version
+        srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
+                upipe_srt_handshake->minor, upipe_srt_handshake->patch);
         srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
         srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
         srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
