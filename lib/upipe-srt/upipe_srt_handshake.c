@@ -885,6 +885,51 @@ static void make_km_msg(struct upipe *upipe, uint8_t *out_ext, const uint8_t *wr
 }
 
 #ifdef UPIPE_HAVE_GCRYPT_H
+static bool upipe_srt_handshake_wrap_key(struct upipe *upipe, uint8_t *wrap)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    const uint8_t klen = upipe_srt_handshake->sek_len;
+    size_t wrap_len = ((upipe_srt_handshake->kk == 3) ? 2 : 1) * klen + 8;
+
+    uint8_t kek[32];
+    gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
+            strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
+            &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
+    if (err) {
+        upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
+        return false;
+    }
+
+    gcry_cipher_hd_t aes;
+    err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
+    if (err) {
+        upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
+        return false;
+    }
+
+    err = gcry_cipher_setkey(aes, kek, klen);
+    if (err) {
+        gcry_cipher_close(aes);
+        upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
+        return false;
+    }
+
+    uint8_t clear_wrap[2*256/8];
+    memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
+    memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
+
+    err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
+    if (err) {
+        gcry_cipher_close(aes);
+        upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
+        return false;
+    }
+
+    gcry_cipher_close(aes);
+
+    return true;
+}
+
 static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t timestamp)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -913,39 +958,8 @@ static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t
 
     uint8_t *out_ext = &out[SRT_HEADER_SIZE];
     uint8_t wrap[8+256/8] = {0};
-
-    uint8_t kek[32];
-    gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
-            strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
-            &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
-    if (err) {
-        upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
+    if (!upipe_srt_handshake_wrap_key(upipe, wrap))
         goto error;
-    }
-
-    gcry_cipher_hd_t aes;
-    err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
-    if (err) {
-        upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
-        goto error;
-    }
-
-    err = gcry_cipher_setkey(aes, kek, klen);
-    if (err) {
-        upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
-        goto aes_error;
-    }
-
-    uint8_t clear_wrap[2*256/8];
-    memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
-    memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
-    err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
-    if (err) {
-        upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
-        goto aes_error;
-    }
-
-    gcry_cipher_close(aes);
 
     make_km_msg(upipe, out_ext, wrap, wrap_len);
 
@@ -953,8 +967,6 @@ static struct uref *upipe_srt_handshake_make_kmreq(struct upipe *upipe, uint32_t
 
     return next;
 
-aes_error:
-    gcry_cipher_close(aes);
 error:
     uref_free(next);
     return NULL;
@@ -1080,43 +1092,9 @@ static struct uref *upipe_srt_handshake_handle_hs_caller_induction(struct upipe 
     if (upipe_srt_handshake->password) {
         const uint8_t klen = upipe_srt_handshake->sek_len;
         wrap_len = ((upipe_srt_handshake->kk == 3) ? 2 : 1) * klen + 8;
-
-        uint8_t kek[32];
-        gpg_error_t err = gcry_kdf_derive(upipe_srt_handshake->password,
-                strlen(upipe_srt_handshake->password), GCRY_KDF_PBKDF2, GCRY_MD_SHA1,
-                &upipe_srt_handshake->salt[8], 8, 2048, klen, kek);
-        if (err) {
-            upipe_err_va(upipe, "pbkdf2 failed (%s)", gcry_strerror(err));
-            return false;
+        if (!upipe_srt_handshake_wrap_key(upipe, wrap)) {
+            return NULL;
         }
-
-        gcry_cipher_hd_t aes;
-        err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_AESWRAP, 0);
-        if (err) {
-            upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
-            return false;
-        }
-
-        err = gcry_cipher_setkey(aes, kek, klen);
-        if (err) {
-            gcry_cipher_close(aes);
-            upipe_err_va(upipe, "Couldn't use key encrypting key (0x%x)", err);
-            return false;
-        }
-
-        uint8_t clear_wrap[2*256/8];
-        memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
-        memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
-
-        err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
-        if (err) {
-            gcry_cipher_close(aes);
-            upipe_err_va(upipe, "Couldn't encrypt session key (0x%x)", err);
-            return false;
-        }
-
-        gcry_cipher_close(aes);
-
         size += SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_KMREQ_COMMON_SIZE + wrap_len;
         extension |= SRT_HANDSHAKE_EXT_KMREQ;
     }
