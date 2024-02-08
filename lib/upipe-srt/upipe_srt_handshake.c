@@ -1380,11 +1380,10 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
     const uint8_t *cif = srt_get_control_packet_cif(buf);
     size -= SRT_HEADER_SIZE;
 
-    if (!srt_check_km(buf, size) || !upipe_srt_handshake_parse_kmreq(upipe, buf, &wrap, &wrap_len))
-        if (!upipe_srt_handshake_parse_kmreq(upipe, cif, &wrap, &wrap_len)) {
-            upipe_err_va(upipe, "parse failed");
-            return NULL;
-        }
+    if (!srt_check_km(cif, size) || !upipe_srt_handshake_parse_kmreq(upipe, cif, &wrap, &wrap_len)) {
+        upipe_err_va(upipe, "KM parse failed");
+        return NULL;
+    }
 
     if (subtype == SRT_HANDSHAKE_EXT_TYPE_KMRSP) {
         if (upipe_srt_handshake->kmreq) {
