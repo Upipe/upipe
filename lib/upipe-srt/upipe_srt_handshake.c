@@ -1522,6 +1522,18 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
+    if (!upipe_srt_handshake->upump_mgr) {
+        upipe_warn(upipe, "No upump mgr");
+        upipe_srt_handshake_check(upipe, NULL);
+        uref_free(uref);
+    }
+
+    if (!upipe_srt_handshake->uclock) {
+        upipe_warn(upipe, "No uclock");
+        upipe_srt_handshake_check(upipe, NULL);
+        uref_free(uref);
+    }
+
     size_t total_size;
     ubase_assert(uref_block_size(uref, &total_size));
 
