@@ -527,7 +527,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_ffmt_store_bin_output(upipe, sws);
             if (!need_deint)
                 upipe_ffmt_store_bin_input(upipe, upipe_use(sws));
-            if (upipe_ffmt->sws_flags)
+            if (sws && upipe_ffmt->sws_flags)
                 upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
         } else {
             struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
