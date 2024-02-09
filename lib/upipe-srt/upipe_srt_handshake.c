@@ -735,6 +735,10 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
     upipe_srt_handshake->expect_conclusion = false;
     upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
 
+    if (!upipe_srt_handshake->upump_keepalive_timeout) {
+        upipe_dbg_va(upipe, "[%s] Remote connected",
+                upipe_srt_handshake->listener ? "listener" : "caller");
+    }
     upipe_srt_handshake_restart_keepalive_timeout(upipe);
 
     struct uref *flow_def;
@@ -1324,6 +1328,10 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             return NULL;
         }
     }
+
+    upipe_dbg_va(upipe, "[%s] got %s handshake packet",
+        upipe_srt_handshake->listener ? "listener" : "caller",
+        conclusion ? "conclusion" : "induction");
 
     struct uref *uref;
     if (!upipe_srt_handshake->listener) {
