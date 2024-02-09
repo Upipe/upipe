@@ -1162,9 +1162,13 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
-    if (hs_packet->syn_cookie != upipe_srt_handshake->syn_cookie
-            || hs_packet->dst_socket_id != 0) {
-        upipe_err(upipe, "Malformed conclusion handshake");
+    if (hs_packet->dst_socket_id != 0) {
+        upipe_err_va(upipe, "Malformed conclusion handshake (dst_socket_id 0x%08x)", hs_packet->dst_socket_id);
+        upipe_srt_handshake->expect_conclusion = false;
+        return NULL;
+    }
+    if (hs_packet->syn_cookie != upipe_srt_handshake->syn_cookie) {
+        upipe_err(upipe, "Malformed conclusion handshake (invalid syn cookie)");
         upipe_srt_handshake->expect_conclusion = false;
         return NULL;
     }
