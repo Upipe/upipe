@@ -858,7 +858,7 @@ static void upipe_srt_receiver_empty_buffer(struct upipe *upipe)
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain);
         ulist_delete(uchain);
-        uref_free(uref);        
+        uref_free(uref);
     }
 }
 
