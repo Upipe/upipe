@@ -150,7 +150,7 @@ jobs:
 
       - name: Install bitstream
         run: |
-          git clone --depth 1 https://code.videolan.org/videolan/bitstream.git
+          git clone --depth 1 https://github.com/funman/bitstream
           make -C bitstream install PREFIX="$PWD/usr-bitstream"
           set-env PKG_CONFIG_PATH "$PKG_CONFIG_PATH:$PWD/usr-bitstream/share/pkgconfig"
           if [ "${{ matrix.static }}" = "true" ]; then
