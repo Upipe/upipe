@@ -716,19 +716,26 @@ static const char *get_hs_error(uint32_t hs_type)
     return hs_error[hs_type];
 }
 
-static void upipe_srt_handshake_finalize(struct upipe *upipe)
+static void upipe_srt_handshake_restart_keepalive_timeout(struct upipe *upipe)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
-    upipe_srt_handshake->expect_conclusion = false;
-    upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
-
     struct upump *upump =
         upump_alloc_timer(upipe_srt_handshake->upump_mgr,
                 upipe_srt_handshake_keepalive_timeout,
                 upipe, upipe->refcount,
                 10*UCLOCK_FREQ, 0);
     upump_start(upump);
+
     upipe_srt_handshake_set_upump_keepalive_timeout(upipe, upump);
+}
+
+static void upipe_srt_handshake_finalize(struct upipe *upipe)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    upipe_srt_handshake->expect_conclusion = false;
+    upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
+
+    upipe_srt_handshake_restart_keepalive_timeout(upipe);
 
     struct uref *flow_def;
     if (ubase_check(upipe_srt_handshake_get_flow_def(upipe, &flow_def))) {
@@ -1558,6 +1565,10 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
         uref_free(uref);
         return;
     }
+
+    /* Only restart if timer is already alive, it means we're connected */
+    if (upipe_srt_handshake->upump_keepalive_timeout)
+        upipe_srt_handshake_restart_keepalive_timeout(upipe);
 
     if (srt_get_packet_control(buf)) {
         bool handled = false;
