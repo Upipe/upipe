@@ -196,7 +196,7 @@ jobs:
 
       - name: Archive config log
         if: always()
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}_config.log
           path: config.log
