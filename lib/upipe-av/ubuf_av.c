@@ -720,7 +720,30 @@ static int ubuf_sound_av_iterate_plane(struct ubuf *ubuf,
  */
 static int ubuf_sound_av_resize(struct ubuf *ubuf, int offset, int new_size)
 {
-    return UBASE_ERR_UNHANDLED;
+    struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
+    AVFrame *frame = ubuf_av->frame;
+
+    size_t size;
+    uint8_t sample_size;
+    UBASE_RETURN(ubuf_sound_av_size(ubuf, &size, &sample_size));
+
+    if (offset < 0) {
+        if (-offset > size)
+            return UBASE_ERR_INVALID;
+        offset = size - offset;
+    } else if (offset > size)
+        return UBASE_ERR_INVALID;
+
+    if (new_size < 0)
+        new_size = size - offset;
+    else if (offset + new_size > size)
+        return UBASE_ERR_INVALID;
+
+    av_samples_copy(frame->extended_data, frame->extended_data,
+                    0, offset, new_size, frame->channels, frame->format);
+    frame->nb_samples = new_size;
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This gets the channel_id of a plane.
