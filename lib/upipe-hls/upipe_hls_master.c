@@ -332,37 +332,23 @@ static void upipe_hls_master_set_renditions(struct upipe *upipe,
             uref_hls_rendition_set_autoselect(uref, count);
         count++;
     }
-    /** the the rendition count. */
+    /** set the rendition count. */
     uref_hls_set_renditions(uref, count);
 }
 
-/** @internal @This is called when there is input data.
+/** @internal @This prepares the master playlist.
  *
  * @param upipe description structure of the pipe
- * @param uref uref carrying the data
- * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_hls_master_input(struct upipe *upipe,
-                                   struct uref *uref,
-                                   struct upump **upump_p)
+static void upipe_hls_master_prepare(struct upipe *upipe)
 {
     struct upipe_hls_master *upipe_hls_master =
         upipe_hls_master_from_upipe(upipe);
 
-    if (ubase_check(uref_block_get_start(uref)))
-        upipe_hls_master_flush(upipe);
+    struct uchain *uchain;
+    ulist_foreach(&upipe_hls_master->items, uchain) {
+        struct uref *uref = uref_from_uchain(uchain);
 
-    if (!ubase_check(uref_uri_copy(uref, upipe_hls_master->flow_def))) {
-        upipe_warn(upipe, "fail to import uri");
-        uref_free(uref);
-        return;
-    }
-
-    const char *type;
-    if (ubase_check(uref_m3u_master_get_media_type(uref, &type))) {
-        ulist_add(&upipe_hls_master->renditions, uref_to_uchain(uref));
-    }
-    else {
         /** attach renditions */
         const char *id;
         if (ubase_check(uref_m3u_master_get_audio(uref, &id)))
@@ -372,11 +358,7 @@ static void upipe_hls_master_input(struct upipe *upipe,
         if (ubase_check(uref_m3u_master_get_subtitles(uref, &id)))
             upipe_hls_master_set_renditions(upipe, uref, "SUBTITLES", id);
         uref_flow_set_id(uref, upipe_hls_master->id++);
-        ulist_add(&upipe_hls_master->items, uref_to_uchain(uref));
     }
-
-    if (ubase_check(uref_block_get_end(uref)))
-        upipe_split_throw_update(upipe);
 }
 
 /** @internal @This iterates over variants.
@@ -419,6 +401,40 @@ static void upipe_hls_master_store_flow_def(struct upipe *upipe,
     if (upipe_hls_master->flow_def)
         uref_free(upipe_hls_master->flow_def);
     upipe_hls_master->flow_def = flow_def;
+}
+
+/** @internal @This is called when there is input data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref carrying the data
+ * @param upump_p reference to pump that generated the buffer
+ */
+static void upipe_hls_master_input(struct upipe *upipe,
+                                   struct uref *uref,
+                                   struct upump **upump_p)
+{
+    struct upipe_hls_master *upipe_hls_master =
+        upipe_hls_master_from_upipe(upipe);
+
+    if (ubase_check(uref_block_get_start(uref)))
+        upipe_hls_master_flush(upipe);
+
+    if (!ubase_check(uref_uri_copy(uref, upipe_hls_master->flow_def))) {
+        upipe_warn(upipe, "fail to import uri");
+        uref_free(uref);
+        return;
+    }
+
+    const char *type;
+    if (ubase_check(uref_m3u_master_get_media_type(uref, &type)))
+        ulist_add(&upipe_hls_master->renditions, uref_to_uchain(uref));
+    else
+        ulist_add(&upipe_hls_master->items, uref_to_uchain(uref));
+
+    if (ubase_check(uref_block_get_end(uref))) {
+        upipe_hls_master_prepare(upipe);
+        upipe_split_throw_update(upipe);
+    }
 }
 
 /** @internal @This sets a new input flow definition.
