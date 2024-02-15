@@ -32,6 +32,7 @@
 #include "upipe-modules/upipe_probe_uref.h"
 #include "upipe-modules/upipe_setflowdef.h"
 
+#include "upipe/ubase.h"
 #include "upipe/upipe_helper_inner.h"
 #include "upipe/upipe_helper_uprobe.h"
 #include "upipe/upipe_helper_bin_output.h"
@@ -1234,9 +1235,9 @@ static int upipe_hls_playlist_set_flow_def(struct upipe *upipe,
     }
 
     const char *type;
-    if (!ubase_check(uref_m3u_playlist_flow_get_type(flow_def_dup, &type)) ||
+    if (!ubase_check(uref_m3u_playlist_flow_get_type(input_flow_def, &type)) ||
         (strcasecmp(type, "VOD") && strcasecmp(type, "EVENT")) ||
-        !ubase_check(uref_m3u_playlist_flow_get_endlist(flow_def_dup))) {
+        !ubase_check(uref_m3u_playlist_flow_get_endlist(input_flow_def))) {
         upipe_dbg(upipe, "playlist need to be reloaded");
 
         uint64_t old_media_sequence, media_sequence;
@@ -1251,7 +1252,7 @@ static int upipe_hls_playlist_set_flow_def(struct upipe *upipe,
 
         uint64_t target_duration;
         if (ubase_check(uref_m3u_playlist_flow_get_target_duration(
-                    flow_def_dup, &target_duration))) {
+                    input_flow_def, &target_duration))) {
             if (old_media_sequence == media_sequence) {
                 upipe_dbg(upipe, "playlist media sequence has not changed");
                 target_duration /= 2;
@@ -1269,6 +1270,14 @@ static int upipe_hls_playlist_set_flow_def(struct upipe *upipe,
         }
     }
     upipe_hls_playlist_store_input_flow_def(upipe, flow_def_dup);
+
+    if (unlikely(upipe_hls_playlist->reloading)) {
+        upipe_dbg(upipe, "playlist end");
+        upipe_hls_playlist_throw_reloaded(upipe);
+    }
+
+    upipe_hls_playlist_flush(upipe);
+    upipe_hls_playlist->reloading = true;
     return UBASE_ERR_NONE;
 }
 

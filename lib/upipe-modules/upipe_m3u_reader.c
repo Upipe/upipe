@@ -1343,6 +1343,10 @@ static void upipe_m3u_reader_output_all(struct upipe *upipe,
 
         upipe_m3u_reader_output(upipe, uref, upump_p);
     }
+
+    if (first)
+        upipe_m3u_reader_output(upipe, NULL, NULL);
+
     upipe_release(upipe);
 }
 
