@@ -368,6 +368,7 @@ static bool upipe_agraph_handle(struct upipe *upipe, struct uref *uref,
 
     for (int i = 0; i < 3; i++)
         ubuf_pic_plane_unmap(ubuf, chroma[i], 0, 0, -1, -1);
+    uref_pic_set_progressive(uref);
     upipe_agraph_output(upipe, uref, upump_p);
     return true;
 }
