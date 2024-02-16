@@ -51,6 +51,7 @@
 #include "upipe/ustring.h"
 #include "upipe/upipe.h"
 #include "upipe-modules/upipe_udp_source.h"
+#include <upipe-modules/upipe_rtp_decaps.h>
 #include "upipe-modules/upipe_udp_sink.h"
 #include "upipe-srt/upipe_srt_handshake.h"
 #include "upipe-srt/upipe_srt_receiver.h"
@@ -175,6 +176,8 @@ static char *latency;
 
 static bool restart;
 
+static struct upipe_mgr *rtpd_mgr;
+
 static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 {
     uint16_t port = 0;
@@ -234,6 +237,13 @@ static int start(void)
             udp_sink_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel,
                 "udpsink"));
     upipe_release(upipe_udp_sink);
+
+    if (rtpd_mgr) {
+        upipe_srtr = upipe_void_chain_output(upipe_srtr, rtpd_mgr,
+                uprobe_pfx_alloc(uprobe_use(logger),
+                    loglevel, "rtpd"));
+        assert(upipe_srtr);
+    }
 
     int udp_fd;
     /* receive SRT */
@@ -345,9 +355,10 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 static void usage(const char *argv0) {
-    fprintf(stdout, "Usage: %s [-d] [-k password] [-l 128] <udp source> <udp dest> <latency>", argv0);
+    fprintf(stdout, "Usage: %s [-dr] [-k password] [-l 128] <udp source> <udp dest> <latency>", argv0);
     fprintf(stdout, "   -d: more verbose\n");
     fprintf(stdout, "   -q: more quiet\n");
+    fprintf(stdout, "   -r: rtp demux\n");
     fprintf(stdout, "   -k encryption password\n");
     fprintf(stdout, "   -l key length in bits\n");
     exit(EXIT_FAILURE);
@@ -358,7 +369,7 @@ int main(int argc, char *argv[])
     int opt;
 
     /* parse options */
-    while ((opt = getopt(argc, argv, "qdk:l:")) != -1) {
+    while ((opt = getopt(argc, argv, "qrdk:l:")) != -1) {
         switch (opt) {
             case 'd':
                 loglevel--;
@@ -371,6 +382,9 @@ int main(int argc, char *argv[])
                 break;
             case 'l':
                 key_length = atoi(optarg);
+                break;
+            case 'r':
+                rtpd_mgr = upipe_rtpd_mgr_alloc();
                 break;
             default:
                 usage(argv[0]);
@@ -460,6 +474,7 @@ int main(int argc, char *argv[])
     umem_mgr_release(umem_mgr);
     uclock_release(uclock);
     upipe_mgr_release(udp_sink_mgr);
+    upipe_mgr_release(rtpd_mgr);
 
     return 0;
 }
