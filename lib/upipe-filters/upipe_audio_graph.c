@@ -20,10 +20,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston MA 02110-1301, USA.
  */
 
+#include "upipe/ubase.h"
 #include "upipe/upipe.h"
 #include "upipe/uref.h"
 #include "upipe/uref_dump.h"
 #include "upipe/uref_sound_flow.h"
+#include "upipe/uref_pic_flow_formats.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_flow.h"
@@ -240,11 +242,7 @@ static bool upipe_agraph_handle(struct upipe *upipe, struct uref *uref,
         UBASE_FATAL(upipe,
                 uref_attr_import(uref, upipe_agraph->flow_def_config))
         uref_pic_flow_clear_format(uref);
-        UBASE_FATAL(upipe, uref_pic_flow_set_planes(uref, 0))
-        UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(uref, 1))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 1, 1, 1, "y8"))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 2, 1, 1, "u8"))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 2, 1, 1, "v8"))
+        UBASE_FATAL(upipe, uref_pic_flow_set_yuv420p(uref));
         UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
 
         upipe_agraph->hsize = upipe_agraph->vsize =
@@ -404,8 +402,11 @@ static void upipe_agraph_input(struct upipe *upipe, struct uref *uref,
 static int upipe_agraph_check_flow_format(struct upipe *upipe,
                                           struct uref *flow_format)
 {
-    if (flow_format != NULL)
+    if (flow_format != NULL) {
+        if (unlikely(!ubase_check(uref_pic_flow_check_yuv420p(flow_format))))
+            uref_pic_flow_set_yuv420p(flow_format);
         upipe_agraph_require_ubuf_mgr(upipe, flow_format);
+    }
 
     return UBASE_ERR_NONE;
 }
