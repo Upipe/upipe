@@ -1168,7 +1168,9 @@ static void upipe_hls_playlist_input(struct upipe *upipe,
         upipe_hls_playlist->reloading = true;
     }
 
-    if (unlikely(ubase_check(uref_m3u_playlist_daterange_get_id(uref, NULL)))) {
+    if (unlikely(
+            ubase_check(uref_m3u_playlist_daterange_get_id(uref, NULL)) ||
+            ubase_check(uref_m3u_variable_get_name(uref, NULL)))) {
         uref_free(uref);
         return;
     }
