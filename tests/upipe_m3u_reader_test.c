@@ -175,6 +175,13 @@ static int catch_uref(struct uprobe *uprobe,
         if (ubase_check(uref_m3u_master_get_media_autoselect(uref)))
             printf("master media_autoselect\n");
 
+        const char *str;
+        if (ubase_check(uref_m3u_variable_get_name(uref, &str))) {
+            printf("variable name: %s\n", str);
+            ubase_assert(uref_m3u_variable_get_value(uref, &str));
+            printf("variable value: %s\n", str);
+        }
+
         return UBASE_ERR_NONE;
     }
     }

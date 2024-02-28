@@ -1126,6 +1126,56 @@ static int upipe_m3u_reader_gap(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This checks and parses a "#EXT-X-DEFINE" tag.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def the current flow definition
+ * @param line the trailing characters of the line
+ * @return an error code
+ */
+static int upipe_m3u_reader_define(struct upipe *upipe,
+                                   struct uref *flow_def,
+                                   const char *line)
+{
+    struct upipe_m3u_reader *upipe_m3u_reader =
+        upipe_m3u_reader_from_upipe(upipe);
+
+    UBASE_RETURN(uref_flow_match_def(flow_def, M3U_FLOW_DEF));
+
+    struct uref *item = uref_sibling_alloc_control(flow_def);
+    if (unlikely(item == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return UBASE_ERR_ALLOC;
+    }
+
+    const char *iterator = line;
+    struct ustring name, value;
+    while (ubase_check(attribute_iterate(&iterator, &name, &value)) &&
+           iterator != NULL) {
+        char value_str[value.len + 1];
+        int err = ustring_cpy(value, value_str, sizeof (value_str));
+        if (unlikely(!ubase_check(err))) {
+            upipe_err_va(upipe, "fail to copy ustring %.*s",
+                         (int)value.len, value.at);
+            continue;
+        }
+
+        if (!ustring_cmp_str(name, "NAME")) {
+            err = uref_m3u_variable_set_name(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set variable name to %s", value_str);
+        }
+        else if (!ustring_cmp_str(name, "VALUE")) {
+            err = uref_m3u_variable_set_value(item, value_str);
+            if (unlikely(!ubase_check(err)))
+                upipe_err_va(upipe, "fail to set variable value to %s", value_str);
+        }
+    }
+
+    ulist_add(&upipe_m3u_reader->items, uref_to_uchain(item));
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This checks and parses a "#EXT-X-DISCONTINUITY-SEQUENCE" tag.
  *
  * @param upipe description structure of the pipe
@@ -1230,6 +1280,7 @@ static int upipe_m3u_reader_process_line(struct upipe *upipe,
         { "#EXT-X-DISCONTINUITY-SEQUENCE:", upipe_m3u_reader_discontinuity_sequence },
         { "#EXT-X-DISCONTINUITY", upipe_m3u_reader_discontinuity },
         { "#EXT-X-GAP", upipe_m3u_reader_gap },
+        { "#EXT-X-DEFINE:", upipe_m3u_reader_define },
     };
 
     size_t block_size;

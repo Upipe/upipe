@@ -34,6 +34,9 @@ extern "C" {
 
 UREF_ATTR_STRING(m3u, uri, "m3u.uri", uri)
 
+UREF_ATTR_STRING(m3u_variable, name, "m3u.variable.name", variable name);
+UREF_ATTR_STRING(m3u_variable, value, "m3u.variable.value", variable value);
+
 #ifdef __cplusplus
 }
 #endif

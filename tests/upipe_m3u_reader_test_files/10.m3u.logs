@@ -3,6 +3,8 @@ version: 3
 playlist target duration: 162000000
 playlist media sequence: 2680
 playlist discontinuity sequence: 42
+variable name: abc
+variable value: def
 uri: https://priv.example.com/fileSequence2680.ts
 playlist sequence duration: 162000000
 playlist program date time: 45819615617145000
