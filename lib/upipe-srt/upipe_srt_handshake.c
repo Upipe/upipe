@@ -408,9 +408,9 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
         | SRT_HANDSHAKE_EXT_FLAG_REXMITFLG | SRT_HANDSHAKE_EXT_FLAG_TSBPDSND | SRT_HANDSHAKE_EXT_FLAG_TSBPDRCV | SRT_HANDSHAKE_EXT_FLAG_TLPKTDROP;
 
     /* made up version */
-    upipe_srt_handshake->major = 2;
-    upipe_srt_handshake->minor = 2;
-    upipe_srt_handshake->patch = 2;
+    upipe_srt_handshake->major = 1;
+    upipe_srt_handshake->minor = 5;
+    upipe_srt_handshake->patch = 3;
 
     upipe_srt_handshake->socket_id = 0;
 
