@@ -1579,7 +1579,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
     }
 
     /* Only restart if timer is already alive, it means we're connected */
-    if (upipe_srt_handshake->upump_keepalive_timeout)
+    if (upipe_srt_handshake->upump_keepalive_timeout && dst_socket_id == upipe_srt_handshake->socket_id)
         upipe_srt_handshake_restart_keepalive_timeout(upipe);
 
     if (srt_get_packet_control(buf)) {
