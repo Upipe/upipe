@@ -1329,7 +1329,19 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
         if (upipe_srt_handshake->upump_keepalive_timeout) {
             upipe_dbg(upipe, "Ignore handshake, already connected");
-            return NULL;
+
+            uint8_t *out_cif;
+            struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+            if (!uref)
+                return NULL;
+
+            srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
+            uint8_t *out = &out_cif[-SRT_HEADER_SIZE];
+            srt_set_packet_dst_socket_id(out, hs_packet.remote_socket_id);
+
+            uref_block_unmap(uref, 0);
+
+            return uref;
         }
     }
 
