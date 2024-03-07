@@ -1158,6 +1158,21 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_induction(struct upip
     return uref;
 }
 
+static struct uref *upipe_srt_handshake_alloc_hs_reject(struct upipe *upipe, uint32_t timestamp, uint32_t dst_socket_id, uint32_t rejection_type)
+{
+    uint8_t *out_cif;
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+    if (!uref)
+        return NULL;
+
+    srt_set_handshake_type(out_cif, rejection_type);
+    uint8_t *out = &out_cif[-SRT_HEADER_SIZE];
+    srt_set_packet_dst_socket_id(out, dst_socket_id);
+
+    uref_block_unmap(uref, 0);
+    return uref;
+}
+
 static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upipe *upipe, int size, uint32_t timestamp, const struct hs_packet *hs_packet)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -1165,19 +1180,22 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
     if (hs_packet->dst_socket_id != 0) {
         upipe_err_va(upipe, "Malformed conclusion handshake (dst_socket_id 0x%08x)", hs_packet->dst_socket_id);
         upipe_srt_handshake->expect_conclusion = false;
-        return NULL;
+        return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
     if (hs_packet->syn_cookie != upipe_srt_handshake->syn_cookie) {
         upipe_err(upipe, "Malformed conclusion handshake (invalid syn cookie)");
         upipe_srt_handshake->expect_conclusion = false;
-        return NULL;
+        return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
 
     /* At least HSREQ is expected */
     if (hs_packet->version == SRT_HANDSHAKE_VERSION && size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
         upipe_err(upipe, "Malformed conclusion handshake (size)");
         upipe_srt_handshake->expect_conclusion = false;
-        return NULL;
+        return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
 
     upipe_srt_handshake->isn = hs_packet->isn;
@@ -1319,29 +1337,21 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     if (conclusion) {
         if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
             upipe_err_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
-            return NULL;
+            return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                    hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
     } else {
         if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
             upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
-            return NULL;
+            return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                    hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
 
         if (upipe_srt_handshake->upump_keepalive_timeout) {
             upipe_dbg(upipe, "Ignore handshake, already connected");
 
-            uint8_t *out_cif;
-            struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
-            if (!uref)
-                return NULL;
-
-            srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
-            uint8_t *out = &out_cif[-SRT_HEADER_SIZE];
-            srt_set_packet_dst_socket_id(out, hs_packet.remote_socket_id);
-
-            uref_block_unmap(uref, 0);
-
-            return uref;
+            return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                    hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
     }
 
@@ -1357,7 +1367,8 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             if (hs_packet.version != SRT_HANDSHAKE_VERSION || hs_packet.dst_socket_id != upipe_srt_handshake->socket_id) {
                 upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
                         hs_packet.dst_socket_id, upipe_srt_handshake->socket_id);
-                return NULL;
+                return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                        hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
             }
             uref = upipe_srt_handshake_handle_hs_caller_induction(upipe, size, timestamp, &hs_packet);
         }
@@ -1369,7 +1380,8 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                     hs_packet.extension != SRT_HANDSHAKE_EXT_KMREQ ||
                     hs_packet.syn_cookie != 0 || hs_packet.dst_socket_id != 0) {
                 upipe_err_va(upipe, "Malformed first handshake syn %u dst_id %u", hs_packet.syn_cookie, hs_packet.dst_socket_id);
-                return NULL;
+                return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                        hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
             }
 
             uref = upipe_srt_handshake_handle_hs_listener_induction(upipe, size, timestamp, &hs_packet);
