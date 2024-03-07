@@ -1571,7 +1571,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
 
     uint32_t dst_socket_id = srt_get_packet_dst_socket_id(buf);
     if (dst_socket_id && dst_socket_id != upipe_srt_handshake->socket_id) {
-        upipe_err_va(upipe, "0x%08x != 0x%08x", dst_socket_id,
+        upipe_dbg_va(upipe, "0x%08x != 0x%08x", dst_socket_id,
             upipe_srt_handshake->socket_id);
         ubase_assert(uref_block_unmap(uref, 0));
         uref_free(uref);
