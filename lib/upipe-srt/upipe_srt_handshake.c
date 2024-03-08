@@ -112,7 +112,6 @@ struct upipe_srt_handshake {
     uint8_t sek[2][32];
     uint8_t sek_len;
     uint8_t kk;
-    bool update_even;
 
     struct uref *kmreq;
 
@@ -415,8 +414,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->socket_id = 0;
 
     upipe_srt_handshake->sek_len = 0;
-    upipe_srt_handshake->kk = 3;
-    upipe_srt_handshake->update_even = false;
+    upipe_srt_handshake->kk = 1;
     upipe_srt_handshake->kmreq = NULL;
     upipe_srt_handshake->password = NULL;
 
@@ -603,7 +601,6 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
             upipe_srt_handshake->sek_len = va_arg(args, int);
             free(upipe_srt_handshake->password);
             if (password) {
-                upipe_srt_handshake->kk = 3;
                 upipe_srt_handshake->password = strdup(password);
                 switch (upipe_srt_handshake->sek_len) {
                     case 128/8:
@@ -617,11 +614,11 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
                 if (upipe_srt_handshake->upump_keepalive_timeout) { /* already started */
 #ifdef UPIPE_HAVE_GCRYPT_H
                     // KM refresh
-                    gcry_randomize(upipe_srt_handshake->sek[!upipe_srt_handshake->update_even], upipe_srt_handshake->sek_len, GCRY_STRONG_RANDOM);
-                    upipe_srt_handshake->update_even = !upipe_srt_handshake->update_even;
+                    gcry_randomize(upipe_srt_handshake->sek[upipe_srt_handshake->kk == 2], upipe_srt_handshake->sek_len, GCRY_STRONG_RANDOM);
 
                     uint64_t now = uclock_now(upipe_srt_handshake->uclock);
                     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
+                    upipe_srt_handshake->kk = (upipe_srt_handshake->kk == 2) ? 1 : 2;
                     struct uref *kmreq = upipe_srt_handshake_make_kmreq(upipe, timestamp);
                     if (kmreq) {
                         if (upipe_srt_handshake->kmreq)
