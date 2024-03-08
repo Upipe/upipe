@@ -53,6 +53,7 @@
 #include "upipe/upipe.h"
 #include "upipe-modules/upipe_udp_source.h"
 #include "upipe-modules/upipe_udp_sink.h"
+#include "upipe-modules/upipe_probe_uref.h"
 
 #include "upipe-srt/upipe_srt_sender.h"
 #include "upipe-srt/upipe_srt_handshake.h"
@@ -102,6 +103,9 @@ static struct uprobe *logger;
 
 static bool restart = true;
 
+static size_t packets = 0;
+static const size_t km_refresh_period = 1 << 25;
+
 static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
 {
     uint16_t port = 0;
@@ -144,6 +148,26 @@ static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
 }
 
 /** definition of our uprobe */
+static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
+                 int event, va_list args)
+{
+    switch (event) {
+    case UPROBE_PROBE_UREF:
+        UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
+        //struct uref *uref = va_arg(args, struct uref *);
+
+        if (packets++ == km_refresh_period) {
+            packets = 0;
+            if (upipe_srt_handshake)
+                upipe_srt_handshake_set_password(upipe_srt_handshake, password, key_length / 8);
+        }
+
+        return UBASE_ERR_NONE;
+    }
+    return uprobe_throw_next(uprobe, upipe, event, args);
+}
+
+/** definition of our uprobe */
 static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
@@ -180,6 +204,7 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
 
 static int start(void)
 {
+    packets = 0;
     static unsigned z = 0;
     z++;
 
@@ -227,8 +252,13 @@ static int start(void)
     upipe_release(upipe_srt_sender_sub);
 
     /* send to udp */
+
+    struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
+    struct upipe *upipe = upipe_void_chain_output(upipe_srt_sender, upipe_probe_uref_mgr,
+            uprobe_pfx_alloc_va(uprobe_alloc(catch_uref, uprobe_use(logger)), loglevel, "probe %u", z));
+
     struct upipe_mgr *upipe_udpsink_mgr = upipe_udpsink_mgr_alloc();
-    upipe_udpsink = upipe_void_chain_output(upipe_srt_sender, upipe_udpsink_mgr,
+    upipe_udpsink = upipe_void_chain_output(upipe, upipe_udpsink_mgr,
             uprobe_pfx_alloc_va(uprobe_use(logger), loglevel, "udp sink %u", z));
     upipe_release(upipe_udpsink);
 
@@ -263,16 +293,6 @@ static int start(void)
     }
 
     return 0;
-}
-
-static void kmrefresh(struct upump *upump)
-{
-    if (upipe_srt_handshake)
-        upipe_srt_handshake_set_password(upipe_srt_handshake, password, key_length / 8);
-    else {
-        upump_stop(upump);
-        upump_free(upump);
-    }
 }
 
 static void stop(struct upump *upump)
@@ -372,12 +392,6 @@ int main(int argc, char *argv[])
     int ret = start();
     if (ret)
         return ret;
-
-    if (1) {
-        struct upump *u = upump_alloc_timer(upump_mgr, kmrefresh, NULL,
-                NULL, 5*UCLOCK_FREQ, 5*UCLOCK_FREQ);
-        upump_start(u);
-    }
 
     if (0) {
         restart = false;
