@@ -500,6 +500,9 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
     } else {
         upipe_dbg(upipe, "Encryption disabled");
     }
+
+    if (!upipe_srt_sender->sek_len[!even_key] && upipe_srt_sender->sek_len[even_key])
+        upipe_srt_sender->even_key = !even_key;
 #endif
 
     return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
