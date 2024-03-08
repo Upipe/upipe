@@ -54,6 +54,8 @@
 
 #define EXPECTED_FLOW_DEF "block."
 
+#define SRT_KM_PRE_ANNOUNCEMENT_PERIOD 4000 // XXX: make configurable?
+
 /** upipe_srt_sender structure */
 struct upipe_srt_sender {
     /** real refcount management structure */
@@ -105,6 +107,8 @@ struct upipe_srt_sender {
     uint8_t sek_len[2];
 
     int even_key;
+
+    size_t packets_since_key;
 
     uint64_t last_sent;
 
@@ -489,20 +493,24 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
         memcpy(upipe_srt_sender->sek[1], opaque.v, opaque.size);
     }
 
-    int even_key = !upipe_srt_sender->even_key; // switch key
-    upipe_srt_sender->even_key = even_key;
-    if (!upipe_srt_sender->sek_len[even_key] && upipe_srt_sender->sek_len[!even_key]) {
-        upipe_err_va(upipe, "Couldn't switch encryption keys: %s key is absent",
-            even_key ? "even" : "odd");
-        upipe_srt_sender->even_key = !even_key;
-    } else if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
-        upipe_dbg_va(upipe, "Switching to %s key", even_key ? "even" : "odd");
+    int even_key = upipe_srt_sender->even_key;
+    if (upipe_srt_sender->sek_len[0] && upipe_srt_sender->sek_len[1])
+        upipe_srt_sender->packets_since_key = 0;
+    else
+        upipe_srt_sender->packets_since_key = SRT_KM_PRE_ANNOUNCEMENT_PERIOD;
+
+    if (!upipe_srt_sender->sek_len[!even_key] && upipe_srt_sender->sek_len[even_key]) {
+        upipe_err_va(upipe, "%s key is absent", even_key ? "even" : "odd");
+        even_key = !even_key;
+    }
+
+    if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
+        upipe_dbg_va(upipe, "Using %s key", even_key ? "even" : "odd");
     } else {
         upipe_dbg(upipe, "Encryption disabled");
     }
 
-    if (!upipe_srt_sender->sek_len[!even_key] && upipe_srt_sender->sek_len[even_key])
-        upipe_srt_sender->even_key = !even_key;
+    upipe_srt_sender->even_key = even_key;
 #endif
 
     return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
@@ -591,7 +599,8 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_sender->sek_len[0] = 0;
     upipe_srt_sender->sek_len[1] = 0;
-    upipe_srt_sender->even_key = false;
+    upipe_srt_sender->even_key = true;
+    upipe_srt_sender->packets_since_key = 0;
 
     upipe_srt_sender->last_sent = 0;
 
@@ -653,6 +662,24 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
     srt_set_data_packet_retransmit(buf, false);
 
 #ifdef UPIPE_HAVE_GCRYPT_H
+    if (++upipe_srt_sender->packets_since_key == SRT_KM_PRE_ANNOUNCEMENT_PERIOD) {
+        int even_key = !upipe_srt_sender->even_key;
+
+        if (!upipe_srt_sender->sek_len[!even_key] && upipe_srt_sender->sek_len[even_key]) {
+            upipe_err_va(upipe, "Couldn't switch encryption keys: %s key is absent",
+                    even_key ? "even" : "odd");
+            even_key = !even_key;
+        }
+
+        if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
+            upipe_dbg_va(upipe, "Switching to %s key", even_key ? "even" : "odd");
+        } else {
+            upipe_dbg(upipe, "Encryption disabled");
+        }
+
+        upipe_srt_sender->even_key = even_key;
+    }
+
     int key = !upipe_srt_sender->even_key;
     if (upipe_srt_sender->sek_len[key]) {
         //
