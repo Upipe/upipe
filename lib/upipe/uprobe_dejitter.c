@@ -195,16 +195,19 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
 
     if (cr_sys > uprobe_dejitter->last_print + PRINT_PERIODICITY) {
         upipe_dbg_va(upipe,
-                "dejitter drift %f error %"PRId64" deviation %g",
+                "dejitter drift %f error %g us deviation %g us",
                 (double)uprobe_dejitter->drift_rate.num /
                 uprobe_dejitter->drift_rate.den,
-                error_offset, uprobe_dejitter->deviation);
+                (double)error_offset * 1000000 / UCLOCK_FREQ,
+                uprobe_dejitter->deviation * 1000000 / UCLOCK_FREQ);
         uprobe_dejitter->last_print = cr_sys;
     }
 
     upipe_verbose_va(upipe,
-            "new ref offset %"PRId64" error %"PRId64" deviation %g",
-            real_offset, error_offset, uprobe_dejitter->deviation);
+            "new ref offset %.2g us error %.2g us deviation %g us",
+            (double)real_offset * 1000000. / UCLOCK_FREQ,
+            (double)error_offset * 1000000. / UCLOCK_FREQ,
+            uprobe_dejitter->deviation * 1000000. / UCLOCK_FREQ);
     return UBASE_ERR_NONE;
 }
 
