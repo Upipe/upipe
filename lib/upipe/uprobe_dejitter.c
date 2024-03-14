@@ -121,10 +121,11 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
         uprobe_dejitter->offset_count++;
 
     double deviation = offset - uprobe_dejitter->offset;
-    uprobe_dejitter->deviation =
-        sqrt((uprobe_dejitter->deviation * uprobe_dejitter->deviation *
-              uprobe_dejitter->deviation_count + deviation * deviation) /
-             (uprobe_dejitter->deviation_count + 1));
+    if (uprobe_dejitter->deviation_count)
+        uprobe_dejitter->deviation =
+            sqrt((uprobe_dejitter->deviation * uprobe_dejitter->deviation *
+                        uprobe_dejitter->deviation_count + deviation * deviation) /
+                    (uprobe_dejitter->deviation_count + 1));
     if (uprobe_dejitter->deviation_count < uprobe_dejitter->deviation_divider)
         uprobe_dejitter->deviation_count++;
 
@@ -282,7 +283,7 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
     uprobe_dejitter->offset_divider = enabled ? OFFSET_DIVIDER : 0;
     uprobe_dejitter->deviation_divider = enabled ? DEVIATION_DIVIDER : 0;
     uprobe_dejitter->offset_count = 0;
-    uprobe_dejitter->deviation_count = 1;
+    uprobe_dejitter->deviation_count = 0;
     uprobe_dejitter->offset = 0;
     if (deviation)
         uprobe_dejitter->deviation = deviation;
