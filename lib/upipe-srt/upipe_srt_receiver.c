@@ -1322,6 +1322,7 @@ error:
     // XXX : when much too late, it could mean RTP source restart
     upipe_err_va(upipe, "LATE packet %u, dropped (buffered %"PRIu64" -> %"PRIu64")",
             seqnum, first_seq, last_seq);
+    uref_free(uref);
 }
 
 /** @This frees a upipe.
