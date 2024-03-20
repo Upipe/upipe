@@ -121,6 +121,7 @@ struct upipe_srt_handshake {
     uint64_t establish_time;
 
     bool expect_conclusion;
+    struct uref *caller_conclusion;
 
     bool listener;
 
@@ -321,27 +322,54 @@ static void upipe_srt_handshake_send_timer(struct upump *upump)
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
     uint64_t now = uclock_now(upipe_srt_handshake->uclock);
+    if (!upipe_srt_handshake->establish_time)
+        upipe_srt_handshake->establish_time = now;
+    uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
 
     /* 250 ms between handshakes, just like libsrt */
     if (now - upipe_srt_handshake->last_hs_sent < UCLOCK_FREQ / 4)
         return;
 
-    //send HS
-    uint8_t *out_cif;
-    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, 0, &out_cif);
-    if (!uref)
-        return;
+    if (upipe_srt_handshake->expect_conclusion) {
+        if (upipe_srt_handshake->caller_conclusion) {
+            struct uref *uref = uref_dup(upipe_srt_handshake->caller_conclusion);
+            /* copy because we need to rewrite the timestamp */
+            struct ubuf *ubuf = ubuf_block_copy(uref->ubuf->mgr, uref->ubuf, 0, -1); 
+            if (!ubuf) {
+                upipe_err_va(upipe, "Malloc failed");
+                return;
+            }
+            uref_attach_ubuf(uref, ubuf);
 
-    upipe_srt_handshake->establish_time = now;
+            uint8_t *out;
+            int output_size = -1;
+            if (unlikely(!ubase_check(uref_block_write(uref, 0, &output_size, &out)))) {
+                uref_free(uref);
+                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                return;
+            }
+            srt_set_packet_timestamp(out, timestamp);
+            uref_block_unmap(uref, 0);
 
-    srt_set_handshake_version(out_cif, SRT_HANDSHAKE_VERSION_MIN); // XXX
-    srt_set_handshake_extension(out_cif, SRT_HANDSHAKE_EXT_KMREQ); // draft-sharabayko-srt-01#section-4.3.1.1    *  Extension Field: 2
-    srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_INDUCTION);
+            upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
+                    &upipe_srt_handshake->upump_handshake_send);
+        }
+    } else {
+        //send HS
+        uint8_t *out_cif;
+        struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+        if (!uref)
+            return;        
 
-    uref_block_unmap(uref, 0);
+        srt_set_handshake_version(out_cif, SRT_HANDSHAKE_VERSION_MIN); // XXX
+        srt_set_handshake_extension(out_cif, SRT_HANDSHAKE_EXT_KMREQ); // draft-sharabayko-srt-01#section-4.3.1.1    *  Extension Field: 2
+        srt_set_handshake_type(out_cif, SRT_HANDSHAKE_TYPE_INDUCTION);
 
-    upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
-            &upipe_srt_handshake->upump_handshake_send);
+        uref_block_unmap(uref, 0);
+
+        upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
+                &upipe_srt_handshake->upump_handshake_send);
+    }
     upipe_srt_handshake->last_hs_sent = now;
 }
 
@@ -397,6 +425,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->last_hs_sent = 0;
 
     upipe_srt_handshake->expect_conclusion = false;
+    upipe_srt_handshake->caller_conclusion = NULL;
 
     upipe_srt_handshake->stream_id = NULL;
     upipe_srt_handshake->stream_id_len = 0;
@@ -417,6 +446,8 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->kk = 1;
     upipe_srt_handshake->kmreq = NULL;
     upipe_srt_handshake->password = NULL;
+
+    upipe_srt_handshake->establish_time = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1360,6 +1391,11 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     if (!upipe_srt_handshake->listener) {
         if (conclusion) {
             uref = upipe_srt_handshake_handle_hs_caller_conclusion(upipe, size, timestamp, &hs_packet);
+            /* We don't need the cached conclusion packet any more */
+            if (upipe_srt_handshake->caller_conclusion) {
+                uref_free(upipe_srt_handshake->caller_conclusion);
+                upipe_srt_handshake->caller_conclusion = NULL;
+            }
         } else {
             if (hs_packet.version != SRT_HANDSHAKE_VERSION || hs_packet.dst_socket_id != upipe_srt_handshake->socket_id) {
                 upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
@@ -1368,6 +1404,9 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                         hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
             }
             uref = upipe_srt_handshake_handle_hs_caller_induction(upipe, size, timestamp, &hs_packet);
+            if (upipe_srt_handshake->caller_conclusion)
+                uref_free(upipe_srt_handshake->caller_conclusion);
+            upipe_srt_handshake->caller_conclusion = uref_dup(uref);
         }
     } else { /* listener */
         if (conclusion) {
@@ -1644,6 +1683,9 @@ static void upipe_srt_handshake_free(struct upipe *upipe)
 
     if (upipe_srt_handshake->kmreq)
         uref_free(upipe_srt_handshake->kmreq);
+
+    if (upipe_srt_handshake->caller_conclusion)
+        uref_free(upipe_srt_handshake->caller_conclusion);
 
     upipe_srt_handshake_clean_output(upipe);
     upipe_srt_handshake_clean_upump_handshake_send(upipe);
