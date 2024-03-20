@@ -1332,10 +1332,10 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     bool conclusion = upipe_srt_handshake->expect_conclusion;
 
     if (conclusion) {
+        /* Don't send a rejection as it could be a duplicate Induction on a long latency link */
         if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
-            upipe_err_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
-            return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
-                    hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
+            upipe_dbg_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
+            return NULL;
         }
     } else {
         if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
