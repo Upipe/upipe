@@ -65,7 +65,7 @@ struct upipe_srt_handshake {
     struct urefcount urefcount;
 
     struct upump_mgr *upump_mgr;
-    struct upump *upump_timer; /* send handshakes every 250ms until connected */
+    struct upump *upump_handshake_send; /* send handshakes every 250ms until connected */
     struct upump *upump_handshake_timeout; /* abort connection if not successful */
     struct upump *upump_keepalive_timeout; /* reset connection if no keep alive in 10s */
     struct upump *upump_kmreq; /* re-send key update if not acknowledged */
@@ -140,7 +140,7 @@ UPIPE_HELPER_VOID(upipe_srt_handshake)
 
 UPIPE_HELPER_OUTPUT(upipe_srt_handshake, output, flow_def, output_state, request_list)
 UPIPE_HELPER_UPUMP_MGR(upipe_srt_handshake, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_timer, upump_mgr)
+UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_handshake_send, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_handshake_timeout, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_keepalive_timeout, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_srt_handshake, upump_kmreq, upump_mgr)
@@ -216,7 +216,7 @@ static void upipe_srt_handshake_shutdown(struct upipe *upipe)
 
     uref_block_unmap(uref, 0);
     upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
-            &upipe_srt_handshake->upump_timer);
+            &upipe_srt_handshake->upump_handshake_send);
 }
 
 
@@ -341,7 +341,7 @@ static void upipe_srt_handshake_timer(struct upump *upump)
     uref_block_unmap(uref, 0);
 
     upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref,
-            &upipe_srt_handshake->upump_timer);
+            &upipe_srt_handshake->upump_handshake_send);
     upipe_srt_handshake->last_hs_sent = now;
 }
 
@@ -380,7 +380,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake_init_output(upipe);
 
     upipe_srt_handshake_init_upump_mgr(upipe);
-    upipe_srt_handshake_init_upump_timer(upipe);
+    upipe_srt_handshake_init_upump_handshake_send(upipe);
     upipe_srt_handshake_init_upump_handshake_timeout(upipe);
     upipe_srt_handshake_init_upump_keepalive_timeout(upipe);
     upipe_srt_handshake_init_upump_kmreq(upipe);
@@ -455,7 +455,7 @@ static int upipe_srt_handshake_check(struct upipe *upipe, struct uref *flow_form
         return UBASE_ERR_NONE;
     }
 
-    if (upipe_srt_handshake->upump_mgr && !upipe_srt_handshake->upump_keepalive_timeout && !upipe_srt_handshake->upump_timer && !upipe_srt_handshake->listener) {
+    if (upipe_srt_handshake->upump_mgr && !upipe_srt_handshake->upump_keepalive_timeout && !upipe_srt_handshake->upump_handshake_send && !upipe_srt_handshake->listener) {
         upipe_srt_handshake->socket_id = mrand48();
         upipe_srt_handshake->syn_cookie = 0;
         struct upump *upump =
@@ -464,7 +464,7 @@ static int upipe_srt_handshake_check(struct upipe *upipe, struct uref *flow_form
                               upipe, upipe->refcount,
                               UCLOCK_FREQ/300, UCLOCK_FREQ/300);
         upump_start(upump);
-        upipe_srt_handshake_set_upump_timer(upipe, upump);
+        upipe_srt_handshake_set_upump_handshake_send(upipe, upump);
     }
 
     return UBASE_ERR_NONE;
@@ -568,7 +568,7 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
 
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_srt_handshake_set_upump_timer(upipe, NULL);
+            upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
             upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
             upipe_srt_handshake_set_upump_keepalive_timeout(upipe, NULL);
             upipe_srt_handshake_set_upump_kmreq(upipe, NULL);
@@ -1049,7 +1049,7 @@ static struct uref *upipe_srt_handshake_handle_hs_caller_conclusion(struct upipe
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
-    upipe_srt_handshake_set_upump_timer(upipe, NULL);
+    upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
     upipe_srt_handshake->remote_socket_id = hs_packet->remote_socket_id;
 
     /* At least HSREQ is expected */
@@ -1646,7 +1646,7 @@ static void upipe_srt_handshake_free(struct upipe *upipe)
         uref_free(upipe_srt_handshake->kmreq);
 
     upipe_srt_handshake_clean_output(upipe);
-    upipe_srt_handshake_clean_upump_timer(upipe);
+    upipe_srt_handshake_clean_upump_handshake_send(upipe);
     upipe_srt_handshake_clean_upump_handshake_timeout(upipe);
     upipe_srt_handshake_clean_upump_keepalive_timeout(upipe);
     upipe_srt_handshake_clean_upump_kmreq(upipe);
