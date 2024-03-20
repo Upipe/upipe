@@ -203,10 +203,9 @@ static void upipe_srt_sender_input_sub(struct upipe *upipe, struct uref *uref,
         uref_block_unmap(uref, 0);
         uref_free(uref);
     } else {
-        if (type == SRT_CONTROL_TYPE_HANDSHAKE) {
+        if (type == SRT_CONTROL_TYPE_HANDSHAKE && upipe_srt_sender->establish_time == 0 && now > 0) {
             uint64_t ts = srt_get_packet_timestamp(buf);
-            if (ts)
-                upipe_srt_sender->establish_time = now - ts * UCLOCK_FREQ / 1000000;
+            upipe_srt_sender->establish_time = now - ts * UCLOCK_FREQ / 1000000;
         }
 
         uref_block_unmap(uref, 0);
@@ -595,6 +594,7 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender->latency = UCLOCK_FREQ; /* 1 sec */
     upipe_srt_sender->socket_id = 0;
     upipe_srt_sender->seqnum = 0;
+    upipe_srt_sender->establish_time = 0;
     upipe_srt_sender->syn_cookie = 1;
 
     upipe_srt_sender->sek_len[0] = 0;
