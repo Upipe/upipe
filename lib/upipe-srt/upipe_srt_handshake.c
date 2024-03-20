@@ -315,7 +315,7 @@ static void upipe_srt_handshake_timeout(struct upump *upump)
     upipe_srt_handshake->expect_conclusion = false;
 }
 
-static void upipe_srt_handshake_timer(struct upump *upump)
+static void upipe_srt_handshake_send_timer(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -460,7 +460,7 @@ static int upipe_srt_handshake_check(struct upipe *upipe, struct uref *flow_form
         upipe_srt_handshake->syn_cookie = 0;
         struct upump *upump =
             upump_alloc_timer(upipe_srt_handshake->upump_mgr,
-                              upipe_srt_handshake_timer,
+                              upipe_srt_handshake_send_timer,
                               upipe, upipe->refcount,
                               UCLOCK_FREQ/300, UCLOCK_FREQ/300);
         upump_start(upump);
