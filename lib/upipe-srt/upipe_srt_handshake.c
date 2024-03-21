@@ -1360,6 +1360,11 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         return NULL;
     }
 
+    if (upipe_srt_handshake->upump_keepalive_timeout && hs_packet.dst_socket_id == upipe_srt_handshake->socket_id) {
+        upipe_dbg_va(upipe, "Already connected, ignoring hs type 0x%x", hs_type);
+        return NULL;
+    }
+
     bool conclusion = upipe_srt_handshake->expect_conclusion;
 
     if (conclusion) {
