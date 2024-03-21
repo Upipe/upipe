@@ -334,7 +334,7 @@ static void upipe_srt_handshake_send_timer(struct upump *upump)
         if (upipe_srt_handshake->caller_conclusion) {
             struct uref *uref = uref_dup(upipe_srt_handshake->caller_conclusion);
             /* copy because we need to rewrite the timestamp */
-            struct ubuf *ubuf = ubuf_block_copy(uref->ubuf->mgr, uref->ubuf, 0, -1); 
+            struct ubuf *ubuf = ubuf_block_copy(uref->ubuf->mgr, uref->ubuf, 0, -1);
             if (!ubuf) {
                 upipe_err_va(upipe, "Malloc failed");
                 return;
@@ -359,7 +359,7 @@ static void upipe_srt_handshake_send_timer(struct upump *upump)
         uint8_t *out_cif;
         struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
         if (!uref)
-            return;        
+            return;
 
         srt_set_handshake_version(out_cif, SRT_HANDSHAKE_VERSION_MIN); // XXX
         srt_set_handshake_extension(out_cif, SRT_HANDSHAKE_EXT_KMREQ); // draft-sharabayko-srt-01#section-4.3.1.1    *  Extension Field: 2
