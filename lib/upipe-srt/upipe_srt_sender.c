@@ -505,7 +505,8 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
     if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
         upipe_dbg_va(upipe, "Using %s key", even_key ? "even" : "odd");
     } else {
-        upipe_dbg(upipe, "Encryption disabled");
+        if (upipe_srt_sender->socket_id)
+            upipe_dbg(upipe, "No encryption key in handshake");
     }
 
     upipe_srt_sender->even_key = even_key;
