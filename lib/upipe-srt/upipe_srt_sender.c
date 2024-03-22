@@ -93,7 +93,6 @@ struct upipe_srt_sender {
     /** list of output requests */
     struct uchain request_list;
 
-    uint32_t syn_cookie;
     uint32_t socket_id;
     uint32_t seqnum;
 
@@ -595,7 +594,6 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender->socket_id = 0;
     upipe_srt_sender->seqnum = 0;
     upipe_srt_sender->establish_time = 0;
-    upipe_srt_sender->syn_cookie = 1;
 
     upipe_srt_sender->sek_len[0] = 0;
     upipe_srt_sender->sek_len[1] = 0;
