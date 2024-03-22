@@ -149,6 +149,8 @@ struct upipe_srt_receiver {
     uint8_t sek[2][32];
     uint8_t sek_len;
 
+    uint64_t establish_time;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -355,7 +357,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
             }
 
             srt_set_packet_control(out, true);
-            srt_set_packet_timestamp(out, now / 27);
+            srt_set_packet_timestamp(out, (now - upipe_srt_receiver->establish_time) / 27);
             srt_set_packet_dst_socket_id(out, upipe_srt_receiver->socket_id);
             srt_set_control_packet_type(out, SRT_CONTROL_TYPE_KEEPALIVE);
             srt_set_control_packet_subtype(out, 0);
@@ -440,7 +442,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
                 s -= SRT_HEADER_SIZE;
 
                 srt_set_packet_control(buf, true);
-                srt_set_packet_timestamp(buf, now / 27);
+                srt_set_packet_timestamp(buf, (now - upipe_srt_receiver->establish_time) / 27);
                 srt_set_packet_dst_socket_id(buf, upipe_srt_receiver->socket_id);
                 srt_set_control_packet_type(buf, SRT_CONTROL_TYPE_NAK);
                 srt_set_control_packet_subtype(buf, 0);
@@ -497,7 +499,7 @@ next:
             } else {
                 uint32_t ack_num = upipe_srt_receiver->ack_num++;
                 srt_set_packet_control(out, true);
-                srt_set_packet_timestamp(out, now / 27);
+                srt_set_packet_timestamp(out, (now - upipe_srt_receiver->establish_time) / 27);
                 srt_set_packet_dst_socket_id(out, upipe_srt_receiver->socket_id);
                 srt_set_control_packet_type(out, SRT_CONTROL_TYPE_ACK);
                 srt_set_control_packet_subtype(out, 0);
@@ -778,6 +780,8 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
     upipe_srt_receiver->bytes = 0;
 
     upipe_srt_receiver->sek_len = 0;
+
+    upipe_srt_receiver->establish_time = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1179,6 +1183,12 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
             ubase_assert(uref_block_unmap(uref, 0));
             uref_free(uref);
         } else {
+
+            if (type == SRT_CONTROL_TYPE_HANDSHAKE && upipe_srt_receiver->establish_time == 0 && now > 0) {
+                uint64_t ts = srt_get_packet_timestamp(buf);
+                upipe_srt_receiver->establish_time = now - ts * UCLOCK_FREQ / 1000000;
+            }
+
             ubase_assert(uref_block_unmap(uref, 0));
             if (upipe_srt_receiver->control) {
                 upipe_srt_receiver->last_sent = now;
