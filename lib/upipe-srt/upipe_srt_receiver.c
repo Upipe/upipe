@@ -515,7 +515,8 @@ next:
 
                 uint64_t packets_per_sec = upipe_srt_receiver->packets * UCLOCK_FREQ / t;
                 srt_set_ack_packets_receiving_rate(out_cif, packets_per_sec);
-                srt_set_ack_avail_bufsize(out_cif, packets_per_sec * upipe_srt_receiver->latency / UCLOCK_FREQ);
+                /* If we sent value 0, libsrt will stop sending */
+                srt_set_ack_avail_bufsize(out_cif, 8192);
                 srt_set_ack_estimated_link_capacity(out_cif, 10 * packets_per_sec); /* ? */
                 srt_set_ack_receiving_rate(out_cif, upipe_srt_receiver->bytes * UCLOCK_FREQ / t);
 
