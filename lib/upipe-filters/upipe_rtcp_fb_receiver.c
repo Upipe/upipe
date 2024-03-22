@@ -276,7 +276,7 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
         uref_attr_get_priv(uref, &uref_seqnum);
 
         uint16_t diff = uref_seqnum - seq;
-        if (diff > pkts) {
+        if (diff >= pkts) {
             /* packet not in range */
             if (diff < 0x8000) {
                 /* packet after range */
@@ -285,7 +285,7 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
             continue;
         }
 
-        upipe_verbose_va(upipe, "Retransmit %hu", seq);
+        upipe_verbose_va(upipe, "Retransmit %" PRIu64, uref_seqnum);
         upipe_rtcpfb->retrans++;
 
         uint8_t *buf;
@@ -299,6 +299,12 @@ static void upipe_rtcpfb_lost_sub_n(struct upipe *upipe, uint16_t seq, uint16_t 
         }
 
         upipe_rtcpfb_output(upipe_super, uref_dup(uref), NULL);
+        diff++;
+        seq += diff;
+        pkts -= diff;
+
+        if (pkts == 0)
+            return;
     }
 }
 
