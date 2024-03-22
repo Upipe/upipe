@@ -296,6 +296,11 @@ static int start(void)
         upipe_srt_handshake_set_peer(upipe_srt_handshake, peer, peer_len);
     }
 
+    struct uref *flow_def = uref_alloc_control(uref_mgr);
+    uref_flow_set_def(flow_def, "block.");
+    upipe_set_flow_def(upipe_srt_sender, flow_def);
+    uref_free(flow_def);
+
     return 0;
 }
 
