@@ -826,11 +826,16 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
             upipe_srt_handshake->receiver_tsbpd_delay, upipe_srt_handshake->sender_tsbpd_delay);
 }
 
-static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const uint8_t **wrap, uint8_t *wrap_len)
+static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const size_t ext_len, const uint8_t **wrap, uint8_t *wrap_len)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+    if (!srt_check_km(ext, ext_len)) {
+        upipe_err(upipe, "Malformed KMREQ");
+        return false;
+    }
+
     if (!upipe_srt_handshake->password) {
-        upipe_err(upipe, "Password not set");
+        upipe_warn(upipe, "Received a Key Message, but passphrase was not set");
         return false;
     }
 
@@ -1249,8 +1254,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
                 upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
                         SRT_HANDSHAKE_HSREQ_SIZE);
         } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
-            if (!srt_check_km(ext, ext_len) || !upipe_srt_handshake_parse_kmreq(upipe, ext, &wrap, &wrap_len))
-                upipe_err(upipe, "Malformed KMREQ");
+            upipe_srt_handshake_parse_kmreq(upipe, ext, ext_len, &wrap, &wrap_len);
         }
 
         ext += ext_len;
@@ -1465,8 +1469,7 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
     const uint8_t *cif = srt_get_control_packet_cif(buf);
     size -= SRT_HEADER_SIZE;
 
-    if (!srt_check_km(cif, size) || !upipe_srt_handshake_parse_kmreq(upipe, cif, &wrap, &wrap_len)) {
-        upipe_err_va(upipe, "KM parse failed");
+    if (!upipe_srt_handshake_parse_kmreq(upipe, cif, size, &wrap, &wrap_len)) {
         return NULL;
     }
 
