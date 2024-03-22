@@ -288,8 +288,8 @@ static void stop(struct upump *upump)
         upump_free(upump);
     }
 
-    upipe_release(upipe_srtr_sub);
     upipe_release(upipe_udpsrc);
+    upipe_release(upipe_srtr_sub);
 
     if (restart) {
         restart = false;
