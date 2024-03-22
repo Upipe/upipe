@@ -546,13 +546,14 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
         free(upipe_srt_handshake->stream_id);
         upipe_srt_handshake->stream_id = NULL;
 
-        size_t stream_id_len = (strlen(value) + 3) & ~3; // round up to 4 bytes
-        uint8_t *stream_id = malloc(stream_id_len);
+        size_t src_len = strlen(value);
+        size_t stream_id_len = (src_len + 3) & ~3; // round up to 4 bytes
+        uint8_t *stream_id = calloc(1, stream_id_len);
         if (!stream_id) {
             return UBASE_ERR_ALLOC;
         }
 
-        strncpy((char*)stream_id, value, stream_id_len);
+        strncpy((char*)stream_id, value, src_len);
 
         for (size_t i = 0; i < stream_id_len; i += 4) {
             uint8_t tmp = stream_id[i+0];
