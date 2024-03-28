@@ -110,11 +110,6 @@ endif
 libupipe_modules_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include
 libupipe_modules_la_LIBADD = -lm $(top_builddir)/lib/upipe/libupipe.la
 
-if HAVE_GCRYPT
-libupipe_modules_la_CPPFLAGS += $(GCRYPT_CFLAGS)
-libupipe_modules_la_LIBADD += $(GCRYPT_LIBS)
-endif
-
 libupipe_modules_la_LDFLAGS = -no-undefined
 
 pkgconfigdir = $(libdir)/pkgconfig
