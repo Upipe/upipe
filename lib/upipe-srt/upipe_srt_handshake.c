@@ -797,6 +797,8 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
 
             uref_pic_set_number(flow_def, upipe_srt_handshake->isn);
             upipe_srt_handshake_store_flow_def(upipe, flow_def);
+            /* force sending flow definition immediately */
+            upipe_srt_handshake_output(upipe, NULL, NULL);
         }
     }
 }
