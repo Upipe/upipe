@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+Name: libupipe_srt
+Description: Upipe multimedia framework, libsrt interface module
+Version: @VERSION@
+Requires: libupipe
+Requires.private: libgcrypt
+Libs: -L${libdir} -lupipe_srt
+Cflags: -I${includedir}
