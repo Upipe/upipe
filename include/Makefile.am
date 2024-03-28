@@ -2,7 +2,8 @@ SUBDIRS = \
 	  upipe \
 	  upipe-modules \
 	  upipe-filters \
-	  upipe-dveo
+	  upipe-dveo \
+	  upipe-srt
 
 if HAVE_QTWEBKIT
 SUBDIRS += upipe-qt
@@ -105,5 +106,5 @@ SUBDIRS += upipe-bearssl
 endif
 
 if HAVE_SRT
-SUBDIRS += upump-srt upipe-srt
+SUBDIRS += upump-srt
 endif
