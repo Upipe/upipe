@@ -525,8 +525,6 @@ static int upipe_srt_handshake_set_flow_def(struct upipe *upipe, struct uref *fl
         return UBASE_ERR_ALLOC;
 
     upipe_srt_handshake_store_flow_def(upipe, flow_def);
-    /* force sending flow definition immediately */
-    upipe_srt_handshake_output(upipe, NULL, NULL);
 
     return UBASE_ERR_NONE;
 }
