@@ -618,7 +618,9 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         }
 
         if (--upipe_srt_receiver->buffered == 0) {
-            upipe_dbg_va(upipe, "Exhausted buffer");
+            upipe_warn_va(upipe, "Exhausted buffer");
+            upipe_srt_receiver->expected_seqnum = UINT64_MAX;
+            upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
         }
     }
 }
