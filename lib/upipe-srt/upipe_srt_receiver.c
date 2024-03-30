@@ -121,9 +121,6 @@ struct upipe_srt_receiver {
     size_t loss;
     size_t dups;
 
-    /* exhausted buffer count */
-    size_t exhausted_buffer_count;
-
     /** buffer latency */
     uint64_t latency;
     /** last time a NACK was sent */
@@ -573,8 +570,6 @@ static void upipe_srt_receiver_timer(struct upump *upump)
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
     uint64_t rtt = upipe_srt_receiver_get_rtt(upipe);
 
-    size_t buffered_orig = upipe_srt_receiver->buffered;
-
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
         struct uref *uref = uref_from_uchain(uchain);
@@ -622,19 +617,11 @@ static void upipe_srt_receiver_timer(struct upump *upump)
             old = now;
         }
 
-        upipe_srt_receiver->buffered--;
-    }
-
-    /* At low bitrates and VBR video the buffer may momentarily exhaust. 
-       Try and avoid a buffer reset in this case */
-    if (upipe_srt_receiver->buffered == 0 && buffered_orig > 0)
-        upipe_srt_receiver->exhausted_buffer_count++;
-
-    if (upipe_srt_receiver->exhausted_buffer_count >= 5) {
-        upipe_warn_va(upipe, "Exhausted buffer");
-        upipe_srt_receiver->expected_seqnum = UINT64_MAX;
-        upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
-        upipe_srt_receiver->exhausted_buffer_count = 0;
+        if (--upipe_srt_receiver->buffered == 0) {
+            upipe_warn_va(upipe, "Exhausted buffer");
+            upipe_srt_receiver->expected_seqnum = UINT64_MAX;
+            upipe_srt_receiver->last_output_seqnum = UINT64_MAX;
+        }
     }
 }
 
@@ -785,8 +772,6 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
     upipe_srt_receiver->repaired = 0;
     upipe_srt_receiver->loss = 0;
     upipe_srt_receiver->dups = 0;
-
-    upipe_srt_receiver->exhausted_buffer_count = 0;
 
     upipe_srt_receiver->latency = 0;
     upipe_srt_receiver->last_sent = 0;
