@@ -587,7 +587,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        if (now - cr_sys <= upipe_srt_receiver->latency)
+        if (now <= cr_sys + upipe_srt_receiver->latency)
             break;
 
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
@@ -625,7 +625,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         upipe_srt_receiver->buffered--;
     }
 
-    /* At low bitrates and VBR video the buffer may momentarily exhaust. 
+    /* At low bitrates and VBR video the buffer may momentarily exhaust.
        Try and avoid a buffer reset in this case */
     if (upipe_srt_receiver->buffered == 0 && buffered_orig > 0)
         upipe_srt_receiver->exhausted_buffer_count++;
