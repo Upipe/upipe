@@ -586,7 +586,7 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        if (now <= cr_sys + upipe_srt_receiver->latency - rtt)
+        if (now <= cr_sys + upipe_srt_receiver->latency)
             break;
 
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
