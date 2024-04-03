@@ -170,6 +170,8 @@ struct upipe_avcenc {
     struct uchain urefs_in_use;
     /** last incoming pts (in avcodec timebase) */
     int64_t avcpts;
+    /** last PTS */
+    uint64_t last_pts;
     /** last DTS */
     uint64_t last_dts;
     /** last DTS (system time) */
@@ -180,6 +182,8 @@ struct upipe_avcenc {
     uint64_t input_pts;
     /** last input PTS (system time) */
     uint64_t input_pts_sys;
+    /** latency in the input flow */
+    uint64_t input_latency;
 
     /** frame counter */
     uint64_t counter;
@@ -532,6 +536,14 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
         UBASE_FATAL(upipe, uref_ts_flow_set_sub_ancillary(flow_def, 1, 0))
     }
 
+    /* find latency */
+    if (upipe_avcenc->input_pts != UINT64_MAX) {
+        uint64_t latency = upipe_avcenc->input_pts - upipe_avcenc->last_pts;
+        upipe_notice_va(upipe, "latency: %" PRIu64 " ms",
+                        1000 * latency / UCLOCK_FREQ);
+        uref_clock_set_latency(flow_def, upipe_avcenc->input_latency + latency);
+    }
+
     upipe_avcenc_store_flow_def(upipe, flow_def);
 }
 
@@ -655,6 +667,7 @@ static void upipe_avcenc_output_pkt(struct upipe *upipe,
 
     uref_clock_rebase_dts_orig(uref);
     uref_clock_set_rate(uref, upipe_avcenc->drift_rate);
+    uref_clock_get_pts_prog(uref, &upipe_avcenc->last_pts);
 
     upipe_avcenc->last_dts = dts;
     upipe_avcenc->last_dts_sys = dts_sys;
@@ -1090,6 +1103,8 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
     AVCodecContext *context = upipe_avcenc->context;
     const char *def;
     if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, &def)))) {
+        upipe_avcenc->input_latency = 0;
+        uref_clock_get_latency(uref, &upipe_avcenc->input_latency);
         upipe_avcenc_store_flow_def(upipe, NULL);
         uref_free(upipe_avcenc->flow_def_requested);
         upipe_avcenc->flow_def_requested = NULL;
@@ -2091,11 +2106,13 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
 
     ulist_init(&upipe_avcenc->urefs_in_use);
     upipe_avcenc->avcpts = AVCPTS_INIT;
+    upipe_avcenc->last_pts = UINT64_MAX;
     upipe_avcenc->last_dts = UINT64_MAX;
     upipe_avcenc->last_dts_sys = UINT64_MAX;
     upipe_avcenc->drift_rate.num = upipe_avcenc->drift_rate.den = 1;
     upipe_avcenc->input_pts = UINT64_MAX;
     upipe_avcenc->input_pts_sys = UINT64_MAX;
+    upipe_avcenc->input_latency = 0;
 
     upipe_throw_ready(upipe);
     upipe_avcenc_build_flow_def_attr(upipe);
