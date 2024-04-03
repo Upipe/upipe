@@ -128,6 +128,11 @@ struct upipe_avfsrc {
     /** last random access point */
     uint64_t systime_rap;
 
+    /** libavformat stream ID used as clock reference */
+    uint64_t cr_id;
+    /** last libavformat stream ID used as clock reference */
+    uint64_t last_cr_id;
+
     /** list of subs */
     struct uchain subs;
 
@@ -294,6 +299,7 @@ static struct upipe *upipe_avfsrc_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
     }
     upipe_avfsrc_sub->id = id;
+    upipe_avfsrc->cr_id = UINT64_MAX;
 
     struct upipe_avfsrc *avfsrc = upipe_avfsrc_from_sub_mgr(upipe->mgr);
     struct upipe_avfsrc_mgr *avfsrc_mgr =
@@ -403,6 +409,10 @@ static void upipe_avfsrc_sub_free(struct urefcount *urefcount_real)
     struct upipe_avfsrc_sub *sub =
         upipe_avfsrc_sub_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_avfsrc_sub_to_upipe(sub);
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_sub_mgr(upipe->mgr);
+
+    if (sub->id == upipe_avfsrc->cr_id)
+        upipe_avfsrc->cr_id = UINT64_MAX;
 
     upipe_throw_dead(upipe);
 
@@ -479,6 +489,8 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->timestamp_highest = AV_CLOCK_MIN;
     upipe_avfsrc->systime_rap = UINT64_MAX;
+    upipe_avfsrc->cr_id = UINT64_MAX;
+    upipe_avfsrc->last_cr_id = UINT64_MAX;
 
     upipe_avfsrc->url = NULL;
 
@@ -522,6 +534,51 @@ static struct upipe_avfsrc_sub *upipe_avfsrc_find_output(struct upipe *upipe,
             return output;
     }
     return NULL;
+}
+
+/** @internal @This updates the stream used as clock reference for dejittering.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsrc_update_cr(struct upipe *upipe)
+{
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+
+    uint64_t cr_id = UINT64_MAX;
+    enum AVMediaType type = AVMEDIA_TYPE_UNKNOWN;
+
+    struct uchain *uchain;
+    ulist_foreach (&upipe_avfsrc->subs, uchain) {
+        struct upipe_avfsrc_sub *output =
+            upipe_avfsrc_sub_from_uchain(uchain);
+
+        AVStream *stream = upipe_avfsrc->context->streams[output->id];
+        enum AVMediaType current_type = stream->codecpar->codec_type;
+
+        switch (current_type) {
+            case AVMEDIA_TYPE_VIDEO:
+                if (type != AVMEDIA_TYPE_VIDEO) {
+                    cr_id = output->id;
+                    type = current_type;
+                }
+                break;
+
+            case AVMEDIA_TYPE_AUDIO:
+                if (type != AVMEDIA_TYPE_VIDEO && type != AVMEDIA_TYPE_AUDIO) {
+                    cr_id = output->id;
+                    type = current_type;
+                }
+                break;
+
+            default:
+                if (cr_id == UINT64_MAX) {
+                    cr_id = output->id;
+                    type = current_type;
+                }
+        }
+    }
+
+    upipe_avfsrc->cr_id = cr_id;
 }
 
 /** @internal @This reads data from the source and outputs it.
@@ -568,6 +625,9 @@ static void upipe_avfsrc_worker(struct upump *upump)
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
+
+    if (upipe_avfsrc->cr_id == UINT64_MAX)
+        upipe_avfsrc_update_cr(upipe);
 
     AVStream *stream = upipe_avfsrc->context->streams[pkt.stream_index];
     uint64_t systime = upipe_avfsrc->uclock != NULL ?
@@ -632,7 +692,14 @@ static void upipe_avfsrc_worker(struct upump *upump)
         ts = true;
 
         /* this is subtly wrong, but whatever */
-        upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, 0);
+        if (output->id == upipe_avfsrc->cr_id) {
+            int discontinuity = 0;
+            if (upipe_avfsrc->last_cr_id != UINT64_MAX &&
+                upipe_avfsrc->last_cr_id != upipe_avfsrc->cr_id)
+                discontinuity = 1;
+            upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, discontinuity);
+            upipe_avfsrc->last_cr_id = upipe_avfsrc->cr_id;
+        }
     }
     if (pkt.duration > 0)
         UBASE_FATAL(upipe, uref_clock_set_duration(uref, pkt.duration))
