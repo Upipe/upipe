@@ -428,6 +428,11 @@ static void upipe_pciesdi_src_worker(struct upump *upump)
     /* All seems good with the signal so restart the format watcher pump. */
     upump_restart(upipe_pciesdi_src->format_watcher);
 
+    if (!upipe_pciesdi_src->sdi_format) {
+        upipe_err(upipe, "Invalid SDI format, not continuing");
+        return;
+    }
+
     /* Size (in bytes) of a packed line. */
     int sdi_line_width = upipe_pciesdi_src->sdi_format->width * 2 * 10 / 8;
     if (upipe_pciesdi_src->sdi3g_levelb)
