@@ -110,8 +110,13 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (unlikely(discontinuity)) {
         uprobe_dejitter->offset_count = 0;
         uprobe_dejitter->offset = 0;
+        uprobe_dejitter->first_real_offset = 0;
         /* but do not reset the deviation */
     }
+
+    /* offset has an arbitrary value, as it is the difference between 2 unrelated clocks. */
+    if (uprobe_dejitter->first_real_offset == 0)
+        uprobe_dejitter->first_real_offset = offset;
 
     /* low-pass filter */
     uprobe_dejitter->offset =
@@ -204,8 +209,8 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     upipe_verbose_va(upipe,
-            "new ref offset %.2g us error %.2g us deviation %g us",
-            (double)real_offset * 1000000. / UCLOCK_FREQ,
+            "new ref offset %g us error %g us deviation %g us",
+            (double)(real_offset - uprobe_dejitter->first_real_offset) * 1000000. / UCLOCK_FREQ,
             (double)error_offset * 1000000. / UCLOCK_FREQ,
             uprobe_dejitter->deviation * 1000000. / UCLOCK_FREQ);
     return UBASE_ERR_NONE;
@@ -286,6 +291,7 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
     uprobe_dejitter->offset_divider = enabled ? OFFSET_DIVIDER : 0;
     uprobe_dejitter->deviation_divider = enabled ? DEVIATION_DIVIDER : 0;
     uprobe_dejitter->offset_count = 0;
+    uprobe_dejitter->first_real_offset = 0;
     uprobe_dejitter->deviation_count = 0;
     uprobe_dejitter->offset = 0;
     if (deviation)
