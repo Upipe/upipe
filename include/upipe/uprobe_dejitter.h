@@ -69,6 +69,9 @@ struct uprobe_dejitter {
     /** cr_sys of the last debug print */
     uint64_t last_print;
 
+    /** initial offset between cr_sys and cr_prog */
+    int64_t first_real_offset;
+
     /** structure exported to modules */
     struct uprobe uprobe;
 };
