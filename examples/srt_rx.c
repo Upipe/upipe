@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Open Broadcast Systems Ltd.
+ * Copyright (C) 2016-2024 Open Broadcast Systems Ltd.
  *
  * Authors: Rafaël Carré
  *
