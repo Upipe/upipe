@@ -292,9 +292,14 @@ static void upipe_rtpr_list_add(struct upipe *upipe, struct uref *uref)
         uref_free(uref);
         return;
     }
-    uint16_t new_seqnum = rtp_get_seqnum(rtp_header);
-    uref_attr_set_priv(uref, new_seqnum);
+    bool is_rtp = rtp_check_hdr(rtp_header);
+    uint16_t new_seqnum = likely(is_rtp) ? rtp_get_seqnum(rtp_header) : 0;
     uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
+    if (unlikely(!is_rtp)) {
+        uref_free(uref);
+        return;
+    }
+    uref_attr_set_priv(uref, new_seqnum);
 
     /* Drop late packets */
     if (rtpr->last_sent_seqnum != UINT64_MAX &&
