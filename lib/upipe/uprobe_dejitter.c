@@ -131,6 +131,8 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
 
     if (uprobe_dejitter->deviation < uprobe_dejitter->minimum_deviation)
         uprobe_dejitter->deviation = uprobe_dejitter->minimum_deviation;
+    if (uprobe_dejitter->deviation > uprobe_dejitter->maximum_deviation)
+        uprobe_dejitter->deviation = uprobe_dejitter->maximum_deviation;
 
     int64_t wanted_offset = uprobe_dejitter->offset +
                             3 * uprobe_dejitter->deviation;
@@ -295,6 +297,8 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
 
     if (uprobe_dejitter->deviation < uprobe_dejitter->minimum_deviation)
         uprobe_dejitter->deviation = uprobe_dejitter->minimum_deviation;
+    if (uprobe_dejitter->deviation > uprobe_dejitter->maximum_deviation)
+        uprobe_dejitter->deviation = uprobe_dejitter->maximum_deviation;
 }
 
 /** @This sets the minimum deviation of the dejittering probe.
@@ -308,6 +312,21 @@ void uprobe_dejitter_set_minimum_deviation(struct uprobe *uprobe,
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
     uprobe_dejitter->minimum_deviation = deviation;
+    if (uprobe_dejitter->deviation < deviation)
+        uprobe_dejitter->deviation = deviation;
+}
+
+/** @This sets the maximum deviation of the dejittering probe.
+ *
+ * @param uprobe pointer to probe
+ * @param deviation maximum deviation to set
+ */
+void uprobe_dejitter_set_maximum_deviation(struct uprobe *uprobe,
+                                           double deviation)
+{
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    uprobe_dejitter->maximum_deviation = deviation;
     if (uprobe_dejitter->deviation < deviation)
         uprobe_dejitter->deviation = deviation;
 }
