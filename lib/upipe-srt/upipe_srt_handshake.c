@@ -223,7 +223,7 @@ static void upipe_srt_handshake_shutdown(struct upipe *upipe)
 }
 
 
-static struct uref *upipe_srt_handshake_alloc_hs(struct upipe *upipe, int ext_size, uint32_t timestamp, uint8_t **cif)
+static struct uref *upipe_srt_handshake_alloc_hs(struct upipe *upipe, int ext_size, uint32_t timestamp, uint8_t **cif, bool reject)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
@@ -261,7 +261,7 @@ static struct uref *upipe_srt_handshake_alloc_hs(struct upipe *upipe, int ext_si
     srt_set_handshake_syn_cookie(out_cif, upipe_srt_handshake->syn_cookie);
     srt_set_handshake_mtu(out_cif, upipe_srt_handshake->mtu);
     srt_set_handshake_mfw(out_cif, upipe_srt_handshake->mfw);
-    srt_set_handshake_socket_id(out_cif, upipe_srt_handshake->socket_id);
+    srt_set_handshake_socket_id(out_cif, reject ? 0 : upipe_srt_handshake->socket_id);
     srt_set_handshake_isn(out_cif, upipe_srt_handshake->isn);
 
     srt_set_handshake_ip(out_cif, (const struct sockaddr*)&upipe_srt_handshake->addr);
@@ -359,7 +359,7 @@ static void upipe_srt_handshake_send_timer(struct upump *upump)
     } else {
         //send HS
         uint8_t *out_cif;
-        struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+        struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif, false);
         if (!uref)
             return;
 
@@ -1163,7 +1163,7 @@ static struct uref *upipe_srt_handshake_handle_hs_caller_induction(struct upipe 
     }
 
     uint8_t *out_cif;
-    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif);
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif, false);
     if (!uref)
         return NULL;
 
@@ -1183,7 +1183,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_induction(struct upip
     upipe_srt_handshake->syn_cookie = mrand48();
 
     uint8_t *out_cif;
-    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif, false);
     if (!uref)
         return NULL;
 
@@ -1197,7 +1197,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_induction(struct upip
 static struct uref *upipe_srt_handshake_alloc_hs_reject(struct upipe *upipe, uint32_t timestamp, uint32_t dst_socket_id, uint32_t rejection_type)
 {
     uint8_t *out_cif;
-    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif);
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, 0, timestamp, &out_cif, true);
     if (!uref)
         return NULL;
 
@@ -1292,7 +1292,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
     }
 
     uint8_t *out_cif;
-    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif);
+    struct uref *uref = upipe_srt_handshake_alloc_hs(upipe, size, timestamp, &out_cif, false);
     if (!uref)
         return NULL;
 
