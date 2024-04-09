@@ -127,6 +127,9 @@ struct upipe_rtpr_sub {
     /** flow_definition packet */
     struct uref *flow_def;
 
+    /** maximum observed delay */
+    uint64_t max_delay;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -240,6 +243,7 @@ static struct upipe *upipe_rtpr_sub_alloc(struct upipe_mgr *mgr,
 
     struct upipe_rtpr_sub *upipe_rtpr_sub = upipe_rtpr_sub_from_upipe(upipe);
     upipe_rtpr_sub->flow_def = NULL;
+    upipe_rtpr_sub->max_delay = UINT64_MAX;
     upipe_rtpr_sub_init_urefcount(upipe);
     upipe_rtpr_sub_init_sub(upipe);
     upipe_throw_ready(upipe);
@@ -259,6 +263,8 @@ static int upipe_rtpr_sub_control(struct upipe *upipe,
 {
     UBASE_HANDLED_RETURN(upipe_rtpr_sub_control_super(upipe, command, args));
 
+    struct upipe_rtpr_sub *upipe_rtpr_sub = upipe_rtpr_sub_from_upipe(upipe);
+
     switch (command) {
         case UPIPE_REGISTER_REQUEST:
         case UPIPE_UNREGISTER_REQUEST:
@@ -272,14 +278,36 @@ static int upipe_rtpr_sub_control(struct upipe *upipe,
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_rtpr_sub_set_flow_def(upipe, flow_def);
         }
+        case UPIPE_RTPR_SUB_GET_MAX_DELAY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_RTPR_INPUT_SIGNATURE)
+            uint64_t *delay_p = va_arg(args, uint64_t *);
+            if (delay_p)
+                *delay_p = upipe_rtpr_sub->max_delay;
+            upipe_rtpr_sub->max_delay = UINT64_MAX;
+            return UBASE_ERR_NONE;
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
 }
 
-static void upipe_rtpr_list_add(struct upipe *upipe, struct uref *uref)
+/** @This sets the maximum observed delay for this subpipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param delay delay to set
+ */
+static void upipe_rtpr_sub_set_max_delay(struct upipe *upipe, uint64_t delay)
 {
-    struct upipe_rtpr *rtpr = upipe_rtpr_from_upipe(upipe);
+    struct upipe_rtpr_sub *upipe_rtpr_sub = upipe_rtpr_sub_from_upipe(upipe);
+    if (upipe_rtpr_sub->max_delay == UINT64_MAX ||
+        upipe_rtpr_sub->max_delay < delay)
+        upipe_rtpr_sub->max_delay = delay;
+}
+
+static void upipe_rtpr_list_add(struct upipe *super, struct uref *uref,
+                                struct upipe *upipe)
+{
+    struct upipe_rtpr *rtpr = upipe_rtpr_from_upipe(super);
     int dup = 0, ooo = 0;
     struct uchain *uchain, *uchain_tmp;
 
@@ -345,6 +373,15 @@ static void upipe_rtpr_list_add(struct upipe *upipe, struct uref *uref)
         }
         /* Duplicate packet */
         else if (new_seqnum == seqnum) {
+            int type;
+            uint64_t date;
+            uref_clock_get_date_sys(cur_uref, &date, &type);
+            if (date != UINT64_MAX) {
+                uint64_t new_date;
+                uref_clock_get_date_sys(uref, &new_date, &type);
+                if (new_date >= date)
+                    upipe_rtpr_sub_set_max_delay(upipe, new_date - date);
+            }
             dup = 1;
             uref_free(uref);
             break;
@@ -353,10 +390,10 @@ static void upipe_rtpr_list_add(struct upipe *upipe, struct uref *uref)
             break;
     }
 
-
     /* Add to end if normal packet */
     if (!dup && !ooo) {
         ulist_add(&rtpr->queue, uref_to_uchain(uref));
+        upipe_rtpr_sub_set_max_delay(upipe, 0);
     }
 }
 
@@ -377,7 +414,7 @@ static bool upipe_rtpr_sub_output(struct upipe *upipe, struct uref *uref,
     date_sys += upipe_rtpr->delay;
     uref_clock_set_date_sys(uref, date_sys, type);
 
-    upipe_rtpr_list_add(&upipe_rtpr->upipe, uref);
+    upipe_rtpr_list_add(&upipe_rtpr->upipe, uref, upipe);
 
     return true;
 }

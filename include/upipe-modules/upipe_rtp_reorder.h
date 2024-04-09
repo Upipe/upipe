@@ -50,6 +50,14 @@ enum upipe_rtpr_command {
     UPIPE_RTPR_SET_DELAY
 };
 
+/** @This extends upipe_command with specific commands for rtpr subpipes. */
+enum upipe_rtpr_sub_command {
+    UPIPE_RTPR_SUB_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** returns the maximum observed delay for this input (uint64_t *) */
+    UPIPE_RTPR_SUB_GET_MAX_DELAY
+};
+
 /** @This returns the management structure for rtpr pipes.
  *
  * @return pointer to manager
@@ -78,6 +86,20 @@ static inline int upipe_rtpr_set_delay(struct upipe *upipe, uint64_t delay)
 {
     return upipe_control(upipe, UPIPE_RTPR_SET_DELAY,
                          UPIPE_RTPR_SIGNATURE, delay);
+}
+
+/** @This returns the maximum observed delay for this input subpipe
+ * since the last call.
+ *
+ * @param upipe description structure of the pipe
+ * @param delay_p filled with the maximum delay
+ * @return an error code
+ */
+static inline int upipe_rtpr_sub_get_max_delay(struct upipe *upipe,
+                                               uint64_t *delay_p)
+{
+    return upipe_control(upipe, UPIPE_RTPR_SUB_GET_MAX_DELAY,
+                         UPIPE_RTPR_INPUT_SIGNATURE, delay_p);
 }
 
 #ifdef __cplusplus
