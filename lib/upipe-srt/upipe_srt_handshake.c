@@ -1372,6 +1372,8 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     uint32_t hs_type = srt_get_handshake_type(cif);
     if (hs_type >= SRT_HANDSHAKE_TYPE_REJ_UNKNOWN && hs_type <= SRT_HANDSHAKE_TYPE_REJ_GROUP) {
         upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
+        if (!upipe_srt_handshake->listener)
+            upipe_srt_handshake->syn_cookie = 0;
         upipe_srt_handshake->expect_conclusion = false;
         return NULL;
     }
