@@ -1265,6 +1265,13 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
         size -= ext_len;
     }
 
+    if (upipe_srt_handshake->password && upipe_srt_handshake->sek_len == 0) {
+        upipe_err(upipe, "Password specified but could not get streaming key");
+        upipe_srt_handshake->expect_conclusion = false;
+        return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
+    }
+
     int extension = 0;
     size = 0;
     if (hs_packet->version == SRT_HANDSHAKE_VERSION) {
