@@ -1329,6 +1329,8 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 #endif
     }
 
+    upipe_srt_handshake_finalize(upipe);
+
     uref_block_unmap(uref, 0);
     return uref;
 }
@@ -1454,8 +1456,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                 upump_start(upump);
                 upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
             }
-        } else {
-            upipe_srt_handshake_finalize(upipe);
         }
     }
 
