@@ -1239,6 +1239,8 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
     const uint8_t *wrap;
     uint8_t wrap_len = 0;
 
+    bool got_key = false;
+
     while (size >= SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE) {
         uint16_t ext_type = srt_get_handshake_extension_type(ext);
         uint16_t ext_len = 4 * srt_get_handshake_extension_len(ext);
@@ -1258,14 +1260,14 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
                 upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
                         SRT_HANDSHAKE_HSREQ_SIZE);
         } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
-            upipe_srt_handshake_parse_kmreq(upipe, ext, ext_len, &wrap, &wrap_len);
+            got_key = upipe_srt_handshake_parse_kmreq(upipe, ext, ext_len, &wrap, &wrap_len);
         }
 
         ext += ext_len;
         size -= ext_len;
     }
 
-    if (upipe_srt_handshake->password && upipe_srt_handshake->sek_len == 0) {
+    if (upipe_srt_handshake->password && !got_key) {
         upipe_err(upipe, "Password specified but could not get streaming key");
         upipe_srt_handshake->expect_conclusion = false;
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
