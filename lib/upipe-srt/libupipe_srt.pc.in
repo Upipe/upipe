@@ -3,7 +3,7 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 Name: libupipe_srt
-Description: Upipe multimedia framework, libsrt interface module
+Description: Upipe multimedia framework, SRT modules
 Version: @VERSION@
 Requires: libupipe
 Requires.private: libgcrypt
