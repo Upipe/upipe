@@ -587,7 +587,6 @@ static void upipe_srt_receiver_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        // FIXME this needs to include RTT when RTT is reliable
         if (now - cr_sys <= upipe_srt_receiver->latency)
             break;
 
