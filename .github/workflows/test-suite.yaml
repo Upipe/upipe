@@ -26,11 +26,11 @@ jobs:
             version: 13
             static: true
 
-          - name: ubuntu-amd64-clang-17
+          - name: ubuntu-amd64-clang-18
             os: ubuntu-24.04
             arch: amd64
             compiler: clang
-            version: 17
+            version: 18
 
         # - name: ubuntu-i386-gcc-12
         #   os: ubuntu-22.04
@@ -118,6 +118,7 @@ jobs:
           sudo apt-get install clang-${{ matrix.version }}
           set-env HOST_CC "clang-${{ matrix.version }}"
           set-env HOST_CXX "clang++-${{ matrix.version }}"
+          set-env CXXFLAGS "-Wno-error=vla-cxx-extension"
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
