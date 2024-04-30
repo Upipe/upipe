@@ -142,17 +142,15 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
         return UINT64_MAX;
     }
 
-    /* 128 bits needed to prevent overflow after ~2.5 hours */
-    __uint128_t fullscale = tick;
-    /* Use exact frequency.  This multiply was UCLOCK_FREQ so the comment above
-     * is outdated.  The overflow will take longer to occur. */
-    fullscale *= upipe_pciesdi_sink->freq.den;
-    fullscale /= upipe_pciesdi_sink->freq.num;
-    fullscale += upipe_pciesdi_sink->offset;
+    /* Use exact frequency.  This multiply is only, at most, 91 so this should
+     * not overflow for 43 years. */
+    tick *= upipe_pciesdi_sink->freq.den;
+    tick /= upipe_pciesdi_sink->freq.num;
+    tick += upipe_pciesdi_sink->offset;
 
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
-    return fullscale;
+    return tick;
 }
 
 /** @internal @This allocates a null pipe.
