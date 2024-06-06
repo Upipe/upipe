@@ -130,8 +130,6 @@ struct upipe_srt_handshake {
 
     uint64_t last_hs_sent;
 
-    uint64_t rtt_0;
-
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -797,8 +795,6 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
                     upipe_err(upipe, "damn");
             }
 
-            uref_clock_set_latency(flow_def, upipe_srt_handshake->rtt_0);
-
             uref_pic_set_number(flow_def, upipe_srt_handshake->isn);
             upipe_srt_handshake_store_flow_def(upipe, flow_def);
             /* force sending flow definition immediately */
@@ -1422,7 +1418,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                 upipe_srt_handshake->caller_conclusion = NULL;
             }
         } else {
-            upipe_srt_handshake->rtt_0 = now - upipe_srt_handshake->last_hs_sent;
             if (hs_packet.version != SRT_HANDSHAKE_VERSION || hs_packet.dst_socket_id != upipe_srt_handshake->socket_id) {
                 upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
                         hs_packet.dst_socket_id, upipe_srt_handshake->socket_id);
@@ -1436,7 +1431,6 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         }
     } else { /* listener */
         if (conclusion) {
-            upipe_srt_handshake->rtt_0 = now - upipe_srt_handshake->establish_time;
             uref = upipe_srt_handshake_handle_hs_listener_conclusion(upipe, size, timestamp, &hs_packet);
         } else {
             if (hs_packet.version != SRT_HANDSHAKE_VERSION_MIN || hs_packet.encryption != SRT_HANDSHAKE_CIPHER_NONE ||
