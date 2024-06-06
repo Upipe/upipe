@@ -186,6 +186,12 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
         if (sig != UPIPE_UDPSRC_SIGNATURE)
             break;
 
+        ubase_assert(upipe_udpsink_get_fd(upipe_udpsink, &udp_fd));
+        if (udp_fd >= 0) {
+            upipe_err(upipe, "Already connected, ignoring");
+            return UBASE_ERR_UNKNOWN;
+        }
+
         const struct sockaddr *s = va_arg(args, struct sockaddr*);
         const socklen_t *len = va_arg(args, socklen_t *);
 
