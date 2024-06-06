@@ -321,6 +321,10 @@ static uint64_t upipe_srt_receiver_get_rtt(struct upipe *upipe)
 {
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
+    /* VSF TR-06 doesn't give a mean to retrieve RTT, but defaults to 7
+     * retransmissions requests per packet.
+     * XXX: make it configurable ? */
+
     uint64_t rtt = upipe_srt_receiver->rtt;
     if (!rtt)
         rtt = upipe_srt_receiver->latency / 7;
@@ -800,13 +804,10 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
     }
 
     if (flow_format != NULL) {
-        // FIXME
-        uint64_t rtt;
-        if (!ubase_check(uref_clock_get_latency(flow_format, &rtt)))
-            rtt = 0;
-        else
-            upipe_srt_receiver->rtt = rtt;
-        uref_clock_set_latency(flow_format, rtt + upipe_srt_receiver->latency);
+        uint64_t latency;
+        if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
+            latency = 0;
+        uref_clock_set_latency(flow_format, latency + upipe_srt_receiver->latency);
 
         upipe_srt_receiver_store_flow_def(upipe, flow_format);
     }
@@ -883,16 +884,6 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
     if (ubase_ncmp(def, "block.")) {
         upipe_err_va(upipe, "Unknown def %s", def);
         return UBASE_ERR_INVALID;
-    }
-
-    uint64_t rtt;
-    if (!ubase_check(uref_clock_get_latency(flow_def, &rtt)))
-        rtt = 0;
-    else
-        upipe_srt_receiver->rtt = rtt;
-    upipe_warn_va(upipe, "RTT %.2f us", (double)rtt / 27);
-    if (rtt > upipe_srt_receiver->latency) {
-        upipe_err_va(upipe, "Latency (%.2f us) is too small", (double)upipe_srt_receiver->latency / 27);
     }
 
     uint64_t id;
