@@ -14,20 +14,20 @@ jobs:
       matrix:
         include:
           - name: ubuntu-amd64-gcc-13
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             arch: amd64
             compiler: gcc
             version: 13
 
           - name: ubuntu-amd64-gcc-13-static
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             arch: amd64
             compiler: gcc
             version: 13
             static: true
 
           - name: ubuntu-amd64-clang-17
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             arch: amd64
             compiler: clang
             version: 17
@@ -40,14 +40,14 @@ jobs:
         #   version: 12
 
           - name: ubuntu-armhf-gcc-12
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
             version: 12
 
           - name: ubuntu-arm64-gcc-12
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
@@ -69,11 +69,14 @@ jobs:
       - name: Install compiler (gcc)
         if: runner.os == 'Linux' && matrix.compiler == 'gcc'
         run: |
-          sudo dpkg --add-architecture ${{ matrix.arch }}
-          sudo sed 's/^deb /deb [arch=amd64,i386] /' -i /etc/apt/sources.list
-          sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc) main universe"
-          sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-updates main universe"
-          sudo apt-add-repository -n -y "deb [arch=arm64,armhf] http://ports.ubuntu.com $(lsb_release -sc)-security main universe"
+          if [ "${{ matrix.arch }}" != "amd64" ]; then
+            sudo dpkg --add-architecture ${{ matrix.arch }}
+            sudo sed '/^Signed-By:/a Architectures: amd64' -i /etc/apt/sources.list.d/*.sources
+            sudo add-apt-repository -n -y -S "deb http://ports.ubuntu.com $(lsb_release -sc) main universe"
+            sudo add-apt-repository -n -y -S "deb http://ports.ubuntu.com $(lsb_release -sc)-updates main universe"
+            sudo add-apt-repository -n -y -S "deb http://ports.ubuntu.com $(lsb_release -sc)-security main universe"
+            sudo sed 's/^deb /deb [arch=arm64,armhf] /' -i /etc/apt/sources.list.d/archive_uri-http_ports_ubuntu_com-*.list
+          fi
           sudo apt-get update
 
           CC=gcc
@@ -128,8 +131,10 @@ jobs:
           if [ "${{ matrix.arch }}" != "i386" ]; then
             LIBS="$LIBS $LIBS_FULL"
           fi
-          sudo apt-get install \
-            valgrind nasm qemu-user-binfmt elfutils \
+          if [ "${{ matrix.arch }}" != "amd64" ]; then
+            sudo apt-get install qemu-user-binfmt
+          fi
+          sudo apt-get install valgrind nasm elfutils \
             $(printf '%s:${{ matrix.arch }} ' libc6-dbg luajit) \
             $(printf 'lib%s-dev:${{ matrix.arch }} ' $LIBS)
           if [ -n "${{ matrix.host }}" ]; then
@@ -164,7 +169,7 @@ jobs:
           if [ "${{ matrix.static }}" = "true" ]; then
             STATIC="--disable-shared"
           fi
-          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -O2 -g -gdwarf-4 -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
+          set-env CONFIGURE_FLAGS "--enable-luajit $STATIC --disable-silent-rules $HOST CC=\"$HOST_CC\" CXX=\"$HOST_CXX\" CFLAGS=\"-Werror -Wno-error=deprecated-declarations -O2 -g -gdwarf-4 -fdiagnostics-color=always $CFLAGS\" CXXFLAGS=\"-Werror -O2 -g -fdiagnostics-color=always $CXXFLAGS\" LDFLAGS=\"$LDFLAGS\""
 
       - name: Build and install libamt
         if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
@@ -210,7 +215,7 @@ jobs:
           VERBOSE=1
 
   coding-style:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -219,7 +224,6 @@ jobs:
         env:
           LIBS: ev avutil dvbcsa srt-gnutls gnutls28
         run: |
-          sudo rm /etc/apt/sources.list.d/*
           sudo apt-get update
           sudo apt-get install $(printf 'lib%s-dev ' $LIBS)
 
