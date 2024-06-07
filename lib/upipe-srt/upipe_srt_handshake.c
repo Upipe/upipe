@@ -671,6 +671,13 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
             return UBASE_ERR_NONE;
         }
 
+        case UPIPE_SRT_HANDSHAKE_GET_LATENCY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SRT_HANDSHAKE_SIGNATURE)
+            uint16_t *latency_ms = va_arg(args, uint16_t *);
+            *latency_ms = upipe_srt_handshake->receiver_tsbpd_delay;
+            return UBASE_ERR_NONE;
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
