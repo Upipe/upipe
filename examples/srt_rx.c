@@ -162,6 +162,7 @@ static struct upump_mgr *upump_mgr;
 
 static struct upipe *upipe_udpsrc;
 static struct upipe *upipe_udp_sink;
+static struct upipe *upipe_srtr;
 static struct upipe *upipe_srtr_sub;
 
 static struct uprobe uprobe_udp;
@@ -221,11 +222,9 @@ static int start(void)
     upipe_mgr_release(upipe_srt_handshake_mgr);
 
     struct upipe_mgr *upipe_srt_receiver_mgr = upipe_srt_receiver_mgr_alloc();
-    struct upipe *upipe_srtr = upipe_void_chain_output(upipe_srth,
+    upipe_srtr = upipe_void_chain_output(upipe_srth,
             upipe_srt_receiver_mgr, uprobe_pfx_alloc(uprobe_use(logger), loglevel, "srtr"));
     assert(upipe_srtr);
-    if (!ubase_check(upipe_set_option(upipe_srtr, "latency", latency)))
-        return EXIT_FAILURE;
 
     upipe_mgr_release(upipe_srt_receiver_mgr);
 
@@ -290,6 +289,7 @@ static void stop(struct upump *upump)
 
     upipe_release(upipe_udpsrc);
     upipe_release(upipe_srtr_sub);
+    upipe_srtr = NULL;
 
     if (restart) {
         restart = false;
@@ -317,6 +317,19 @@ static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
         struct upump *u = upump_alloc_timer(upump_mgr, stop, NULL, NULL, 0, 0);
         upump_start(u);
         return UBASE_ERR_NONE;
+    }
+
+    if (event == UPROBE_NEW_FLOW_DEF && upipe_srtr) {
+        uint16_t latency_ms;
+        if (!ubase_check(upipe_srt_handshake_get_latency(upipe, &latency_ms)))
+            upipe_err(upipe, "Couldn't get latency");
+        else {
+            upipe_notice_va(upipe, "Latency %hu ms", latency_ms);
+            char latency_ms_str[16];
+            snprintf(latency_ms_str, sizeof(latency_ms_str), "%hu", latency_ms);
+            if (!ubase_check(upipe_set_option(upipe_srtr, "latency", latency_ms_str)))
+                upipe_err(upipe, "Couldn't set receiver latency");
+        }
     }
 
     return uprobe_throw_next(uprobe, upipe, event, args);
