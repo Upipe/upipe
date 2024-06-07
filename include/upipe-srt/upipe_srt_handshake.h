@@ -50,6 +50,9 @@ enum upipe_srt_handshake_command {
 
     /** set the encryption password (const char *, int) */
     UPIPE_SRT_HANDSHAKE_SET_PASSWORD,
+
+    /** gets negociated latency (int *) */
+    UPIPE_SRT_HANDSHAKE_GET_LATENCY,
 };
 
 /** @This sets the peer address
@@ -78,6 +81,17 @@ static inline int upipe_srt_handshake_set_password(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_SRT_HANDSHAKE_SET_PASSWORD, UPIPE_SRT_HANDSHAKE_SIGNATURE,
             password, key_len);
+}
+
+/** @This sets the encryption key
+ *
+ * @param upipe description structure of the pipe
+ * @param latency_ms pointer to latency in ms
+ * @return false in case of error
+ */
+static inline int upipe_srt_handshake_get_latency(struct upipe *upipe, uint16_t *latency_ms)
+{
+    return upipe_control(upipe, UPIPE_SRT_HANDSHAKE_GET_LATENCY, UPIPE_SRT_HANDSHAKE_SIGNATURE, latency_ms);
 }
 
 /** @This returns the management structure for all srt handshakes sources.
