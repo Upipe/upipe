@@ -822,10 +822,17 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
         (flags & SRT_HANDSHAKE_EXT_FLAG_PACKET_FILTER) ? "PACKET_FILTER " : "");
     upipe_srt_handshake->flags = flags;
 
+    uint16_t receiver_tsbpd = upipe_srt_handshake->receiver_tsbpd_delay;
+
     upipe_srt_handshake->receiver_tsbpd_delay = srt_get_handshake_extension_receiver_tsbpd_delay(ext);
     upipe_srt_handshake->sender_tsbpd_delay = srt_get_handshake_extension_sender_tsbpd_delay(ext);
-    upipe_dbg_va(upipe, "tsbpd delays: receiver %u, sender %u",
-            upipe_srt_handshake->receiver_tsbpd_delay, upipe_srt_handshake->sender_tsbpd_delay);
+    if (upipe_srt_handshake->receiver_tsbpd_delay < upipe_srt_handshake->sender_tsbpd_delay)
+        upipe_srt_handshake->receiver_tsbpd_delay = upipe_srt_handshake->sender_tsbpd_delay;
+
+    if (upipe_srt_handshake->receiver_tsbpd_delay < receiver_tsbpd)
+        upipe_srt_handshake->receiver_tsbpd_delay = receiver_tsbpd;
+
+    upipe_dbg_va(upipe, "latency receiver %u", upipe_srt_handshake->receiver_tsbpd_delay);
 }
 
 static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const size_t ext_len, const uint8_t **wrap, uint8_t *wrap_len)
