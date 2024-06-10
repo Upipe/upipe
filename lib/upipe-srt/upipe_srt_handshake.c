@@ -102,7 +102,7 @@ struct upipe_srt_handshake {
     uint32_t mfw;
 
 
-    uint16_t receiver_tsbpd_delay;
+    uint16_t receiver_tsbpd_delay; /* stores negotiated latency */
     uint16_t sender_tsbpd_delay;
     uint32_t flags;
     uint16_t major;
@@ -829,6 +829,7 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
         (flags & SRT_HANDSHAKE_EXT_FLAG_PACKET_FILTER) ? "PACKET_FILTER " : "");
     upipe_srt_handshake->flags = flags;
 
+    /* Latency is MAX(sender_tsbpd_delay, receiver_tsbpd_delay). Arbitrarily use receiver_tsbpd_delay variable as the latency */
     uint16_t receiver_tsbpd = upipe_srt_handshake->receiver_tsbpd_delay;
 
     upipe_srt_handshake->receiver_tsbpd_delay = srt_get_handshake_extension_receiver_tsbpd_delay(ext);
@@ -839,7 +840,7 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
     if (upipe_srt_handshake->receiver_tsbpd_delay < receiver_tsbpd)
         upipe_srt_handshake->receiver_tsbpd_delay = receiver_tsbpd;
 
-    upipe_dbg_va(upipe, "latency receiver %u", upipe_srt_handshake->receiver_tsbpd_delay);
+    upipe_dbg_va(upipe, "Negotiated latency %u ms", upipe_srt_handshake->receiver_tsbpd_delay);
 }
 
 static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const size_t ext_len, const uint8_t **wrap, uint8_t *wrap_len)
