@@ -13,17 +13,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ubuntu-amd64-gcc-13
+          - name: ubuntu-amd64-gcc-14
             os: ubuntu-24.04
             arch: amd64
             compiler: gcc
-            version: 13
+            version: 14
 
-          - name: ubuntu-amd64-gcc-13-static
+          - name: ubuntu-amd64-gcc-14-static
             os: ubuntu-24.04
             arch: amd64
             compiler: gcc
-            version: 13
+            version: 14
             static: true
 
           - name: ubuntu-amd64-clang-18
@@ -39,19 +39,19 @@ jobs:
         #   compiler: gcc
         #   version: 12
 
-          - name: ubuntu-armhf-gcc-12
+          - name: ubuntu-armhf-gcc-14
             os: ubuntu-24.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
-            version: 12
+            version: 14
 
-          - name: ubuntu-arm64-gcc-12
+          - name: ubuntu-arm64-gcc-14
             os: ubuntu-24.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
-            version: 12
+            version: 14
 
           - name: macos-13-xcode
             os: macos-13
