@@ -300,7 +300,7 @@ static void test_escape(void)
         ssize_t len = uuri_escape_len(paths[i]);
         assert(len >= 0);
         char escape[len + 1];
-        assert(uuri_escape(paths[i], escape, sizeof (escape)) >= 0);
+        assert(uuri_escape(paths[i], escape, sizeof (escape)) == len);
         printf("escaped path %s -> %s\n", paths[i], escape);
 
         assert(uuri_unescape_len(escape) <= strlen(paths[i]));

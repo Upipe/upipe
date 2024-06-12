@@ -69,18 +69,23 @@ ssize_t uuri_escape(const char *path, char *buffer, size_t size)
 
     while (!ustring_is_empty(str)) {
         struct ustring tmp = ustring_split_while(&str, uuri_escape_set);
-        memcpy(buffer, tmp.at, tmp.len > size ? size : tmp.len);
+        size_t len = tmp.len > size ? size : tmp.len;
+        if (buffer) {
+            memcpy(buffer, tmp.at, len);
+            buffer += len;
+        }
+        size -= len;
         s += tmp.len;
-        buffer += tmp.len;
-        size -= size > tmp.len ? tmp.len : size;
 
         tmp = ustring_split_until(&str, uuri_escape_set);
         for (size_t i = 0; i < tmp.len; i++) {
-            int ret = snprintf(buffer, size, "%%%02X", tmp.at[i]);
-            if (ret != 3)
-                return -1;
+            if (buffer) {
+                int ret = snprintf(buffer, size, "%%%02X", tmp.at[i]);
+                if (ret != 3)
+                    return -1;
+                buffer += 3;
+            }
             s += 3;
-            buffer += 3;
             size -= size > 3 ? 3 : size;
         }
     }
