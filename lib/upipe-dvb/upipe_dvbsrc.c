@@ -44,6 +44,7 @@
 #include <libdvbv5/dvb-dev.h>
 #include <libdvbv5/dvb-fe.h>
 
+#include <ctype.h>
 
 #define MTU (7 * 188)
 

@@ -58,6 +58,7 @@
 #include <upipe-framers/uref_mpgv.h>
 #include <upipe-framers/upipe_h26x_common.h>
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 
