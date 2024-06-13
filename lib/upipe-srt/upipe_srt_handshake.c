@@ -982,8 +982,8 @@ static bool upipe_srt_handshake_wrap_key(struct upipe *upipe, uint8_t *wrap)
     }
 
     uint8_t clear_wrap[2*256/8];
-    memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
-    memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
+    memcpy(&clear_wrap[0], upipe_srt_handshake->sek[(upipe_srt_handshake->kk == 2) ? 1 : 0], klen);
+    memcpy(&clear_wrap[klen], upipe_srt_handshake->sek[1], klen);
 
     err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
     if (err) {
