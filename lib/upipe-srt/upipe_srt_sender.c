@@ -596,6 +596,10 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender->seqnum = 0;
     upipe_srt_sender->establish_time = 0;
 
+    /* Note: 0 is the even key and 1 is the odd key.
+       When upipe_srt_sender->even_key = true
+       upipe_srt_sender->sek[!upipe_srt_sender->even_key] is the even key
+    */
     upipe_srt_sender->sek_len[0] = 0;
     upipe_srt_sender->sek_len[1] = 0;
     upipe_srt_sender->even_key = true;
@@ -662,6 +666,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
 
 #ifdef UPIPE_HAVE_GCRYPT_H
     if (++upipe_srt_sender->packets_since_key == SRT_KM_PRE_ANNOUNCEMENT_PERIOD) {
+        /* invert the boolean to get the right index */
         int even_key = !upipe_srt_sender->even_key;
 
         if (!upipe_srt_sender->sek_len[!even_key] && upipe_srt_sender->sek_len[even_key]) {
@@ -681,6 +686,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
         memset(upipe_srt_sender->sek[upipe_srt_sender->even_key], 0, sizeof(upipe_srt_sender->sek[0]));
     }
 
+    /* invert the boolean to get the right index */
     int key = !upipe_srt_sender->even_key;
     if (upipe_srt_sender->sek_len[key]) {
         //
