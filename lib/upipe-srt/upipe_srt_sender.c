@@ -672,12 +672,13 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
 
         if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
             upipe_dbg_va(upipe, "Switching to %s key", even_key ? "even" : "odd");
-            memset(upipe_srt_sender->sek[even_key], 0, sizeof(upipe_srt_sender->sek[0]));
         } else {
             upipe_dbg(upipe, "Encryption disabled");
         }
 
         upipe_srt_sender->even_key = even_key;
+    } else if (upipe_srt_sender->packets_since_key == 2 * SRT_KM_PRE_ANNOUNCEMENT_PERIOD) {
+        memset(upipe_srt_sender->sek[upipe_srt_sender->even_key], 0, sizeof(upipe_srt_sender->sek[0]));
     }
 
     int key = !upipe_srt_sender->even_key;
