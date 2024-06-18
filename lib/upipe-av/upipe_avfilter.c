@@ -642,9 +642,7 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     uint64_t duration = 0;
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO:
-            duration = frame->pkt_duration;
-            UBASE_ERROR(upipe, uref_pic_set_number(
-                    uref, frame->coded_picture_number))
+            duration = frame->duration;
 
             if (!frame->interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
@@ -666,10 +664,8 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     upipe_avfilt_sub->last_duration = duration;
     UBASE_ERROR(upipe, uref_clock_set_duration(uref, duration));
 
-    upipe_verbose_va(upipe, "output frame %d(%d) %ix%i pts_prog=%f "
+    upipe_verbose_va(upipe, "output frame %ix%i pts_prog=%f "
                      "pts_sys=%f duration=%f",
-                     frame->display_picture_number,
-                     frame->coded_picture_number,
                      frame->width, frame->height,
                      (double) pts_prog / UCLOCK_FREQ,
                      (double) pts_sys / UCLOCK_FREQ,
@@ -1044,21 +1040,15 @@ static int upipe_avfilt_sub_avframe_from_uref_pic(struct upipe *upipe,
     frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
     frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
 
-    uint64_t number;
-    if (ubase_check(uref_pic_get_number(uref, &number)))
-        frame->coded_picture_number = number;
-
     uint64_t pts = UINT64_MAX;
     if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
         frame->pts = pts;
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->pkt_duration = duration;
+        frame->duration = duration;
 
-    upipe_verbose_va(upipe, " input frame %d(%d) %ix%i pts=%f duration=%f",
-                     frame->display_picture_number,
-                     frame->coded_picture_number,
+    upipe_verbose_va(upipe, " input frame %ix%i pts=%f duration=%f",
                      frame->width, frame->height,
                      (double) pts / UCLOCK_FREQ,
                      (double) duration / UCLOCK_FREQ);
@@ -1121,7 +1111,7 @@ static int upipe_avfilt_sub_avframe_from_uref_sound(struct upipe *upipe,
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->pkt_duration = duration;
+        frame->duration = duration;
 
     frame->extended_data = frame->data;
     frame->nb_samples = size;
@@ -1216,7 +1206,7 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
 
         uint64_t duration = UINT64_MAX;
         if (ubase_check(uref_clock_get_duration(uref, &duration)))
-            frame->pkt_duration = duration;
+            frame->duration = duration;
 
         uref_free(uref);
     }
@@ -2246,9 +2236,7 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     uint64_t duration = 0;
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO:
-            duration = frame->pkt_duration;
-            UBASE_ERROR(upipe, uref_pic_set_number(
-                    uref, frame->coded_picture_number))
+            duration = frame->duration;
 
             if (!frame->interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
@@ -2267,10 +2255,8 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     }
     UBASE_ERROR(upipe, uref_clock_set_duration(uref, duration));
 
-    upipe_verbose_va(upipe, "output frame %d(%d) %ix%i pts_prog=%f "
+    upipe_verbose_va(upipe, "output frame %ix%i pts_prog=%f "
                      "pts_sys=%f duration=%f",
-                     frame->display_picture_number,
-                     frame->coded_picture_number,
                      frame->width, frame->height,
                      (double) pts_prog / UCLOCK_FREQ,
                      (double) pts_sys / UCLOCK_FREQ,
@@ -2350,21 +2336,15 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
     if (ubase_check(uref_pic_flow_get_matrix_coefficients_val(flow_def, &val)))
         frame->colorspace = val;
 
-    uint64_t number;
-    if (ubase_check(uref_pic_get_number(uref, &number)))
-        frame->coded_picture_number = number;
-
     uint64_t pts = UINT64_MAX;
     if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
         frame->pts = pts;
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->pkt_duration = duration;
+        frame->duration = duration;
 
-    upipe_verbose_va(upipe, " input frame %d(%d) %ix%i pts=%f duration=%f",
-                     frame->display_picture_number,
-                     frame->coded_picture_number,
+    upipe_verbose_va(upipe, " input frame %ix%i pts=%f duration=%f",
                      frame->width, frame->height,
                      (double) pts / UCLOCK_FREQ,
                      (double) duration / UCLOCK_FREQ);
@@ -2426,7 +2406,7 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->pkt_duration = duration;
+        frame->duration = duration;
 
     frame->extended_data = frame->data;
     frame->nb_samples = size;
@@ -2505,7 +2485,7 @@ static void upipe_avfilt_input(struct upipe *upipe,
 
         uint64_t duration = UINT64_MAX;
         if (ubase_check(uref_clock_get_duration(uref, &duration)))
-            frame->pkt_duration = duration;
+            frame->duration = duration;
     }
 
     if (!upipe_avfilt->configured) {
