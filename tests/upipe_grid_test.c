@@ -27,7 +27,6 @@
 
 #include "upump-ev/upump_ev.h"
 
-#include "upipe/uclock_std.h"
 #include "upipe/umem.h"
 #include "upipe/umem_alloc.h"
 #include "upipe/udict.h"
@@ -92,6 +91,50 @@ static struct upump_mgr *upump_mgr = NULL;
 static struct upump *timer = NULL;
 static struct uref *pic_flow_def = NULL;
 static struct uref *sound_flow_def = NULL;
+
+struct uclock_test {
+    struct urefcount urefcount;
+    uint64_t now;
+    struct uclock uclock;
+};
+
+UBASE_FROM_TO(uclock_test, urefcount, urefcount, urefcount);
+UBASE_FROM_TO(uclock_test, uclock, uclock, uclock);
+
+static void uclock_test_free(struct urefcount *urefcount)
+{
+    struct uclock_test *uclock_test = uclock_test_from_urefcount(urefcount);
+    urefcount_clean(urefcount);
+    free(uclock_test);
+}
+
+static uint64_t uclock_test_now(struct uclock *uclock)
+{
+    struct uclock_test *uclock_test = uclock_test_from_uclock(uclock);
+    return uclock_test->now;
+}
+
+static uint64_t uclock_test_to_real(struct uclock *uclock, uint64_t systime)
+{
+    return systime;
+}
+
+static uint64_t uclock_test_from_real(struct uclock *uclock, uint64_t real)
+{
+    return real;
+}
+
+static struct uclock *uclock_test_alloc(void)
+{
+    struct uclock_test *uclock_test = malloc(sizeof (*uclock_test));
+    uclock_test->now = 0;
+    urefcount_init(&uclock_test->urefcount, uclock_test_free);
+    uclock_test->uclock.refcount = uclock_test_to_urefcount(uclock_test);
+    uclock_test->uclock.uclock_now = uclock_test_now;
+    uclock_test->uclock.uclock_to_real = uclock_test_to_real;
+    uclock_test->uclock.uclock_from_real = uclock_test_from_real;
+    return uclock_test_to_uclock(uclock_test);
+}
 
 struct sink {
     struct upipe upipe;
@@ -214,12 +257,16 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
 
 static void timer_cb(struct upump *upump)
 {
+    struct uclock_test *uclock_test = uclock_test_from_uclock(uclock);
     static unsigned int count = 0;
 
-    uprobe_info(logger, NULL, "timer");
+    uclock_test->now += DURATION;
 
-    uint64_t now = uclock_now(uclock);
-    uint64_t pts = start_time + count * DURATION;
+    if (count >= N_UREF) {
+        return;
+    }
+
+    uint64_t pts = uclock_test->now + UCLOCK_FREQ / 100;
 
     for (unsigned i = 0; count && i < N_OUTPUT * 2; i++) {
         upipe_grid_out_set_input(outputs[i],
@@ -257,14 +304,7 @@ static void timer_cb(struct upump *upump)
     }
     uref_free(uref);
 
-    if (++count < N_UREF) {
-        uint64_t next = start_time + count * DURATION;
-        uint64_t timeout = next < now ? 0 : next - now;
-        upump_free(timer);
-        timer = upump_alloc_timer(upump_mgr, timer_cb, NULL, NULL, timeout, 0);
-        assert(timer);
-        upump_start(timer);
-    }
+    count++;
 }
 
 int main(int argc, char *argv[])
@@ -272,7 +312,7 @@ int main(int argc, char *argv[])
     upump_mgr = upump_ev_mgr_alloc_default(
         UPUMP_POOL_DEPTH, UPUMP_BLOCK_POOL_DEPTH);
 
-    uclock = uclock_std_alloc(0);
+    uclock = uclock_test_alloc();
     assert(uclock);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -361,9 +401,12 @@ int main(int argc, char *argv[])
     }
     uref_free(flow_def);
 
+    struct uclock_test *uclock_test = uclock_test_from_uclock(uclock);
+    uclock_test->now = DURATION;
     start_time = uclock_now(uclock);
-    timer = upump_alloc_timer(upump_mgr, timer_cb, NULL, NULL, 0, 0);
+    timer = upump_alloc_idler(upump_mgr, timer_cb, NULL, NULL);
     assert(timer);
+    upump_set_status(timer, false);
     upump_start(timer);
     upump_mgr_run(upump_mgr, NULL);
     upump_free(timer);
