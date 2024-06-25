@@ -120,10 +120,13 @@ ssize_t uuri_unescape(const char *path, char *buffer, size_t size)
 
     while (!ustring_is_empty(str)) {
         struct ustring tmp = ustring_split_until(&str, "%");
-        memcpy(buffer, tmp.at, tmp.len > size ? size : tmp.len);
+        size_t len = tmp.len > size ? size : tmp.len;
+        if (buffer) {
+            memcpy(buffer, tmp.at, len);
+            buffer += len;
+        }
+        size -= len;
         s += tmp.len;
-        buffer += tmp.len;
-        size -= size > tmp.len ? tmp.len : size;
 
         if (ustring_is_empty(str))
             break;
@@ -132,10 +135,9 @@ ssize_t uuri_unescape(const char *path, char *buffer, size_t size)
         if (ustring_is_empty(pct))
             return -1;
         if (size) {
-            buffer[0] = uuri_pct_decode(pct);
+            *buffer++ = uuri_pct_decode(pct);
             size--;
         }
-        buffer++;
         s++;
     }
     if (size)

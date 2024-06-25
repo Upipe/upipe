@@ -303,9 +303,10 @@ static void test_escape(void)
         assert(uuri_escape(paths[i], escape, sizeof (escape)) == len);
         printf("escaped path %s -> %s\n", paths[i], escape);
 
-        assert(uuri_unescape_len(escape) <= strlen(paths[i]));
+        len = uuri_unescape_len(escape);
+        assert(len >= 0 && len <= strlen(paths[i]));
         char unescape[strlen(paths[i]) + 1];
-        assert(uuri_unescape(escape, unescape, sizeof (unescape)) >= 0);
+        assert(uuri_unescape(escape, unescape, sizeof (unescape)) == len);
         assert(!strcmp(paths[i], unescape));
     }
 }
