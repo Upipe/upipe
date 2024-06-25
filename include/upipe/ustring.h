@@ -154,7 +154,7 @@ static inline int ustring_cpy(const struct ustring sub,
 static inline struct ustring ustring_sub(struct ustring sub,
                                          size_t offset, size_t length)
 {
-    sub.at = offset > sub.len ? NULL : sub.at + offset;
+    sub.at = sub.at == NULL || offset > sub.len ? NULL : sub.at + offset;
     sub.len = sub.at ?
         (sub.len - offset > length ? length : sub.len - offset) : 0;
     return sub;
