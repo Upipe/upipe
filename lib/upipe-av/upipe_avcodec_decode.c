@@ -1324,6 +1324,13 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     if (side_data)
         uref_pic_set_cea_708(uref, side_data->data, side_data->size);
 
+#ifdef AV_FRAME_DATA_S12M_TIMECODE
+    side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_S12M_TIMECODE);
+    if (side_data && uref_attr_s12m_check(side_data->data, side_data->size)) {
+        uref_pic_set_s12m(uref, side_data->data, side_data->size);
+    }
+#endif
+
     /* various time-related attributes */
     upipe_avcdec_set_time_attributes(upipe, uref);
 
