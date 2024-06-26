@@ -62,6 +62,10 @@
 #include <libavutil/hwcontext.h>
 #include "upipe_av_internal.h"
 
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 30, 100)
+# define pkt_duration duration
+#endif
+
 /** @internal @This enumerates the avfilter sub pipe private events. */
 enum uprobe_avfilt_sub_event  {
     /** sentinel */
@@ -642,7 +646,7 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     uint64_t duration = 0;
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO:
-            duration = frame->duration;
+            duration = frame->pkt_duration;
 
             if (!frame->interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
@@ -1046,7 +1050,7 @@ static int upipe_avfilt_sub_avframe_from_uref_pic(struct upipe *upipe,
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->duration = duration;
+        frame->pkt_duration = duration;
 
     upipe_verbose_va(upipe, " input frame %ix%i pts=%f duration=%f",
                      frame->width, frame->height,
@@ -1111,7 +1115,7 @@ static int upipe_avfilt_sub_avframe_from_uref_sound(struct upipe *upipe,
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->duration = duration;
+        frame->pkt_duration = duration;
 
     frame->extended_data = frame->data;
     frame->nb_samples = size;
@@ -1206,7 +1210,7 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
 
         uint64_t duration = UINT64_MAX;
         if (ubase_check(uref_clock_get_duration(uref, &duration)))
-            frame->duration = duration;
+            frame->pkt_duration = duration;
 
         uref_free(uref);
     }
@@ -2236,7 +2240,7 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     uint64_t duration = 0;
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO:
-            duration = frame->duration;
+            duration = frame->pkt_duration;
 
             if (!frame->interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
@@ -2342,7 +2346,7 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->duration = duration;
+        frame->pkt_duration = duration;
 
     upipe_verbose_va(upipe, " input frame %ix%i pts=%f duration=%f",
                      frame->width, frame->height,
@@ -2406,7 +2410,7 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
 
     uint64_t duration = UINT64_MAX;
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
-        frame->duration = duration;
+        frame->pkt_duration = duration;
 
     frame->extended_data = frame->data;
     frame->nb_samples = size;
@@ -2485,7 +2489,7 @@ static void upipe_avfilt_input(struct upipe *upipe,
 
         uint64_t duration = UINT64_MAX;
         if (ubase_check(uref_clock_get_duration(uref, &duration)))
-            frame->duration = duration;
+            frame->pkt_duration = duration;
     }
 
     if (!upipe_avfilt->configured) {
