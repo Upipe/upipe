@@ -426,7 +426,10 @@ int main(int argc, char *argv[])
                                                      UPUMP_BLOCKER_POOL);
     logger = uprobe_stdio_alloc(NULL, stdout, loglevel);
     assert(logger != NULL);
-    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, true, 0);
+    const uint64_t deviation = UCLOCK_FREQ / 30; // actual delay is 3 * this
+    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, true /* enabled */, deviation);
+    uprobe_dejitter_set_minimum_deviation(uprobe_dejitter, deviation);
+    uprobe_dejitter_set_maximum_deviation(uprobe_dejitter, deviation);
     assert(uprobe_dejitter != NULL);
 
     logger = uprobe_uref_mgr_alloc(uprobe_dejitter, uref_mgr);
