@@ -61,6 +61,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 
+#include <bitstream/haivision/srt.h>
+
 #ifdef UPIPE_HAVE_GCRYPT_H
 #include <gcrypt.h>
 #endif
@@ -168,7 +170,17 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
     case UPROBE_PROBE_UREF:
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        //struct uref *uref = va_arg(args, struct uref *);
+        struct uref *uref = va_arg(args, struct uref *);
+
+        const uint8_t *buf;
+        int s = -1;
+        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+            return UBASE_ERR_INVALID;
+        bool ctrl = srt_get_packet_control(buf);
+        uref_block_unmap(uref, 0);
+
+        if (ctrl)
+            return UBASE_ERR_NONE;
 
         if (packets++ == km_refresh_period) {
             packets = 0;
