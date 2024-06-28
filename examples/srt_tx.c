@@ -413,7 +413,7 @@ int main(int argc, char *argv[])
                                                    0);
     upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
-    struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
+    struct uclock *uclock = uclock_std_alloc(0);
     logger = uprobe_stdio_alloc(NULL, stdout, loglevel);
     assert(logger != NULL);
     struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, true, 0);

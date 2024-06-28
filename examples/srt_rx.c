@@ -444,7 +444,7 @@ int main(int argc, char *argv[])
 
     udp_sink_mgr = upipe_udpsink_mgr_alloc();
 
-    uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
+    uclock = uclock_std_alloc(0);
 
     logger = uprobe_obe_log_alloc(logger);
 
