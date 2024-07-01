@@ -407,6 +407,8 @@ static int _upipe_udpsrc_control(struct upipe *upipe,
         case UPIPE_UDPSRC_SET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSRC_SIGNATURE)
             upipe_udpsrc_set_upump(upipe, NULL);
+            if (likely(upipe_udpsrc->fd != -1))
+                close(upipe_udpsrc->fd);
             upipe_udpsrc->fd = va_arg(args, int );
             return UBASE_ERR_NONE;
         }

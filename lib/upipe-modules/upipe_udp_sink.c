@@ -516,6 +516,8 @@ static int _upipe_udpsink_control(struct upipe *upipe,
         case UPIPE_UDPSINK_SET_FD: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_UDPSINK_SIGNATURE)
             upipe_udpsink_set_upump(upipe, NULL);
+            if (likely(upipe_udpsink->fd != -1))
+                close(upipe_udpsink->fd);
             upipe_udpsink->fd = va_arg(args, int );
             return UBASE_ERR_NONE;
         }
