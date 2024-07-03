@@ -1433,7 +1433,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
     ulist_foreach(&upipe_sdi_enc->subs, uchain) {
         struct upipe_sdi_enc_sub *upipe_sdi_enc_sub =
             upipe_sdi_enc_sub_from_uchain(uchain);
-        struct upipe *subpipe = upipe_sdi_enc_sub_to_upipe(upipe_sdi_enc_sub);
 
         if (upipe_sdi_enc_sub->type == SDIENC_VANC) {
             struct uchain *uchain_vanc = ulist_pop(&upipe_sdi_enc_sub->urefs);
@@ -1479,7 +1478,6 @@ static void upipe_sdi_enc_input(struct upipe *upipe, struct uref *uref,
                 memcpy(&dst_line[offset], r, hsize);
             } else {
                 for (int i = 0; i < hsize; i++) {
-                    uint16_t *src = (uint16_t*)r;
                     dst_line[offset+i*2] = r[i];
                 }
             }
