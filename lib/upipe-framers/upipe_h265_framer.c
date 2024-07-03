@@ -2753,7 +2753,7 @@ static int upipe_h265f_check_ubuf_mgr(struct upipe *upipe,
     UBASE_ALLOC_RETURN(upipe_h265f->annexb_header);
 
     ubuf_free(upipe_h265f->annexb_aud);
-    uint8_t aud_buffer[6] = { 0, 0, 0, 1, 0, 0 };
+    uint8_t aud_buffer[6] = { 0, 0, 0, 1, 0, 1 };
     h265nal_set_type(aud_buffer + 1, H265NAL_TYPE_AUD);
     upipe_h265f->annexb_aud =
         ubuf_block_alloc_from_opaque(upipe_h265f->ubuf_mgr, aud_buffer, 6);
