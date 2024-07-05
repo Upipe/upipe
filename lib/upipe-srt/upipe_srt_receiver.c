@@ -153,6 +153,8 @@ struct upipe_srt_receiver {
 
     uint64_t previous_ts;
 
+    uint64_t ts_wraparounds;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -785,6 +787,8 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_receiver->previous_ts = 0;
 
+    upipe_srt_receiver->ts_wraparounds = 0;
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -1214,8 +1218,6 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     uref_block_resize(uref, SRT_HEADER_SIZE, -1); /* skip SRT header */
     total_size -= SRT_HEADER_SIZE;
 
-    uref_clock_set_cr_prog(uref, ts * UCLOCK_FREQ / 1000000);
-
 #define MAX_CLOCK_REF_INTERVAL UCLOCK_FREQ // FIXME
 
     static const uint64_t wrap = UINT64_C(4294967296);
@@ -1223,15 +1225,23 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     int32_t d32 = delta;
     bool discontinuity = false;
     if (d32 <= MAX_CLOCK_REF_INTERVAL || -d32 <= MAX_CLOCK_REF_INTERVAL) {
-        if (d32 <= MAX_CLOCK_REF_INTERVAL)
+        if (d32 <= MAX_CLOCK_REF_INTERVAL) {
+            if (ts < upipe_srt_receiver->previous_ts)
+                upipe_srt_receiver->ts_wraparounds++;
             upipe_srt_receiver->previous_ts += delta;
-        else if (!retransmit)
+        } else if (!retransmit) {
+            upipe_srt_receiver->previous_ts = ts;
+            upipe_srt_receiver->ts_wraparounds = 0;
             discontinuity = true;
+        }
     } else {
         upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
         upipe_srt_receiver->previous_ts = ts;
+        upipe_srt_receiver->ts_wraparounds = 0;
         discontinuity = true;
     }
+
+    uref_clock_set_cr_prog(uref, (upipe_srt_receiver->ts_wraparounds * wrap + ts) * UCLOCK_FREQ / 1000000);
 
     upipe_verbose_va(upipe, "Data seq %u (retx %u)", seqnum, retransmit);
 
