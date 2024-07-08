@@ -815,11 +815,6 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
 
     upipe_srt_receiver_check_upump_mgr(upipe);
 
-    if (upipe_srt_receiver->latency == 0) {
-        upipe_err(upipe, "Latency unset");
-        return UBASE_ERR_UNKNOWN;
-    }
-
     if (flow_format != NULL) {
         uint64_t latency;
         if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
@@ -978,10 +973,6 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
                 return UBASE_ERR_INVALID;
 
             struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
-            if (upipe_srt_receiver->latency) {
-                upipe_err(upipe, "Latency already set");
-                return UBASE_ERR_UNHANDLED;
-            }
             unsigned latency_ms = atoi(v);
             upipe_srt_receiver->latency = latency_ms * UCLOCK_FREQ / 1000;
             upipe_dbg_va(upipe, "Set latency to %u msecs", latency_ms);

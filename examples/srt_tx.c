@@ -61,6 +61,8 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 
+#include <bitstream/haivision/srt.h>
+
 #ifdef UPIPE_HAVE_GCRYPT_H
 #include <gcrypt.h>
 #endif
@@ -138,6 +140,8 @@ static void stop(struct upump *upump);
 static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
+    uint16_t latency_ms;
+
     switch (event) {
     case UPROBE_SOURCE_END:
         upipe_warn(upipe, "Remote shutdown");
@@ -145,6 +149,16 @@ static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
                 NULL, UCLOCK_FREQ, 0);
         upump_start(u);
         return uprobe_throw_next(uprobe, upipe, event, args);
+    case UPROBE_NEW_FLOW_DEF:
+        if (!ubase_check(upipe_srt_handshake_get_latency(upipe, &latency_ms)))
+            upipe_err(upipe, "Couldn't get latency");
+        else {
+            upipe_notice_va(upipe, "Latency %hu ms", latency_ms);
+            char latency_ms_str[16];
+            snprintf(latency_ms_str, sizeof(latency_ms_str), "%hu", latency_ms);
+            if (!ubase_check(upipe_set_option(upipe_srt_sender, "latency", latency_ms_str)))
+                upipe_err(upipe, "Couldn't set sender latency");
+        }
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
@@ -156,7 +170,17 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
     switch (event) {
     case UPROBE_PROBE_UREF:
         UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
-        //struct uref *uref = va_arg(args, struct uref *);
+        struct uref *uref = va_arg(args, struct uref *);
+
+        const uint8_t *buf;
+        int s = -1;
+        if (!ubase_check(uref_block_read(uref, 0, &s, &buf)))
+            return UBASE_ERR_INVALID;
+        bool ctrl = srt_get_packet_control(buf);
+        uref_block_unmap(uref, 0);
+
+        if (ctrl)
+            return UBASE_ERR_NONE;
 
         if (packets++ == km_refresh_period) {
             packets = 0;

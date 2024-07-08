@@ -102,7 +102,7 @@ struct upipe_srt_handshake {
     uint32_t mfw;
 
 
-    uint16_t receiver_tsbpd_delay;
+    uint16_t receiver_tsbpd_delay; /* stores negotiated latency */
     uint16_t sender_tsbpd_delay;
     uint32_t flags;
     uint16_t major;
@@ -571,7 +571,7 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
 
     if (!strcmp(option, "latency")) {
         upipe_srt_handshake->receiver_tsbpd_delay = atoi(value);
-        upipe_srt_handshake->sender_tsbpd_delay = atoi(value);
+        upipe_srt_handshake->sender_tsbpd_delay = 0;
         return UBASE_ERR_NONE;
     }
 
@@ -668,6 +668,13 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
                 upipe_srt_handshake->password = NULL;
                 upipe_srt_handshake->sek_len = 0;
             }
+            return UBASE_ERR_NONE;
+        }
+
+        case UPIPE_SRT_HANDSHAKE_GET_LATENCY: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_SRT_HANDSHAKE_SIGNATURE)
+            uint16_t *latency_ms = va_arg(args, uint16_t *);
+            *latency_ms = upipe_srt_handshake->receiver_tsbpd_delay;
             return UBASE_ERR_NONE;
         }
 
@@ -822,10 +829,18 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
         (flags & SRT_HANDSHAKE_EXT_FLAG_PACKET_FILTER) ? "PACKET_FILTER " : "");
     upipe_srt_handshake->flags = flags;
 
+    /* Latency is MAX(sender_tsbpd_delay, receiver_tsbpd_delay). Arbitrarily use receiver_tsbpd_delay variable as the latency */
+    uint16_t receiver_tsbpd = upipe_srt_handshake->receiver_tsbpd_delay;
+
     upipe_srt_handshake->receiver_tsbpd_delay = srt_get_handshake_extension_receiver_tsbpd_delay(ext);
     upipe_srt_handshake->sender_tsbpd_delay = srt_get_handshake_extension_sender_tsbpd_delay(ext);
-    upipe_dbg_va(upipe, "tsbpd delays: receiver %u, sender %u",
-            upipe_srt_handshake->receiver_tsbpd_delay, upipe_srt_handshake->sender_tsbpd_delay);
+    if (upipe_srt_handshake->receiver_tsbpd_delay < upipe_srt_handshake->sender_tsbpd_delay)
+        upipe_srt_handshake->receiver_tsbpd_delay = upipe_srt_handshake->sender_tsbpd_delay;
+
+    if (upipe_srt_handshake->receiver_tsbpd_delay < receiver_tsbpd)
+        upipe_srt_handshake->receiver_tsbpd_delay = receiver_tsbpd;
+
+    upipe_dbg_va(upipe, "Negotiated latency %u ms", upipe_srt_handshake->receiver_tsbpd_delay);
 }
 
 static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const size_t ext_len, const uint8_t **wrap, uint8_t *wrap_len)
@@ -967,8 +982,8 @@ static bool upipe_srt_handshake_wrap_key(struct upipe *upipe, uint8_t *wrap)
     }
 
     uint8_t clear_wrap[2*256/8];
-    memcpy(&clear_wrap[0],upipe_srt_handshake->sek[0], klen);
-    memcpy(&clear_wrap[klen],upipe_srt_handshake->sek[1], klen);
+    memcpy(&clear_wrap[0], upipe_srt_handshake->sek[(upipe_srt_handshake->kk == 2) ? 1 : 0], klen);
+    memcpy(&clear_wrap[klen], upipe_srt_handshake->sek[1], klen);
 
     err = gcry_cipher_encrypt(aes, wrap, wrap_len, clear_wrap, wrap_len - 8);
     if (err) {
