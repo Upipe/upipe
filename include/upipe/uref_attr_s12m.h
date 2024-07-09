@@ -67,6 +67,34 @@ static inline bool uref_attr_s12m_check(const uint8_t *data, const size_t size)
     return true;
 }
 
+/** @This returns true if the integer values are permissible in a timecode.
+ */
+static inline bool uref_attr_s12m_validate_integers(const uint32_t hours,
+        const uint32_t minutes, const uint32_t seconds, const uint32_t frames)
+{
+    if (hours > 23)
+        return false;
+    if (minutes > 59)
+        return false;
+    if (seconds > 59)
+        return false;
+    if (frames > 29)
+        return false;
+    return true;
+}
+
+/** @This returns true if the decimal values are permissible in a timecode.
+ */
+static inline bool uref_attr_s12m_validate_decimals(const uint32_t hours_10s,
+        const uint32_t hours_1s, const uint32_t minutes_10s, const uint32_t minutes_1s,
+        const uint32_t seconds_10s, const uint32_t seconds_1s, const uint32_t frames_10s,
+        const uint32_t frames_1s)
+{
+    return uref_attr_s12m_validate_integers(10*hours_10s + hours_1s,
+            10*minutes_10s + minutes_1s, 10*seconds_10s + seconds_1s,
+            10*frames_10s + frames_1s);
+}
+
 /** @This returns a new timecode pack from the integer components and the drop
  * frame flag.  Does not validate values.
  *
