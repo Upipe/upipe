@@ -206,6 +206,44 @@ static inline void uref_attr_s12m_to_decimals(const uint32_t timecode,
     *drop = (timecode & 1 << 30) == 1 << 30;
 }
 
+/** @This gets the field flag in a timecode pack
+ *
+ * @param timecode timecode pack
+ * @param is_pal get the flag in the pal location instead of ntsc location
+ * @return the flag as a boolean
+ */
+
+static inline bool uref_attr_s12m_get_field_flag(const uint32_t timecode, const bool is_pal)
+{
+    if (is_pal)
+        return (timecode & 1 << 7) == 1 << 7;
+    else
+        return (timecode & 1 << 23) == 1 << 23;
+}
+
+/** @This sets the field flag in a timecode pack
+ *
+ * @param timecode old timecode pack
+ * @param is_pal set the flag in the pal location instead of ntsc location
+ * @param field field flag as a boolean
+ * @return new timecode pack
+ */
+
+static inline uint32_t uref_attr_s12m_set_field_flag(const uint32_t timecode, const bool is_pal, const bool field)
+{
+    if (is_pal) {
+        if (field)
+            return timecode | 1 << 7;
+        else
+            return timecode & ~(1 << 7);
+    } else {
+        if (field)
+            return timecode | 1 << 23;
+        else
+            return timecode & ~(1 << 23);
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif
