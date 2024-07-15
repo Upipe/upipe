@@ -389,7 +389,7 @@ static inline int32_t extract_hd_audio_sample(struct upipe *upipe,
     sample.u |= (data[0] & 0xF0) <<  4;
     sample.u |= (data[2] & 0xFF) << 12;
     sample.u |= (data[4] & 0xFF) << 20;
-    sample.u |= (data[6] & 0x0F) << 28;
+    sample.u |= (uint32_t)(data[6] & 0x0F) << 28;
 
     if (upipe_sdi_dec->debug) {
         uint8_t parity = 0;
