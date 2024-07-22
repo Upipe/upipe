@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 EasyTools
+ * Copyright (C) 2023-2024 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -77,6 +77,11 @@ struct upipe_id3v2f {
      * sequence header) */
     bool acquired;
 
+    /** max octetrate */
+    uint64_t max_octetrate;
+    /** last output dts */
+    uint64_t last_dts;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -112,6 +117,8 @@ static struct upipe *upipe_id3v2f_alloc(struct upipe_mgr *mgr,
     upipe_id3v2f_init_flow_def(upipe);
     upipe_id3v2f->next_uref = NULL;
     upipe_id3v2f->next_uref_size = 0;
+    upipe_id3v2f->max_octetrate = 0;
+    upipe_id3v2f->last_dts = UINT64_MAX;
     uref_init(&upipe_id3v2f->au_uref_s);
     upipe_throw_ready(upipe);
     return upipe;
@@ -145,20 +152,8 @@ static void upipe_id3v2f_work(struct upipe *upipe, struct upump **upump_p)
         goto upipe_id3v2f_work_err;
     }
 
-    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
-    UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.id3.metadata"))
-
-    flow_def = upipe_id3v2f_store_flow_def_attr(upipe, flow_def);
-    if (unlikely(flow_def == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        uref_free(upipe_id3v2f->next_uref);
-        goto upipe_id3v2f_work_err;
-    }
-    upipe_id3v2f_store_flow_def(upipe, flow_def);
-    upipe_id3v2f_sync_acquired(upipe);
-
     /* We work on encoded data so in the DTS domain. Rebase on DTS */
-    uint64_t date;
+    uint64_t date = UINT64_MAX;
     struct urational drift_rate = { 0, 0 };
     uref_clock_get_rate(upipe_id3v2f->next_uref, &drift_rate);
 #define SET_DATE(dv)                                                          \
@@ -172,6 +167,32 @@ static void upipe_id3v2f_work(struct upipe *upipe, struct upump **upump_p)
     SET_DATE(prog)
     SET_DATE(orig)
 #undef SET_DATE
+
+    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
+    UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "block.id3.metadata."))
+
+    flow_def = upipe_id3v2f_store_flow_def_attr(upipe, flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(upipe_id3v2f->next_uref);
+        goto upipe_id3v2f_work_err;
+    }
+
+    uint64_t octetrate = upipe_id3v2f->next_uref_size;
+    if (upipe_id3v2f->last_dts != UINT64_MAX && date != UINT64_MAX &&
+        date > upipe_id3v2f->last_dts) {
+        octetrate = upipe_id3v2f->next_uref_size * UCLOCK_FREQ /
+            (date - upipe_id3v2f->last_dts);
+    }
+    octetrate = ((octetrate >> 10) + 1) << 10;
+    if (octetrate > upipe_id3v2f->max_octetrate) {
+        upipe_notice_va(upipe, "increase max octetrate to %"PRIu64, octetrate);
+        upipe_id3v2f->max_octetrate = octetrate;
+    }
+    upipe_id3v2f->last_dts = date;
+    uref_block_flow_set_max_octetrate(flow_def, upipe_id3v2f->max_octetrate);
+    upipe_id3v2f_store_flow_def(upipe, flow_def);
+    upipe_id3v2f_sync_acquired(upipe);
 
     uref_clock_set_dts_pts_delay(upipe_id3v2f->next_uref, 0);
     if (drift_rate.den)
