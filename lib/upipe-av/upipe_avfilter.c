@@ -875,8 +875,10 @@ static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
                 p->format = video->pix_fmt;
                 p->width = video->width;
                 p->height = video->height;
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
                 p->color_range = video->full_range ?
                     AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+#endif
                 if (video->sar.num) {
                     p->sample_aspect_ratio.num = video->sar.num;
                     p->sample_aspect_ratio.den = video->sar.den;
