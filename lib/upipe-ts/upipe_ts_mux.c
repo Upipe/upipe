@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
- * Copyright (C) 2020-2023 EasyTools S.A.S.
+ * Copyright (C) 2020-2024 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -1111,7 +1111,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     struct upipe_ts_mux *upipe_ts_mux = upipe_ts_mux_from_program_mgr(
                 upipe_ts_mux_program_to_upipe(program)->mgr);
     const char *def;
-    uint64_t octetrate;
+    uint64_t octetrate = 0;
 
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
@@ -1119,17 +1119,13 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     const char *sub_def = def;
     if (!ubase_ncmp(sub_def, "void.")) {
         sub_def += strlen("void");
-
-        octetrate = 0;
     }
     else if (!ubase_ncmp(sub_def, "block.")) {
         sub_def += strlen("block");
 
-        if (!ubase_check(
-                uref_block_flow_get_octetrate(flow_def, &octetrate)) ||
-            !octetrate) {
-            UBASE_RETURN(uref_block_flow_get_max_octetrate(
-                    flow_def, &octetrate));
+        uref_block_flow_get_octetrate(flow_def, &octetrate);
+        if (!octetrate) {
+            uref_block_flow_get_max_octetrate(flow_def, &octetrate);
             if (!octetrate) {
                 upipe_warn_va(upipe, "no octetrate found");
                 return UBASE_ERR_INVALID;
