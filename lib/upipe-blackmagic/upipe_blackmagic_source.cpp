@@ -32,6 +32,7 @@
 #include "upipe/uprobe.h"
 #include "upipe/uclock.h"
 #include "upipe/uref.h"
+#include "upipe/uref_attr_s12m.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_sound_flow.h"
@@ -547,7 +548,17 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
 
             IDeckLinkTimecode *timecode;
             if (VideoFrame->GetTimecode(bmdTimecodeRP188Any, &timecode) == S_OK) {
-                uint32_t bcd[2] = { 1, timecode->GetBCD() };
+                uint8_t hours, minutes, seconds, frames;
+                timecode->GetComponents(&hours, &minutes, &seconds, &frames);
+                bool drop = timecode->GetFlags() & bmdTimecodeIsDropFrame;
+
+                uint32_t timecode_s12m = uref_attr_s12m_from_integers(hours,
+                        minutes, seconds, frames, !!drop);
+                timecode_s12m = uref_attr_s12m_set_field_flag(timecode_s12m,
+                        upipe_bmd_src->fps.den != 1001,
+                        timecode->GetFlags() & bmdTimecodeFieldMark);
+
+                uint32_t bcd[2] = { 1, timecode_s12m };
                 uref_pic_set_s12m(uref, (uint8_t*)&bcd, sizeof(bcd));
             }
 
