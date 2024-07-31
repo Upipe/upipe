@@ -34,6 +34,7 @@
 #include "upipe/uprobe.h"
 #include "upipe/uclock.h"
 #include "upipe/uref.h"
+#include "upipe/uref_attr_s12m.h"
 #include "upipe/uref_block.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_pic_flow.h"
@@ -1065,12 +1066,13 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
 #endif
 
     if (uatomic_load(&upipe_bmd_sink->timecode)) {
-        const uint32_t *tc_data;
+        const uint8_t *tc_data;
         size_t tc_data_size;
         // bmdVideoOutputRP188
-        if (ubase_check(uref_pic_get_s12m(uref, (const uint8_t**)&tc_data, &tc_data_size))) {
-           upipe_bmd_sink_timecode timecode(tc_data[1]);
-           video_frame->SetTimecode(timecode);
+        if (ubase_check(uref_pic_get_s12m(uref, &tc_data, &tc_data_size))
+                && uref_attr_s12m_check(tc_data, tc_data_size)) {
+            upipe_bmd_sink_timecode timecode(uref_attr_s12m_read(tc_data + sizeof(uint32_t)));
+            video_frame->SetTimecode(timecode);
         }
     }
 
