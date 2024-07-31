@@ -1792,8 +1792,9 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     displayMode->GetFrameRate(&timeValue, &timeScale);
     upipe_bmd_sink->ticks_per_frame = UCLOCK_FREQ * timeValue / timeScale;
 
+    /* TODO: use timecode option to set bit */
     result = deckLinkOutput->EnableVideoOutput(displayMode->GetDisplayMode(),
-                                               bmdVideoOutputVANC);
+            bmdVideoOutputVANC|bmdVideoOutputVITC|bmdVideoOutputRP188);
     if (result != S_OK)
     {
         upipe_err(upipe, "Failed to enable video output. Is another application using the card?\n");
