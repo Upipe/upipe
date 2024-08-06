@@ -41,6 +41,7 @@
 #include <upipe/upipe_helper_void.h>
 #include <upipe/upipe_helper_output.h>
 #include <upipe/upipe_helper_flow_def.h>
+#include <upipe/upipe_helper_ubuf_mgr.h>
 #include <upipe-framers/upipe_s337_framer.h>
 
 #include <bitstream/smpte/337.h>
@@ -70,15 +71,29 @@ struct upipe_s337f {
     /** frame definition packet */
     struct uref *flow_def_attr;
 
+    /** ubuf manager */
+    struct ubuf_mgr *ubuf_mgr;
+    /** flow format packet */
+    struct uref *flow_format;
+    /** ubuf manager request */
+    struct urequest ubuf_mgr_request;
+
     /** public upipe structure */
     struct upipe upipe;
 };
+
+/** @hidden */
+static int upipe_s337f_check(struct upipe *upipe, struct uref *flow_format);
 
 UPIPE_HELPER_UPIPE(upipe_s337f, upipe, UPIPE_S337F_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_s337f, urefcount, upipe_s337f_free)
 UPIPE_HELPER_VOID(upipe_s337f);
 UPIPE_HELPER_OUTPUT(upipe_s337f, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_s337f, flow_def_input, flow_def_attr)
+UPIPE_HELPER_UBUF_MGR(upipe_s337f, ubuf_mgr, flow_format, ubuf_mgr_request,
+                      upipe_s337f_check,
+                      upipe_s337f_register_output_request,
+                      upipe_s337f_unregister_output_request)
 
 /** @internal @This allocates a s337f pipe.
  *
@@ -100,6 +115,7 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
     upipe_s337f_init_urefcount(upipe);
     upipe_s337f_init_output(upipe);
     upipe_s337f_init_flow_def(upipe);
+    upipe_s337f_init_ubuf_mgr(upipe);
     upipe_s337f->uref = NULL;
     upipe_throw_ready(upipe);
     return upipe;
@@ -316,6 +332,12 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
     const ssize_t sync_pos = upipe_s337f_sync(upipe, uref);
 
+    if (!upipe_s337f->ubuf_mgr) {
+        upipe_warn(upipe, "no ubuf_mgr, dropping input uref");
+        uref_free(uref);
+        return;
+    }
+
     if (sync_pos == -1) {
         if (output) {
             upipe_err(upipe, "Sync lost");
@@ -399,9 +421,22 @@ static int upipe_s337f_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     }
 
     flow_def = upipe_s337f_store_flow_def_input(upipe, flow_def_dup);
-    if (flow_def)
-        upipe_s337f_store_flow_def(upipe, flow_def);
+    UBASE_ALLOC_RETURN(flow_def);
+    upipe_s337f_require_ubuf_mgr(upipe, flow_def);
 
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This receives a provided ubuf manager.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format amended flow format
+ * @return an error code
+ */
+static int upipe_s337f_check(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL)
+        upipe_s337f_store_flow_def(upipe, flow_format);
     return UBASE_ERR_NONE;
 }
 
@@ -421,6 +456,21 @@ static int upipe_s337f_control(struct upipe *upipe, int command, va_list args)
             return upipe_s337f_set_flow_def(upipe, flow_def);
         }
 
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR
+                    || request->type == UREQUEST_FLOW_FORMAT)
+                return upipe_throw_provide_request(upipe, request);
+            return upipe_s337f_alloc_output_proxy(upipe, request);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *request = va_arg(args, struct urequest *);
+            if (request->type == UREQUEST_UBUF_MGR ||
+                request->type == UREQUEST_FLOW_FORMAT)
+                return UBASE_ERR_NONE;
+            return upipe_s337f_free_output_proxy(upipe, request);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -437,6 +487,7 @@ static void upipe_s337f_free(struct upipe *upipe)
     upipe_s337f_clean_urefcount(upipe);
     upipe_s337f_clean_output(upipe);
     upipe_s337f_clean_flow_def(upipe);
+    upipe_s337f_clean_ubuf_mgr(upipe);
     uref_free(upipe_s337f->uref);
     upipe_s337f_free_void(upipe);
 }
