@@ -685,8 +685,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
                         0, samples);
                 assert(ubuf);
-                ubuf_free(uref->ubuf);
-                uref->ubuf = ubuf;
+                uref_attach_ubuf(uref, ubuf);
             }
             upipe_sync_sub_output(upipe_sub, uref, upump_p);
 
