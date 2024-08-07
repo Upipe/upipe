@@ -46,6 +46,7 @@
 #include <bitstream/smpte/337.h>
 
 #define MAX_SAMPLES 4000
+#define MAX_SYNC_FAIL 4
 
 /** upipe_s337f structure */
 struct upipe_s337f {
@@ -64,7 +65,12 @@ struct upipe_s337f {
     /** buffered uref (for PTS) */
     struct uref *uref;
 
+    /** working buffer */
     int32_t buffered_samples[MAX_SAMPLES*2];
+
+    bool sync_found;
+
+    uint64_t num_sync_fail;
 
     /** size in samples of buffered data  */
     ssize_t num_buffered_samples;
@@ -106,6 +112,8 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
     upipe_s337f_init_flow_def(upipe);
     upipe_s337f->uref = NULL;
     upipe_s337f->num_buffered_samples = 0;
+    upipe_s337f->sync_found = false;
+    upipe_s337f->num_sync_fail = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -167,7 +175,7 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
         }
 
         uref_sound_unmap(uref, 0, -1, 1);
-        /* buffer next uref with a sync pos */
+
         if (upipe_s337f->uref)
             uref_free(upipe_s337f->uref);
 
@@ -176,12 +184,38 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
             uref_free(uref);
         }
         else {
+            /* buffer next uref with a sync pos */
             upipe_s337f->uref = uref;
         }
     }
     else {
-        // FIXME copy the whole uref and free, leaving the first one buffered
+        /* Copy all the samples from this uref (likely a partial Dolby E frame) */
+        /* Note this "size" is in samples */
+        size_t size;
+        uref_sound_size(uref, &size, NULL);
 
+        if (upipe_s337f->num_buffered_samples + size < MAX_SAMPLES) {
+            const int32_t *samples;
+            if (!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &samples, 1))) {
+                upipe_err(upipe, "Could not map buffered audio uref for writing");
+                return UBASE_ERR_INVALID;
+            }
+
+            size_t samples_bytes = size * 2 /* stereo */ * 4 /* s32 */;
+            memcpy(&upipe_s337f->buffered_samples[2*upipe_s337f->num_buffered_samples], samples, samples_bytes);
+            upipe_s337f->num_buffered_samples += size;
+
+            uref_sound_unmap(uref, 0, -1, 1);
+            uref_free(uref);
+        }
+        else {
+            upipe_warn(upipe, "Too many audio samples buffered, resetting");
+            upipe_s337f->num_buffered_samples = 0;
+            if (upipe_s337f->uref)
+                uref_free(upipe_s337f->uref);
+            upipe_s337f->uref = NULL;
+            uref_free(uref);
+        }
     }
 
     return UBASE_ERR_NONE;
@@ -198,8 +232,12 @@ static void upipe_s337f_throw_flow_def(struct upipe *upipe, size_t frame_size,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
-
-    if (frame_size == 1601 || frame_size == 1602) { /* NTSC */
+    /* latency is 2x the old frame rate as Dolby E does not support 50/59.94fps */
+    if (frame_size == 800 || frame_size == 801) { /* 59.94fps */
+        uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * 1001 / 30000);
+    } else if (frame_size == 960) { /* 50fps */
+        uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 / 25);
+    } else if (frame_size == 1601 || frame_size == 1602) { /* NTSC */
         uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * 1001 / 30000);
     } else
         uref_clock_set_latency(flow_def, UCLOCK_FREQ * 2 * frame_size / 48000);
@@ -302,11 +340,22 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
     const ssize_t sync_pos = upipe_s337f_sync(upipe, uref);
 
-    if (sync_pos == -1) {
+    if (sync_pos >= 0) {
+        upipe_s337f->sync_found = true;
+        upipe_s337f->num_sync_fail = 0;
+    }
+
+    /* After four consecutive syncwords missing, treat as PCM instead of S337 */
+    if (sync_pos == -1)
+        upipe_s337f->num_sync_fail++;
+
+    if (!upipe_s337f->sync_found || (upipe_s337f->sync_found && upipe_s337f->num_sync_fail >= MAX_SYNC_FAIL)) {
+        upipe_s337f->sync_found = false;
         if (output) {
             upipe_err(upipe, "Sync lost");
             uref_free(output);
             upipe_s337f->uref = NULL;
+            upipe_s337f->num_buffered_samples = 0;
         }
 
         struct uref *flow_def = upipe_s337f_alloc_flow_def_attr(upipe);
@@ -328,7 +377,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
 
     /* handle current uref */
 
-    if (output) {
+    if (output && sync_pos >= 0) {
         if (!ubase_check(upipe_s337f_handle(upipe, uref, sync_pos))) {
             goto error;
         }
@@ -336,7 +385,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
         upipe_s337f->uref = NULL;
     }
 
-    /* buffer next uref */
+    /* buffer (if syncword present) otherwise copy next uref */
 
     if (!ubase_check(upipe_s337f_buffer(upipe, uref, sync_pos)))
         goto error;
