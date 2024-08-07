@@ -45,6 +45,8 @@
 
 #include <bitstream/smpte/337.h>
 
+#define MAX_SAMPLES 4000
+
 /** upipe_s337f structure */
 struct upipe_s337f {
     /** refcount management structure */
@@ -59,11 +61,13 @@ struct upipe_s337f {
     /** list of output requests */
     struct uchain request_list;
 
-    /** buffered uref */
+    /** buffered uref (for PTS) */
     struct uref *uref;
 
-    /** size in samples of buffered uref */
-    ssize_t buffered_samples;
+    int32_t buffered_samples[MAX_SAMPLES*2];
+
+    /** size in samples of buffered data  */
+    ssize_t num_buffered_samples;
 
     /** input flow definition packet */
     struct uref *flow_def_input;
@@ -101,6 +105,7 @@ static struct upipe *upipe_s337f_alloc(struct upipe_mgr *mgr,
     upipe_s337f_init_output(upipe);
     upipe_s337f_init_flow_def(upipe);
     upipe_s337f->uref = NULL;
+    upipe_s337f->num_buffered_samples = 0;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -137,33 +142,47 @@ static int upipe_s337f_buffer(struct upipe *upipe, struct uref *uref, ssize_t sy
     struct upipe_s337f *upipe_s337f = upipe_s337f_from_upipe(upipe);
 
     /* discard leading samples up to sync word */
+    if (sync_pos >= 0) {
+        /* Note this "size" is in samples */
+        size_t size;
+        uref_sound_size(uref, &size, NULL);
+        bool fail = false;
 
-    size_t size;
-    uref_sound_size(uref, &size, NULL);
-
-    int32_t *samples;
-    if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
-        // FIXME
-        struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
-                0, size);
-        if (!ubuf)
-            return UBASE_ERR_ALLOC;
-        uref_attach_ubuf(uref, ubuf);
-
-        if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &samples, 1))) {
+        const int32_t *samples;
+        if (!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &samples, 1))) {
             upipe_err(upipe, "Could not map buffered audio uref for writing");
             return UBASE_ERR_INVALID;
         }
+
+        size_t next_samples = (size - sync_pos);
+        if (upipe_s337f->num_buffered_samples + next_samples < MAX_SAMPLES) {
+            size_t next_samples_bytes = next_samples * 2 /* stereo */ * 4 /* s32 */;
+            memcpy(&upipe_s337f->buffered_samples[2*upipe_s337f->num_buffered_samples], &samples[2*sync_pos], next_samples_bytes);
+            upipe_s337f->num_buffered_samples += next_samples;
+        }
+        else {
+            upipe_warn(upipe, "Too many audio samples buffered, resetting");
+            upipe_s337f->num_buffered_samples = 0;
+            fail = true;
+        }
+
+        uref_sound_unmap(uref, 0, -1, 1);
+        /* buffer next uref with a sync pos */
+        if (upipe_s337f->uref)
+            uref_free(upipe_s337f->uref);
+
+        if (fail) {
+            upipe_s337f->uref = NULL;
+            uref_free(uref);
+        }
+        else {
+            upipe_s337f->uref = uref;
+        }
     }
+    else {
+        // FIXME copy the whole uref and free, leaving the first one buffered
 
-    size_t s = 2 /* stereo */ * 4 /* s32 */ * (size - sync_pos);
-    memmove(samples, &samples[2*sync_pos], s); // discard up to sync word
-
-    uref_sound_unmap(uref, 0, -1, 1);
-    upipe_s337f->buffered_samples = size - sync_pos;
-
-    /* buffer next uref */
-    upipe_s337f->uref = uref;
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -216,67 +235,41 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
     if (!ubase_check(uref_sound_size(uref, &in_size, NULL)))
         return UBASE_ERR_INVALID;
 
-    /* buffered uref */
-    size_t out_size;
-    if (!ubase_check(uref_sound_size(output, &out_size, NULL)))
-        return UBASE_ERR_INVALID;
-
-    if (in_size < upipe_s337f->buffered_samples)
-        return UBASE_ERR_INVALID;
-
-    /* how much data to copy from current to buffered uref */
-    size_t missing_size = in_size - upipe_s337f->buffered_samples;
-    if (missing_size < sync_pos)
-        upipe_verbose(upipe, "Frame too small");
-
-    /* NTSC sequence */
-    bool enlarge_output = false;
-
-    if (in_size == out_size + 1) {
-        enlarge_output = true;
-        out_size++;
-    } else if (in_size > out_size) {
-        upipe_warn_va(upipe, "Too large frame, dropping buffered uref");
-        upipe_s337f->buffered_samples = 0;
-        return UBASE_ERR_INVALID;
-    }
-
-    /* map current uref until sync word */
     const int32_t *in32;
-    if (!ubase_check(uref_sound_read_int32_t(uref, 0, sync_pos, &in32, 1))) {
+    if (!ubase_check(uref_sound_read_int32_t(uref, 0, -1, &in32, 1))) {
         upipe_err(upipe, "Could not map audio uref for reading");
         return UBASE_ERR_INVALID;
     }
 
-    /* map buffered uref for filling */
+    /* XXX: Is it always ok to reuse the urefs ubuf_mgr */
+    struct ubuf *ubuf = ubuf_sound_alloc(uref->ubuf->mgr, upipe_s337f->num_buffered_samples + sync_pos);
+    if (!ubuf)
+    {
+        uref_sound_unmap(uref, 0, -1, 1);
+        upipe_err(upipe, "could not alloc ubuf");
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return false;
+    }
+
     int32_t *out32;
-    if (enlarge_output ||
-            !ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
-        struct ubuf *ubuf = ubuf_sound_copy(output->ubuf->mgr, output->ubuf,
-                0, out_size);
-        if (!ubuf) {
-            uref_sound_unmap(uref, 0, sync_pos, 1);
-            return UBASE_ERR_INVALID;
-        }
-        uref_attach_ubuf(output, ubuf);
-
-        if (!ubase_check(uref_sound_write_int32_t(output, 0, -1, &out32, 1))) {
-            upipe_err(upipe, "Could not map buffered audio uref for writing");
-            uref_sound_unmap(uref, 0, sync_pos, 1);
-            return UBASE_ERR_INVALID;
-        }
+    if (unlikely(!ubase_check(ubuf_sound_write_int32_t(ubuf, 0, -1, &out32, 1)))) {
+        uref_sound_unmap(uref, 0, -1, 1);
+        upipe_err(upipe, "could not write ubuf");
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return false;
     }
+    /* copy buffered samples */
+    memcpy(&out32[0], upipe_s337f->buffered_samples, upipe_s337f->num_buffered_samples * 2 * sizeof(int32_t));
 
-    /* data from current uref won't be enough */
-    if (missing_size > sync_pos) {
-        upipe_verbose(upipe, "Frame too big, padding");
-        size_t padding = out_size - missing_size - upipe_s337f->buffered_samples;
-        memset(&out32[2*(upipe_s337f->buffered_samples + missing_size)], 0, 4 * padding);
-    }
+    /* copy up to sync pos */
+    memcpy(&out32[upipe_s337f->num_buffered_samples*2], in32, sync_pos * 2 * sizeof(int32_t));
 
-    memcpy(&out32[2*upipe_s337f->buffered_samples], in32,
-            missing_size * 2 /* channels */ * 4 /* s32 */);
-    uref_sound_unmap(uref, 0, sync_pos, 1);
+    upipe_s337f->num_buffered_samples = 0;
+    uref_sound_unmap(uref, 0, -1, 1);
+    ubuf_sound_unmap(ubuf, 0, -1, 1);
+
+    /* attach ubuf to output */
+    uref_attach_ubuf(output, ubuf);
 
     /* header */
     int bits = (out32[0] == 0x6f872 << 12) ? 20 : 24;
@@ -285,18 +278,11 @@ static int upipe_s337f_handle(struct upipe *upipe, struct uref *uref, ssize_t sy
     hdr[0] = out32[2] >> 16;
     hdr[1] = out32[3] >> (32 - bits);
 
-    uref_sound_unmap(output, 0, -1, 1);
-
     unsigned error_flag         = (hdr[0] >>  7) & 0x1;
     unsigned data_type          = (hdr[0] >>  0) & 0x1f;
 
     if (error_flag)
         upipe_err(upipe, "error flag set");
-
-    size_t samples = hdr[1] / 32 / 2 /* channels */ + 2 /* header */;
-    if (samples > in_size) {
-        upipe_err_va(upipe, "S337 frame truncated");
-    }
 
     upipe_s337f_throw_flow_def(upipe, in_size, data_type);
 
@@ -347,6 +333,7 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
             goto error;
         }
         upipe_s337f_output(upipe, output, upump_p);
+        upipe_s337f->uref = NULL;
     }
 
     /* buffer next uref */
