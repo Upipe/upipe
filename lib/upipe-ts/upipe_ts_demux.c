@@ -765,10 +765,13 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
             upipe_warn_va(upipe, "late DTS %"PRIu64" (%"PRIu64" - %f ms)",
                           dts_orig, TS_CLOCK_MAX - delta,
                           (TS_CLOCK_MAX - delta) * 1000. / UCLOCK_FREQ);
-        } else
+            uref_clock_delete_date_orig(uref);
+        } else {
             upipe_warn_va(upipe, "too long delay for DTS %"PRIu64" "
                           "(%"PRIu64" - %f ms)",
                           dts_orig, delta, delta * 1000. / UCLOCK_FREQ);
+            uref_clock_delete_date_orig(uref);
+        }
     }
 
     return upipe_throw(upipe, event, uref);
