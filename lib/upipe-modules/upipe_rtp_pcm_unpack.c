@@ -179,6 +179,8 @@ static int upipe_rtp_pcm_unpack_control(struct upipe *upipe, int command,
 
 static void upipe_rtp_pcm_unpack_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
+
     upipe_rtp_pcm_unpack_clean_output(upipe);
     upipe_rtp_pcm_unpack_clean_urefcount(upipe);
     upipe_rtp_pcm_unpack_clean_ubuf_mgr(upipe);
@@ -200,6 +202,8 @@ static struct upipe *upipe_rtp_pcm_unpack_alloc(struct upipe_mgr *mgr,
     upipe_rtp_pcm_unpack_init_ubuf_mgr(upipe);
     upipe_rtp_pcm_unpack_init_input(upipe);
     upipe_rtp_pcm_unpack_init_output(upipe);
+
+    upipe_throw_ready(upipe);
 
     return upipe;
 }
