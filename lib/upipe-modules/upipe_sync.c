@@ -639,54 +639,107 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
         const bool a52 = upipe_sync_sub->a52;
 
         if (s337 && !a52) {
-            struct uref *uref = NULL;
+            struct uref *src = NULL;
             struct uchain *uchain = ulist_peek(&upipe_sync_sub->urefs);
+            uint64_t pts = 0;
             if (!uchain) {
                 upipe_dbg_va(upipe_sub, "no urefs");
 
-                uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
-                if (!uref)
+                src = upipe_sync_get_cached_compressed_audio(upipe_sub);
+                if (!src)
                     continue;
             } else {
-                uref = uref_from_uchain(uchain);
+                src = uref_from_uchain(uchain);
 
-                uint64_t pts = 0;
-                uref_clock_get_pts_sys(uref, &pts);
+                uref_clock_get_pts_sys(src, &pts);
                 if (pts + upipe_sync->latency > upipe_sync->pts + upipe_sync->ticks_per_frame) {
                     upipe_warn_va(upipe_sub, "Waiting to buffer %.0f",
                             pts_to_time(pts + upipe_sync->latency - upipe_sync->pts));
 
-                    uref = upipe_sync_get_cached_compressed_audio(upipe_sub);
-                    if (!uref)
-                        uref = get_silence(upipe_sub, samples);
-                    if (!uref)
+                    /* Avoid creating a "hole" of silence */
+                    src = upipe_sync_get_cached_compressed_audio(upipe_sub);
+                    if (!src)
+                        src = get_silence(upipe_sub, samples);
+                    if (!src)
                         continue;
+                    wait = 1;
                 } else {
-                    ulist_pop(&upipe_sync_sub->urefs);
                     upipe_sync_sub->missed_compressed_audio_e = 0;
                     /* cache uref */
                     uref_free(upipe_sync_sub->uref);
-                    upipe_sync_sub->uref = uref_dup(uref);
+                    upipe_sync_sub->uref = uref_dup(src);
                 }
             }
 
+            /* Allocate and map destination uref */
+            struct uref *uref = uref_dup_inner(src);
+            if (!uref)
+                upipe_err_va(upipe_sub, "Could not allocate ubuf");
+            uref->ubuf = ubuf_sound_alloc(src->ubuf->mgr, samples);
+            if (!uref->ubuf)
+                upipe_err_va(upipe_sub, "Could not allocate ubuf");
+            int32_t *dst_buf;
+            if (!ubase_check(uref_sound_write_int32_t(uref, 0, -1, &dst_buf, 1))) {
+                upipe_err_va(upipe_sub, "Could not map dst");
+            }
+
+            const int32_t *src_buf;
             size_t src_samples = 0;
-            uref_sound_size(uref, &src_samples, NULL);
-            upipe_sync_sub->samples -= src_samples;
-            uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
-            if (samples != src_samples) {
-                if (samples - 1 != src_samples && samples + 1 != src_samples) {
-                    /* Log this error but copy anyway so that avsync always outputs the same number
-                       of audio samples for each audio subpipe */
-                    upipe_err_va(upipe, "Problem with s337 framing: got %zu instead of %zu",
-                        src_samples, samples);
-                }
+            uref_sound_size(src, &src_samples, NULL);
 
-                struct ubuf *ubuf = ubuf_sound_copy(uref->ubuf->mgr, uref->ubuf,
-                        0, samples);
-                assert(ubuf);
-                uref_attach_ubuf(uref, ubuf);
+            /* XXX: Doesn't handle the case where multiple s337 packets needed in a single dst uref,
+                    i.e samples < uref_samples */
+            if (!ubase_check(uref_sound_read_int32_t(src, 0, src_samples, &src_buf, 1))) {
+                upipe_err_va(upipe_sub, "Could not map src");
             }
+
+            /* Zero the destination buffer, mainly to avoid garbage on any trailing NTSC sample */
+            memset(dst_buf, 0, samples * channels * sizeof(int32_t));
+
+            /* Limit the number of samples written to the destination buffer size */
+            size_t uref_samples = src_samples;
+            if (uref_samples > samples) {
+                uref_samples = samples;
+            }
+
+            memcpy(dst_buf, src_buf, channels * sizeof(int32_t) * uref_samples);
+            src_samples -= uref_samples;
+            samples -= uref_samples;
+            if (upipe_sync_sub->samples >= src_samples)
+                upipe_sync_sub->samples -= src_samples;
+
+            uref_sound_unmap(src, 0, -1, 1);
+
+            /* Allow 1 sample underrun for NTSC 1601/1602 cadence mismatch. Safe in s337 mode owing to guard band */
+            if (src_samples == 0 || src_samples == 1) {
+                if (!wait)
+                    ulist_pop(&upipe_sync_sub->urefs);
+                uref_free(src);
+                src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
+                if (!src)
+                    break;
+            }
+            else {
+                uref_sound_resize(src, uref_samples, -1);
+                assert(samples == 0);
+
+                /* shift forward by number of consumed samples */
+                uref_clock_get_pts_sys(src, &pts);
+                pts += uref_samples * UCLOCK_FREQ / 48000;
+                uref_clock_set_pts_sys(src, pts);
+
+                /* TODO: Add metadata to uref to tell downstream pipes this is the second pair and
+                         not to touch it */
+
+                /* FIXME: reinsert this cached uref if possible */
+                if (wait)
+                    uref_free(src);
+
+                /* keep the uref in the queue */
+            }
+
+            uref_sound_unmap(uref, 0, -1, 1);
+            uref_clock_set_pts_sys(uref, upipe_sync->pts - upipe_sync->latency);
             upipe_sync_sub_output(upipe_sub, uref, upump_p);
 
             continue;
@@ -748,6 +801,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 upipe_err_va(upipe_sub, "Could not map src");
             }
 
+            /* Limit the number of samples written to the destination buffer size */
             size_t uref_samples = src_samples;
             if (uref_samples > samples) {
                 uref_samples = samples;
@@ -775,12 +829,13 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                 uref_sound_resize(src, uref_samples, -1);
                 assert(samples == 0);
 
+                /* shift forward by number of consumed samples */
                 uref_clock_get_pts_sys(src, &pts);
                 pts += uref_samples * UCLOCK_FREQ / 48000;
                 uref_clock_set_pts_sys(src, pts);
-            }
 
-            // TODO : next uref
+                /* keep the uref in the queue */
+            }
         }
 
         uref_sound_unmap(uref, 0, -1, 1);
