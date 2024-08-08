@@ -349,6 +349,12 @@ static void upipe_s337f_input(struct upipe *upipe, struct uref *uref, struct upu
     if (sync_pos == -1)
         upipe_s337f->num_sync_fail++;
 
+    /* Don't throw PCM too early */
+    if (upipe_s337f->sync_found == false && upipe_s337f->num_sync_fail < MAX_SYNC_FAIL && !output) {
+        uref_free(uref);
+        return;
+    }
+
     if (!upipe_s337f->sync_found || (upipe_s337f->sync_found && upipe_s337f->num_sync_fail >= MAX_SYNC_FAIL)) {
         upipe_s337f->sync_found = false;
         if (output) {
