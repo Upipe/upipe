@@ -839,7 +839,7 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
             upump_alloc_timer(upipe_srt_receiver->upump_mgr,
                               upipe_srt_receiver_timer,
                               upipe, upipe->refcount,
-                              UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+                              UCLOCK_FREQ/1000, UCLOCK_FREQ/1000);
         upump_start(upump);
         upipe_srt_receiver_set_upump_timer(upipe, upump);
 
