@@ -44,11 +44,6 @@
 #include <stdarg.h>
 #include <string.h>
 
-#define OPUS_TS_HEADER     0x7FE0        // 0x3ff (11 bits)
-#define OPUS_TS_MASK       0xFFE0        // top 11 bits
-
-#define OPUS_FRAME_SAMPLES 960 // FIXME clarify variable frame sizes in the spec
-
 /** @internal @This is the private context of an opusf pipe. */
 struct upipe_opusf {
     /** refcount management structure */
@@ -97,6 +92,10 @@ struct upipe_opusf {
     /** true if we have thrown the sync_acquired event (that means we found a
      * sequence header) */
     bool acquired;
+
+    /* The frame size as read from the config value in the TOC byte, converted
+     * to samples. */
+    uint16_t frame_sample_size;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -157,6 +156,7 @@ static struct upipe *upipe_opusf_alloc(struct upipe_mgr *mgr,
     upipe_opusf->samplerate = 0;
     upipe_opusf->got_discontinuity = false;
     upipe_opusf->next_frame_size = -1;
+    upipe_opusf->frame_sample_size = 0;
     uref_init(&upipe_opusf->au_uref_s);
     upipe_opusf_flush_dates(upipe);
     upipe_opusf->drift_rate.num = upipe_opusf->drift_rate.den = 0;
@@ -241,6 +241,28 @@ static bool upipe_opusf_parse_header(struct upipe *upipe)
     while( size == 0xff );
     upipe_opusf->consume_bytes = idx+2 ;
 
+    uint8_t toc;
+    if (unlikely(!ubase_check(uref_block_extract(upipe_opusf->next_uref,
+                                                 idx + 2, 1, &toc)))) {
+        upipe_err(upipe, "unable to read TOC");
+        return true;
+    }
+
+    const uint16_t frame_sample_size_lut[32] = {
+         10*48000/1000, 20*48000/1000, 40*48000/1000, 60*48000/1000, /* SILK-only NB */
+         10*48000/1000, 20*48000/1000, 40*48000/1000, 60*48000/1000, /* SILK-only MB */
+         10*48000/1000, 20*48000/1000, 40*48000/1000, 60*48000/1000, /* SILK-only WB */
+         10*48000/1000, 20*48000/1000, /* Hybrid SWB */
+         10*48000/1000, 20*48000/1000, /* Hybrid FB */
+        2.5*48000/1000,  5*48000/1000, 10*48000/1000, 20*48000/1000, /* CELT-only NB */
+        2.5*48000/1000,  5*48000/1000, 10*48000/1000, 20*48000/1000, /* CELT-only WB */
+        2.5*48000/1000,  5*48000/1000, 10*48000/1000, 20*48000/1000, /* CELT-only SWB */
+        2.5*48000/1000,  5*48000/1000, 10*48000/1000, 20*48000/1000  /* CELT-only FB */
+    };
+
+    const uint8_t config = toc >> 3;
+    upipe_opusf->frame_sample_size = frame_sample_size_lut[config];
+
     /* frame size */
     upipe_opusf->next_frame_size = frame_size;
 
@@ -291,7 +313,7 @@ static void upipe_opusf_output_frame(struct upipe *upipe, struct upump **upump_p
         return;
     }
 
-    lldiv_t div = lldiv(OPUS_FRAME_SAMPLES * UCLOCK_FREQ +
+    lldiv_t div = lldiv(upipe_opusf->frame_sample_size * UCLOCK_FREQ +
                         upipe_opusf->duration_residue,
                         upipe_opusf->samplerate);
     uint64_t duration = div.quot;
@@ -441,10 +463,10 @@ static int upipe_opusf_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     upipe_opusf->input_latency = 0;
     uref_clock_get_latency(flow_def, &upipe_opusf->input_latency);
 
-    if (unlikely(upipe_opusf->samplerate &&
+    if (unlikely(upipe_opusf->samplerate && upipe_opusf->frame_sample_size &&
                  !ubase_check(uref_clock_set_latency(flow_def_dup,
                                     upipe_opusf->input_latency +
-                                    UCLOCK_FREQ * OPUS_FRAME_SAMPLES /
+                                    UCLOCK_FREQ * upipe_opusf->frame_sample_size /
                                     upipe_opusf->samplerate))))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
     flow_def = upipe_opusf_store_flow_def_input(upipe, flow_def_dup);
