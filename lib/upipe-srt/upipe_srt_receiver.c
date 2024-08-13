@@ -1226,7 +1226,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     bool discontinuity = false;
     if (d32 <= MAX_CLOCK_REF_INTERVAL || -d32 <= MAX_CLOCK_REF_INTERVAL) {
         if (d32 <= MAX_CLOCK_REF_INTERVAL) {
-            if (ts < upipe_srt_receiver->previous_ts)
+            if (ts < (upipe_srt_receiver->previous_ts % wrap))
                 upipe_srt_receiver->ts_wraparounds++;
             upipe_srt_receiver->previous_ts += delta;
         } else if (!retransmit) {
