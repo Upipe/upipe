@@ -1224,6 +1224,8 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     uint64_t delta = (wrap + ts - (upipe_srt_receiver->previous_ts % wrap)) % wrap;
     int32_t d32 = delta;
     bool discontinuity = false;
+
+    /* Note: d32 is converted to unsigned implictly */
     if (d32 <= MAX_CLOCK_REF_INTERVAL || -d32 <= MAX_CLOCK_REF_INTERVAL) {
         if (d32 <= MAX_CLOCK_REF_INTERVAL) {
             if (ts < (upipe_srt_receiver->previous_ts % wrap))
