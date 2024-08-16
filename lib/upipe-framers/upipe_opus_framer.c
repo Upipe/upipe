@@ -244,7 +244,7 @@ static bool upipe_opusf_parse_header(struct upipe *upipe)
     uint8_t toc;
     if (unlikely(!ubase_check(uref_block_extract(upipe_opusf->next_uref,
                                                  idx + 2, 1, &toc)))) {
-        upipe_dbg(upipe, "unable to read TOC");
+        /* uref likely too small for TOC so just return like the size above */
         return true;
     }
 
