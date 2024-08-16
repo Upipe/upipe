@@ -1218,15 +1218,13 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     uref_block_resize(uref, SRT_HEADER_SIZE, -1); /* skip SRT header */
     total_size -= SRT_HEADER_SIZE;
 
-#define MAX_CLOCK_REF_INTERVAL UCLOCK_FREQ // FIXME
-
     static const uint64_t wrap = UINT64_C(4294967296);
     uint64_t delta = (wrap + ts - (upipe_srt_receiver->previous_ts % wrap)) % wrap;
     int32_t d32 = delta;
     bool discontinuity = false;
 
     /* Note: d32 is converted to unsigned implictly */
-    if (d32 <= MAX_CLOCK_REF_INTERVAL || -d32 <= MAX_CLOCK_REF_INTERVAL) {
+    if (d32 <= upipe_srt_receiver->latency || -d32 <= upipe_srt_receiver->latency) {
         if (d32 <= MAX_CLOCK_REF_INTERVAL) {
             if (ts < (upipe_srt_receiver->previous_ts % wrap))
                 upipe_srt_receiver->ts_wraparounds++;
