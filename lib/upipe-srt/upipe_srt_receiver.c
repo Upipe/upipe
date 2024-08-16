@@ -154,6 +154,10 @@ struct upipe_srt_receiver {
 
     uint64_t establish_time;
 
+    uint64_t previous_ts;
+
+    uint64_t ts_wraparounds;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -798,6 +802,10 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_receiver->establish_time = 0;
 
+    upipe_srt_receiver->previous_ts = 0;
+
+    upipe_srt_receiver->ts_wraparounds = 0;
+
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -848,7 +856,7 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
             upump_alloc_timer(upipe_srt_receiver->upump_mgr,
                               upipe_srt_receiver_timer,
                               upipe, upipe->refcount,
-                              UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+                              UCLOCK_FREQ/1000, UCLOCK_FREQ/1000);
         upump_start(upump);
         upipe_srt_receiver_set_upump_timer(upipe, upump);
 
@@ -936,6 +944,8 @@ static int upipe_srt_receiver_set_flow_def(struct upipe *upipe, struct uref *flo
     flow_def = uref_dup(flow_def);
     if (!flow_def)
         return UBASE_ERR_ALLOC;
+
+    uref_clock_set_wrap(flow_def, UINT64_C(4294967296) * UCLOCK_FREQ / 1000000);
 
     upipe_srt_receiver_store_flow_def(upipe, flow_def);
 
@@ -1225,7 +1235,34 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     uref_block_resize(uref, SRT_HEADER_SIZE, -1); /* skip SRT header */
     total_size -= SRT_HEADER_SIZE;
 
+    static const uint64_t wrap = UINT64_C(4294967296);
+    uint64_t delta = (wrap + ts - (upipe_srt_receiver->previous_ts % wrap)) % wrap;
+    int32_t d32 = delta;
+    bool discontinuity = false;
+
+    /* Note: d32 is converted to unsigned implictly */
+    if (d32 <= upipe_srt_receiver->latency || -d32 <= upipe_srt_receiver->latency) {
+        if (d32 <= MAX_CLOCK_REF_INTERVAL) {
+            if (ts < (upipe_srt_receiver->previous_ts % wrap))
+                upipe_srt_receiver->ts_wraparounds++;
+            upipe_srt_receiver->previous_ts += delta;
+        } else if (!retransmit) {
+            upipe_srt_receiver->previous_ts = ts;
+            upipe_srt_receiver->ts_wraparounds = 0;
+            discontinuity = true;
+        }
+    } else {
+        upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
+        upipe_srt_receiver->previous_ts = ts;
+        upipe_srt_receiver->ts_wraparounds = 0;
+        discontinuity = true;
+    }
+
     upipe_verbose_va(upipe, "Data seq %u (retx %u)", seqnum, retransmit);
+    if (d32 < 0)
+        uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts + d32) * UCLOCK_FREQ / 1000000);
+    else
+        uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts) * UCLOCK_FREQ / 1000000);
 
     (void)order;
     (void)num;
@@ -1326,12 +1363,21 @@ error:
         }
 
         upipe_srt_receiver->expected_seqnum = (seqnum + 1) & ~(1 << 31);
+
+        if (!retransmit) {
+            upipe_throw_clock_ref(upipe, uref,
+                    upipe_srt_receiver->previous_ts * UCLOCK_FREQ / 1000000, discontinuity);
+        }
+
+        upipe_throw_clock_ts(upipe, uref);
         return;
     }
 
     /* packet is from the past, reordered or retransmitted */
-    if (upipe_srt_receiver_insert(upipe, uref, seqnum))
+    if (upipe_srt_receiver_insert(upipe, uref, seqnum)) {
+        upipe_throw_clock_ts(upipe, uref);
         return;
+    }
 
     uint64_t first_seq = 0, last_seq = 0;
     uref_attr_get_priv(uref_from_uchain(upipe_srt_receiver->queue.next), &first_seq);
