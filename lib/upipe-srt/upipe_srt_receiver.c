@@ -1241,9 +1241,6 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
         discontinuity = true;
     }
 
-    // FIXME handle retransmission from pre-wraparound
-    uref_clock_set_cr_prog(uref, (upipe_srt_receiver->ts_wraparounds * wrap + ts) * UCLOCK_FREQ / 1000000);
-
     upipe_verbose_va(upipe, "Data seq %u (retx %u)", seqnum, retransmit);
     if (d32 < 0)
         uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts + d32) * UCLOCK_FREQ / 1000000);
