@@ -1225,7 +1225,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
 
     /* Note: d32 is converted to unsigned implictly */
     if (d32 <= upipe_srt_receiver->latency || -d32 <= upipe_srt_receiver->latency) {
-        if (d32 <= MAX_CLOCK_REF_INTERVAL) {
+        if (d32 <= upipe_srt_receiver->latency) {
             if (ts < (upipe_srt_receiver->previous_ts % wrap))
                 upipe_srt_receiver->ts_wraparounds++;
             upipe_srt_receiver->previous_ts += delta;
