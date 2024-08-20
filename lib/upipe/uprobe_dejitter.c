@@ -327,7 +327,7 @@ void uprobe_dejitter_set_maximum_deviation(struct uprobe *uprobe,
     struct uprobe_dejitter *uprobe_dejitter =
         uprobe_dejitter_from_uprobe(uprobe);
     uprobe_dejitter->maximum_deviation = deviation;
-    if (uprobe_dejitter->deviation < deviation)
+    if (uprobe_dejitter->deviation > deviation)
         uprobe_dejitter->deviation = deviation;
 }
 
