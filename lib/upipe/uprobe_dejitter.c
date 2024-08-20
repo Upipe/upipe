@@ -348,6 +348,7 @@ struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
     uprobe_dejitter->drift_rate.num = uprobe_dejitter->drift_rate.den = 1;
     uprobe_dejitter->last_print = 0;
     uprobe_dejitter->minimum_deviation = 0;
+    uprobe_dejitter->maximum_deviation = 0;
     uprobe_dejitter_set(uprobe, enabled, deviation);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;
