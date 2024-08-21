@@ -1746,10 +1746,18 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
 
         enum AVPixelFormat hw_pix_fmt = upipe_avcenc_get_hw_pix_fmt(codec);
         if (hw_pix_fmt != AV_PIX_FMT_NONE) {
-            uref_pic_flow_clear_format(flow_format);
-            if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(
-                            AV_PIX_FMT_NV12, flow_format))))
-                goto upipe_avcenc_provide_flow_format_err;
+            const char *chroma_map[UPIPE_AV_MAX_PLANES];
+            enum AVPixelFormat pix_fmt = upipe_av_sw_pixfmt_from_flow_def(
+                flow_format, codec->pix_fmts, chroma_map);
+            if (pix_fmt == AV_PIX_FMT_NONE) {
+                int bit_depth = 0;
+                uref_pic_flow_get_bit_depth(flow_format, &bit_depth);
+                uref_pic_flow_clear_format(flow_format);
+                if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(
+                                bit_depth == 10 ? AV_PIX_FMT_P010 :
+                                AV_PIX_FMT_NV12, flow_format))))
+                    goto upipe_avcenc_provide_flow_format_err;
+            }
             uref_pic_flow_set_surface_type_va(flow_format, "av.%s",
                                               av_get_pix_fmt_name(hw_pix_fmt));
         } else {
