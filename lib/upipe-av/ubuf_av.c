@@ -270,7 +270,8 @@ static int ubuf_pic_av_get_mapped_avframe(struct ubuf *ubuf,
             ubuf_pic_av->mapped_frame = av_frame_alloc();
             UBASE_ALLOC_RETURN(ubuf_pic_av->mapped_frame);
             if (av_hwframe_map(ubuf_pic_av->mapped_frame, frame, writable ?
-                               AV_HWFRAME_MAP_WRITE : AV_HWFRAME_MAP_READ)) {
+                               AV_HWFRAME_MAP_WRITE : AV_HWFRAME_MAP_READ) &&
+                av_hwframe_transfer_data(ubuf_pic_av->mapped_frame, frame, 0)) {
                 av_frame_free(&ubuf_pic_av->mapped_frame);
                 return UBASE_ERR_EXTERNAL;
             }
