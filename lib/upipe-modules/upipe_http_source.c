@@ -72,7 +72,7 @@
 
 #define MAX_URL_SIZE            2048
 #define HTTP_VERSION            "HTTP/1.1"
-#define USER_AGENT              "upipe_http_src"
+#define USER_AGENT              "upipe_http_src/1.0"
 #define TIMEOUT                 (5 * 27000000) /* 5s */
 
 struct http_range {
