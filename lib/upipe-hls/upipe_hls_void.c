@@ -41,6 +41,7 @@
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe.h"
+#include "upipe/uclock.h"
 
 #include "upipe/uprobe_select_flows.h"
 #include "upipe/uprobe_prefix.h"
@@ -423,6 +424,7 @@ static int probe_playlist(struct uprobe *uprobe, struct upipe *inner,
                 UPROBE_LOG_VERBOSE, "demux"));
         upipe_mgr_release(upipe_ts_demux_mgr);
         UBASE_ALLOC_RETURN(output);
+        upipe_ts_demux_set_max_pcr_interval(output, UCLOCK_FREQ * 5);
         upipe_release(output);
         return UBASE_ERR_NONE;
     }
