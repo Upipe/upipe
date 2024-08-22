@@ -295,6 +295,8 @@ struct upipe_ts_demux {
     bool eit_enabled;
     /** enable EITs table ID decoder */
     bool eits_enabled;
+    /** maximum allowed interval between PCRs */
+    uint64_t max_pcr_interval;
 
     /** probe to get new flow events from inner pipes created by psi_pid
      * objects */
@@ -411,6 +413,8 @@ struct upipe_ts_demux_program {
 
     /** offset between MPEG timestamps and Upipe timestamps */
     int64_t timestamp_offset;
+    /** maximum allowed interval between PCRs */
+    uint64_t max_pcr_interval;
     /** last MPEG clock reference */
     uint64_t last_pcr;
     /** highest Upipe timestamp given to a frame */
@@ -761,6 +765,9 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
         /* handle overflow */
         if (output->max_delay + max_pcr_interval < output->max_delay)
             max_pcr_interval = UINT64_MAX - output->max_delay;
+
+        if (program->max_pcr_interval > max_pcr_interval)
+            max_pcr_interval = program->max_pcr_interval;
 
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
@@ -1922,7 +1929,7 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
     uint64_t delta =
         (TS_CLOCK_MAX + pcr_orig -
          (upipe_ts_demux_program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-    if (delta <= MAX_PCR_INTERVAL)
+    if (delta <= upipe_ts_demux_program->max_pcr_interval)
         upipe_ts_demux_program->last_pcr += delta;
     else {
         upipe_warn_va(upipe, "PCR discontinuity %"PRIu64, delta);
@@ -2078,8 +2085,11 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
                                                             args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
+
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
+
     upipe_ts_demux_program_init_urefcount(upipe);
     urefcount_init(upipe_ts_demux_program_to_urefcount_real(upipe_ts_demux_program), upipe_ts_demux_program_free);
     upipe_ts_demux_program_init_output(upipe);
@@ -2108,6 +2118,7 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     }
     upipe_ts_demux_program->timestamp_offset = 0;
     upipe_ts_demux_program->timestamp_highest = TS_CLOCK_MAX;
+    upipe_ts_demux_program->max_pcr_interval = demux->max_pcr_interval;
     upipe_ts_demux_program->last_pcr = TS_CLOCK_MAX;
     uprobe_init(&upipe_ts_demux_program->pmtd_probe,
                 upipe_ts_demux_program_pmtd_probe, NULL);
@@ -2133,7 +2144,6 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux_program_init_sub(upipe);
     upipe_throw_ready(upipe);
 
-    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(upipe->mgr);
     const uint8_t *filter, *mask;
     size_t size;
     const char *def;
@@ -2213,6 +2223,38 @@ static struct upipe *upipe_ts_demux_program_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
+/** @internal @This sets the maximum allow interval between PCRs.
+ *
+ * @param upipe description structure of the pipe
+ * @param max maximum allowed interval between PCRs in 27MHz ticks
+ * @return an error code
+ */
+static int upipe_ts_demux_program_set_max_pcr_interval(struct upipe *upipe,
+                                                       uint64_t max)
+{
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    program->max_pcr_interval = max;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the configured maximum interval between PCRs.
+ *
+ * @param upipe description structure of the pipe
+ * @param max filled with the maximum allowed internal between PCRs in 27MHz
+ * ticks.
+ * @return an error code
+ */
+static int upipe_ts_demux_program_get_max_pcr_interval(struct upipe *upipe,
+                                                       uint64_t *max)
+{
+    struct upipe_ts_demux_program *program =
+        upipe_ts_demux_program_from_upipe(upipe);
+    if (max)
+        *max = program->max_pcr_interval;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_demux_program pipe.
  *
  * @param upipe description structure of the pipe
@@ -2255,10 +2297,27 @@ static int upipe_ts_demux_program_control(struct upipe *upipe,
             *p = upipe_ts_demux_program->pmtd;
             return (*p != NULL) ? UBASE_ERR_NONE : UBASE_ERR_UNHANDLED;
         }
-
         default:
-            return UBASE_ERR_NONE;
+            break;
     }
+
+    if (ubase_get_signature(args) == UPIPE_TS_DEMUX_SIGNATURE) {
+        switch (command) {
+            case UPIPE_TS_DEMUX_SET_MAX_PCR_INTERVAL: {
+                UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
+                uint64_t max = va_arg(args, uint64_t);
+                return upipe_ts_demux_program_set_max_pcr_interval(upipe, max);
+            }
+
+            case UPIPE_TS_DEMUX_GET_MAX_PCR_INTERVAL: {
+                UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
+                uint64_t *max = va_arg(args, uint64_t *);
+                return upipe_ts_demux_program_get_max_pcr_interval(upipe, max);
+            }
+        }
+    }
+
+    return UBASE_ERR_NONE;
 }
 
 /** @This frees a upipe.
@@ -3356,6 +3415,7 @@ static struct upipe *upipe_ts_demux_alloc(struct upipe_mgr *mgr,
     upipe_ts_demux->auto_conformance = true;
     upipe_ts_demux->eit_enabled = true;
     upipe_ts_demux->eits_enabled = true;
+    upipe_ts_demux->max_pcr_interval = MAX_PCR_INTERVAL;
     upipe_ts_demux->nit_pid = 0;
     upipe_ts_demux->flow_def_input = NULL;
 
@@ -3651,6 +3711,44 @@ static int _upipe_ts_demux_set_eits_enabled(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets the maximum allow interval between PCRs.
+ *
+ * @param upipe description structure of the pipe
+ * @param max maximum allowed interval between PCRs in 27MHz ticks
+ * @return an error code
+ */
+static int _upipe_ts_demux_set_max_pcr_interval(struct upipe *upipe,
+                                                uint64_t max)
+{
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_upipe(upipe);
+    demux->max_pcr_interval = max;
+
+    struct uchain *uchain;
+    ulist_foreach(&demux->programs, uchain) {
+        struct upipe_ts_demux_program *program =
+            upipe_ts_demux_program_from_uchain(uchain);
+        struct upipe *sub = upipe_ts_demux_program_to_upipe(program);
+        upipe_ts_demux_program_set_max_pcr_interval(sub, max);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This gets the configured maximum interval between PCRs.
+ *
+ * @param upipe description structure of the pipe
+ * @param max filled with the maximum allowed internal between PCRs in 27MHz
+ * ticks.
+ * @return an error code
+ */
+static int _upipe_ts_demux_get_max_pcr_interval(struct upipe *upipe,
+                                                uint64_t *max)
+{
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_upipe(upipe);
+    if (max)
+        *max = demux->max_pcr_interval;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a ts_demux pipe.
  *
  * @param upipe description structure of the pipe
@@ -3722,6 +3820,16 @@ static int upipe_ts_demux_control(struct upipe *upipe,
             UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
             int enabled = va_arg(args, int);
             return _upipe_ts_demux_set_eits_enabled(upipe, !!enabled);
+        }
+        case UPIPE_TS_DEMUX_SET_MAX_PCR_INTERVAL: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
+            uint64_t max = va_arg(args, uint64_t);
+            return _upipe_ts_demux_set_max_pcr_interval(upipe, max);
+        }
+        case UPIPE_TS_DEMUX_GET_MAX_PCR_INTERVAL: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_TS_DEMUX_SIGNATURE);
+            uint64_t *max = va_arg(args, uint64_t *);
+            return _upipe_ts_demux_get_max_pcr_interval(upipe, max);
         }
 
         default:
