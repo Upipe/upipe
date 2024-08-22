@@ -733,7 +733,7 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
                                           struct upipe *inner,
                                           int event, va_list args)
 {
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
+    struct upipe_ts_demux_output *output =
         upipe_ts_demux_output_from_upipe(upipe);
     struct upipe_ts_demux_program *program =
         upipe_ts_demux_program_from_output_mgr(upipe->mgr);
@@ -751,7 +751,7 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-        if (delta <= upipe_ts_demux_output->max_delay) {
+        if (delta <= output->max_delay + MAX_PCR_INTERVAL) {
             uint64_t dts = program->timestamp_offset +
                            program->last_pcr + delta;
             uref_clock_set_dts_prog(uref, dts);
