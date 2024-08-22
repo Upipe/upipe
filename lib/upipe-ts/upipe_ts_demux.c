@@ -115,6 +115,10 @@
 /** max interval between PCRs (ISO/IEC 13818-1 2.7.2) - could be 100 ms but
  * allow higher tolerance */
 #define MAX_PCR_INTERVAL UCLOCK_FREQ
+/** max interval between PCRs according to ISO/IEC 13818-1 */
+#define MAX_PCR_INTERVAL_ISO    (100 * UCLOCK_FREQ / 1000) /* 100 ms */
+/** max interval between PCRs according to DVB */
+#define MAX_PCR_INTERVAL_DVB    (40 * UCLOCK_FREQ / 1000) /* 40 ms */
 /** max retention time for most streams (ISO/IEC 13818-1 2.4.2.6) */
 #define MAX_DELAY UCLOCK_FREQ
 /** number of EITs table IDs */
@@ -733,10 +737,12 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
                                           struct upipe *inner,
                                           int event, va_list args)
 {
-    struct upipe_ts_demux_output *upipe_ts_demux_output =
+    struct upipe_ts_demux_output *output =
         upipe_ts_demux_output_from_upipe(upipe);
     struct upipe_ts_demux_program *program =
         upipe_ts_demux_program_from_output_mgr(upipe->mgr);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(
+        upipe_ts_demux_program_to_upipe(program)->mgr);
 
     struct uref *uref = va_arg(args, struct uref *);
     uint64_t dts_orig;
@@ -748,10 +754,13 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
                     uref, dts_orig, false);
         }
 
+        uint64_t max_pcr_interval = MAX_PCR_INTERVAL_ISO;
+        if (demux->conformance == UPIPE_TS_CONFORMANCE_DVB)
+            max_pcr_interval = MAX_PCR_INTERVAL_DVB;
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-        if (delta <= upipe_ts_demux_output->max_delay) {
+        if (delta <= output->max_delay + max_pcr_interval) {
             uint64_t dts = program->timestamp_offset +
                            program->last_pcr + delta;
             uref_clock_set_dts_prog(uref, dts);
