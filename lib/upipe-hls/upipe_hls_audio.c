@@ -42,6 +42,7 @@
 #include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_upipe.h"
+#include "upipe/uclock.h"
 
 #include "upipe/uprobe_select_flows.h"
 #include "upipe/uprobe_prefix.h"
@@ -406,6 +407,7 @@ static int probe_uref(struct uprobe *uprobe, struct upipe *inner,
                         UPROBE_LOG_VERBOSE, "ts"));
                 upipe_mgr_release(upipe_ts_demux_mgr);
                 UBASE_ALLOC_RETURN(output);
+                upipe_ts_demux_set_max_pcr_interval(upipe, 5 * UCLOCK_FREQ);
                 upipe_release(output);
                 break;
             }
