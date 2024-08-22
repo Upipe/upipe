@@ -58,6 +58,10 @@ enum upipe_ts_demux_command {
     UPIPE_TS_DEMUX_SET_EIT_ENABLED,
     /** enables  or disables EITs table ID decoding (int) */
     UPIPE_TS_DEMUX_SET_EITS_ENABLED,
+    /** sets the maximum allow interval between PCRs (uint64_t) */
+    UPIPE_TS_DEMUX_SET_MAX_PCR_INTERVAL,
+    /** gets the configured maximum interval between PCRs (uint64_t *) */
+    UPIPE_TS_DEMUX_GET_MAX_PCR_INTERVAL,
 };
 
 /** @This returns the currently detected conformance mode. It cannot return
@@ -126,6 +130,33 @@ static inline int upipe_ts_demux_set_eits_enabled(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_TS_DEMUX_SET_EITS_ENABLED,
                          UPIPE_TS_DEMUX_SIGNATURE, enabled ? 1 : 0);
+}
+
+/** @This sets the maximum allowed interval between PCRs.
+ *
+ * @param upipe description structure of the pipe
+ * @param max maximum allowed interval between PCRs in 27MHz ticks
+ * @return an error code
+ */
+static inline int upipe_ts_demux_set_max_pcr_interval(struct upipe *upipe,
+                                                      uint64_t max)
+{
+    return upipe_control(upipe, UPIPE_TS_DEMUX_SET_MAX_PCR_INTERVAL,
+                         UPIPE_TS_DEMUX_SIGNATURE, max);
+}
+
+/** @This gets the configured maximum allowed interval between PCRs.
+ *
+ * @param upipe description structure of the pipe
+ * @param max filled with the maximum allowed internal between PCRs in 27MHz
+ * ticks
+ * @return an error code
+ */
+static inline int upipe_ts_demux_get_max_pcr_interval(struct upipe *upipe,
+                                                      uint64_t *max)
+{
+    return upipe_control(upipe, UPIPE_TS_DEMUX_GET_MAX_PCR_INTERVAL,
+                         UPIPE_TS_DEMUX_SIGNATURE, max);
 }
 
 /** @This returns the management structure for all ts_demux pipes.
