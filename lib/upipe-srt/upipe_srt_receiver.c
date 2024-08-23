@@ -1240,9 +1240,9 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     if (d32 <= upipe_srt_receiver->latency || -d32 <= upipe_srt_receiver->latency) {
         if (d32 <= upipe_srt_receiver->latency) {
             upipe_srt_receiver->previous_ts += delta;
-        } else if (!retransmit) {
-            upipe_srt_receiver->previous_ts = ts;
-            discontinuity = true;
+            assert(d32 >= 0);
+        } else {
+             /* out of order but not too old or new */
         }
     } else {
         upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
