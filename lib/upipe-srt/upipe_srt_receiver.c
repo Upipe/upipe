@@ -156,8 +156,6 @@ struct upipe_srt_receiver {
 
     uint64_t previous_ts;
 
-    uint64_t ts_wraparounds;
-
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -804,8 +802,6 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_receiver->previous_ts = 0;
 
-    upipe_srt_receiver->ts_wraparounds = 0;
-
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -1243,18 +1239,14 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     /* Note: d32 is converted to unsigned implictly */
     if (d32 <= upipe_srt_receiver->latency || -d32 <= upipe_srt_receiver->latency) {
         if (d32 <= upipe_srt_receiver->latency) {
-            if (ts < (upipe_srt_receiver->previous_ts % wrap))
-                upipe_srt_receiver->ts_wraparounds++;
             upipe_srt_receiver->previous_ts += delta;
         } else if (!retransmit) {
             upipe_srt_receiver->previous_ts = ts;
-            upipe_srt_receiver->ts_wraparounds = 0;
             discontinuity = true;
         }
     } else {
         upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
         upipe_srt_receiver->previous_ts = ts;
-        upipe_srt_receiver->ts_wraparounds = 0;
         discontinuity = true;
     }
 
