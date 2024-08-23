@@ -436,94 +436,132 @@ static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
     return false;
 }
 
+/** @internal @This builds the video flow definition packet.
+ *
+ * @param flow_def output flow def
+ * @param buffer_ctx buffersink context
+ * @param frame first frame
+ * @return an error code
+ */
+static int build_video_flow_def(struct uref *flow_def,
+                                AVFilterContext *buffer_ctx,
+                                const AVFrame *frame)
+{
+    enum AVPixelFormat pix_fmt = av_buffersink_get_format(buffer_ctx);
+    int width = av_buffersink_get_w(buffer_ctx);
+    int height = av_buffersink_get_h(buffer_ctx);
+    AVRational fps = av_buffersink_get_frame_rate(buffer_ctx);
+    if (!fps.den)
+        fps = av_inv_q(av_buffersink_get_time_base(buffer_ctx));
+    AVRational sar = av_buffersink_get_sample_aspect_ratio(buffer_ctx);
+    enum AVColorRange color_range =
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
+        av_buffersink_get_color_range(buffer_ctx);
+#else
+        frame->color_range;
+#endif
+
+    if (width <= 0 || height <= 0)
+        return UBASE_ERR_INVALID;
+
+    AVBufferRef *hw_frames_ctx = av_buffersink_get_hw_frames_ctx(buffer_ctx);
+    if (hw_frames_ctx != NULL) {
+        AVHWFramesContext *hw_frames =
+            (AVHWFramesContext *) hw_frames_ctx->data;
+        UBASE_RETURN(uref_pic_flow_set_surface_type_va(flow_def,
+            "av.%s", av_get_pix_fmt_name(pix_fmt)))
+        pix_fmt = hw_frames->sw_format;
+    }
+
+    UBASE_RETURN(upipe_av_pixfmt_to_flow_def(pix_fmt, flow_def))
+    UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, width))
+    UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height))
+    UBASE_RETURN(uref_pic_flow_set_fps(flow_def, urational(fps)))
+    UBASE_RETURN(uref_pic_flow_set_sar(flow_def, urational(sar)))
+
+    if (!frame->interlaced_frame)
+        UBASE_RETURN(uref_pic_set_progressive(flow_def))
+    if (color_range == AVCOL_RANGE_JPEG)
+        UBASE_RETURN(uref_pic_flow_set_full_range(flow_def))
+
+    UBASE_RETURN(uref_pic_flow_set_colour_primaries_val(
+            flow_def, frame->color_primaries))
+    UBASE_RETURN(uref_pic_flow_set_transfer_characteristics_val(
+            flow_def, frame->color_trc))
+    UBASE_RETURN(uref_pic_flow_set_matrix_coefficients_val(
+            flow_def, frame->colorspace))
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This builds the audio flow definition packet.
+ *
+ * @param flow_def output flow def
+ * @param buffer_ctx buffersink context
+ * @param frame first frame
+ * @return an error code
+ */
+static int build_audio_flow_def(struct uref *flow_def,
+                                AVFilterContext *buffer_ctx,
+                                const AVFrame *frame)
+{
+    enum AVSampleFormat sample_fmt = av_buffersink_get_format(buffer_ctx);
+    int channels = av_buffersink_get_channels(buffer_ctx);
+    int sample_rate = av_buffersink_get_sample_rate(buffer_ctx);
+    uref_sound_flow_set_rate(flow_def, sample_rate);
+    return upipe_av_samplefmt_to_flow_def(flow_def, sample_fmt, channels);
+}
+
 /** @internal @This builds the flow definition packet.
  *
  * @param upipe description structure of the pipe
- * @param flow_def_input description structure of the pipe
+ * @param flow_def output flow def
+ * @param frame first frame
  * @return an error code
  */
 static int upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
-                                           const AVFrame *frame,
-                                           struct uref *flow_def)
+                                           struct uref *flow_def,
+                                           const AVFrame *frame)
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
 
-    enum AVMediaType media_type =
-        av_buffersink_get_type(upipe_avfilt_sub->buffer_ctx);
-
+    AVFilterContext *ctx = upipe_avfilt_sub->buffer_ctx;
     upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
 
-    switch (media_type) {
+    switch (av_buffersink_get_type(ctx)) {
         case AVMEDIA_TYPE_VIDEO: {
-            enum AVPixelFormat pix_fmt =
-                av_buffersink_get_format(upipe_avfilt_sub->buffer_ctx);
-            int width = av_buffersink_get_w(upipe_avfilt_sub->buffer_ctx);
-            int height = av_buffersink_get_h(upipe_avfilt_sub->buffer_ctx);
-            AVRational fps =
-                av_buffersink_get_frame_rate(upipe_avfilt_sub->buffer_ctx);
-            if (!fps.den)
-                fps = av_inv_q(av_buffersink_get_time_base(
-                        upipe_avfilt_sub->buffer_ctx));
-            AVRational sar =
-                av_buffersink_get_sample_aspect_ratio(
-                    upipe_avfilt_sub->buffer_ctx);
-            bool interlaced = frame->interlaced_frame;
-            enum AVColorRange color_range =
-#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-                av_buffersink_get_color_range(upipe_avfilt_sub->buffer_ctx);
-#else
-                frame->color_range;
-#endif
-            bool full_range = color_range == AVCOL_RANGE_JPEG;
-
-            if (width < 0 || height < 0)
-                return UBASE_ERR_INVALID;
-
-            UBASE_RETURN(upipe_av_pixfmt_to_flow_def(pix_fmt, flow_def))
-            UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, width))
-            UBASE_RETURN(uref_pic_flow_set_vsize( flow_def, height))
-            UBASE_RETURN(uref_pic_flow_set_fps(flow_def, urational(fps)))
-            UBASE_RETURN(uref_pic_flow_set_sar(flow_def, urational(sar)))
-            if (!interlaced)
-                UBASE_RETURN(uref_pic_set_progressive(flow_def));
-            if (full_range)
-                UBASE_RETURN(uref_pic_flow_set_full_range(flow_def))
-
+            UBASE_RETURN(build_video_flow_def(flow_def, ctx, frame))
             upipe_avfilt_sub->media.type = AVMEDIA_TYPE_VIDEO;
             struct upipe_avfilt_media_video *video =
                 &upipe_avfilt_sub->media.video;
             video->pix_fmt = upipe_av_pixfmt_from_flow_def(
                 flow_def, NULL, video->chroma_map);
-            video->width = width;
-            video->height = height;
-            video->fps = urational(fps);
-            video->sar = urational(sar);
-            video->interlaced = interlaced;
-            video->full_range = full_range;
+            uref_pic_flow_get_hsize(flow_def, &video->width);
+            uref_pic_flow_get_vsize(flow_def, &video->height);
+            uref_pic_flow_get_fps(flow_def, &video->fps);
+            uref_pic_flow_get_sar(flow_def, &video->sar);
+            video->interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
+            video->full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
             return UBASE_ERR_NONE;
         }
 
         case AVMEDIA_TYPE_AUDIO: {
-            enum AVSampleFormat sample_fmt =
-                av_buffersink_get_format(upipe_avfilt_sub->buffer_ctx);
-            int sample_rate =
-                av_buffersink_get_sample_rate(upipe_avfilt_sub->buffer_ctx);
-
+            UBASE_RETURN(build_audio_flow_def(flow_def, ctx, frame))
             upipe_avfilt_sub->media.type = AVMEDIA_TYPE_AUDIO;
             struct upipe_avfilt_media_audio *audio =
                 &upipe_avfilt_sub->media.audio;
-            audio->sample_fmt = sample_fmt;
-            audio->sample_rate = sample_rate;
+            uint8_t channels;
+            audio->sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def,
+                                                                 &channels);
+            uref_sound_flow_get_rate(flow_def, &audio->sample_rate);
             av_buffersink_get_ch_layout(upipe_avfilt_sub->buffer_ctx,
                                         &audio->ch_layout);
-            //FIXME: use ch_layout for this function
-            return upipe_av_samplefmt_to_flow_def(
-                flow_def, sample_fmt,
-                audio->ch_layout.nb_channels);
+            return UBASE_ERR_NONE;
         }
 
         default:
+            upipe_err_va(upipe, "unknown buffersink type");
             break;
     }
 
@@ -561,20 +599,18 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
         upipe_avfilt_sub_store_flow_def(upipe, NULL);
 
     if (unlikely(!upipe_avfilt_sub->flow_def)) {
-        struct uref *flow_def_dup = uref_dup(upipe_avfilt_sub->flow_def_alloc);
-        if (unlikely(!flow_def_dup)) {
+        struct uref *flow_def = uref_dup(upipe_avfilt_sub->flow_def_alloc);
+        if (unlikely(!flow_def)) {
             upipe_throw_error(upipe, UBASE_ERR_ALLOC);
             return NULL;
         }
-
-        int ret = upipe_avfilt_sub_build_flow_def(upipe, frame, flow_def_dup);
+        int ret = upipe_avfilt_sub_build_flow_def(upipe, flow_def, frame);
         if (unlikely(!ubase_check(ret))) {
-            uref_free(flow_def_dup);
+            uref_free(flow_def);
             upipe_throw_error(upipe, ret);
             return NULL;
         }
-        uref_sound_flow_set_rate(flow_def_dup, frame->sample_rate);
-        upipe_avfilt_sub_store_flow_def(upipe, flow_def_dup);
+        upipe_avfilt_sub_store_flow_def(upipe, flow_def);
     }
 
     if (unlikely(!upipe_avfilt_sub->ubuf_mgr)) {
@@ -2115,62 +2151,32 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
 }
 
 /** @internal @This builds the flow definition packet using attributes
- * from the buffersink.
+ * from the buffersink and the first frame.
  *
  * @param upipe description structure of the pipe
  * @param flow_def output flow def
+ * @param frame first frame
  * @return an error code
  */
 static int upipe_avfilt_build_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def)
+                                       struct uref *flow_def,
+                                       const AVFrame *frame)
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
     AVFilterContext *ctx = upipe_avfilt->buffersink_ctx;
 
     switch (av_buffersink_get_type(ctx)) {
-        case AVMEDIA_TYPE_VIDEO: {
-            enum AVPixelFormat pix_fmt = av_buffersink_get_format(ctx);
-            int width = av_buffersink_get_w(ctx);
-            int height = av_buffersink_get_h(ctx);
-            AVRational fps = av_buffersink_get_frame_rate(ctx);
-            AVRational sar = av_buffersink_get_sample_aspect_ratio(ctx);
+        case AVMEDIA_TYPE_VIDEO:
+            return build_video_flow_def(flow_def, ctx, frame);
 
-            if (width < 0 || height < 0)
-                return UBASE_ERR_INVALID;
-
-            AVBufferRef *hw_frames_ctx = av_buffersink_get_hw_frames_ctx(ctx);
-            if (hw_frames_ctx != NULL) {
-                AVHWFramesContext *hw_frames =
-                    (AVHWFramesContext *) hw_frames_ctx->data;
-                UBASE_RETURN(uref_pic_flow_set_surface_type_va(flow_def,
-                    "av.%s", av_get_pix_fmt_name(pix_fmt)))
-                pix_fmt = hw_frames->sw_format;
-            }
-
-            UBASE_RETURN(upipe_av_pixfmt_to_flow_def(pix_fmt, flow_def))
-            UBASE_RETURN(uref_pic_flow_set_hsize(flow_def, width))
-            UBASE_RETURN(uref_pic_flow_set_vsize(flow_def, height))
-            UBASE_RETURN(uref_pic_flow_set_fps(flow_def, urational(fps)))
-            UBASE_RETURN(uref_pic_flow_set_sar(flow_def, urational(sar)))
-
-            return UBASE_ERR_NONE;
-        }
-
-        case AVMEDIA_TYPE_AUDIO: {
-            enum AVSampleFormat sample_fmt = av_buffersink_get_format(ctx);
-            int channels = av_buffersink_get_channels(ctx);
-            int sample_rate = av_buffersink_get_sample_rate(ctx);
-            uref_sound_flow_set_rate(flow_def, sample_rate);
-            return upipe_av_samplefmt_to_flow_def(flow_def, sample_fmt,
-                                                  channels);
-        }
+        case AVMEDIA_TYPE_AUDIO:
+            return build_audio_flow_def(flow_def, ctx, frame);
 
         default:
             upipe_err_va(upipe, "unknown buffersink type");
             break;
     }
 
-    upipe_err_va(upipe, "UBASE_ERR_UNHANDLED");
     return UBASE_ERR_UNHANDLED;
 }
 
@@ -2192,28 +2198,12 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
             upipe_throw_error(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        int ret = upipe_avfilt_build_flow_def(upipe, flow_def_attr);
+        int ret = upipe_avfilt_build_flow_def(upipe, flow_def_attr, frame);
         if (!ubase_check(ret)) {
             uref_free(flow_def_attr);
             upipe_throw_error(upipe, ret);
             return;
         }
-
-        if (!frame->interlaced_frame)
-            UBASE_ERROR(upipe, uref_pic_set_progressive(flow_def_attr))
-
-        if (frame->color_range == AVCOL_RANGE_JPEG)
-            UBASE_ERROR(upipe, uref_pic_flow_set_full_range(flow_def_attr))
-
-        UBASE_ERROR(upipe, uref_pic_flow_set_colour_primaries_val(
-                flow_def_attr, frame->color_primaries))
-
-        UBASE_ERROR(upipe, uref_pic_flow_set_transfer_characteristics_val(
-                flow_def_attr, frame->color_trc))
-
-        UBASE_ERROR(upipe, uref_pic_flow_set_matrix_coefficients_val(
-                flow_def_attr, frame->colorspace))
-
         struct uref *flow_def =
             upipe_avfilt_store_flow_def_attr(upipe, flow_def_attr);
         if (flow_def == NULL) {
