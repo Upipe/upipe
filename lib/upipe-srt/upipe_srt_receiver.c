@@ -1236,7 +1236,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     int32_t d32 = delta;
     bool discontinuity = false;
 
-    uint64_t latency_us = upipe_srt_receiver->latency * (1000000 / UCLOCK_FREQ);
+    uint64_t latency_us = (upipe_srt_receiver->latency * 1000000) / UCLOCK_FREQ;
     /* Note: d32 is converted to unsigned implictly */
     if (d32 <= latency_us|| -d32 <= latency_us) {
         if (d32 <= latency_us) {
