@@ -1335,12 +1335,17 @@ error:
                     upipe_srt_receiver->last_nack[seq & 0xffff] = fake_last_nack;
         }
 
-        upipe_srt_receiver->expected_seqnum = (seqnum + 1) & ~(1 << 31);
+        if (!retransmit && diff == 0) {
+            uint64_t cr_prog;
+            if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr_prog)))) {
+                upipe_warn(upipe, "[srtr] no cr_prog in packet");
+                return;
+            }
 
-        if (!retransmit) {
-            upipe_throw_clock_ref(upipe, uref,
-                    upipe_srt_receiver->previous_ts * UCLOCK_FREQ / 1000000, discontinuity);
+            upipe_throw_clock_ref(upipe, uref, cr_prog, discontinuity);
         }
+
+        upipe_srt_receiver->expected_seqnum = (seqnum + 1) & ~(1 << 31);
 
         upipe_throw_clock_ts(upipe, uref);
         return;
