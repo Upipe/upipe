@@ -179,6 +179,8 @@ struct upipe_http_src {
     char *location;
     /** http proxy */
     char *proxy;
+    /** user agent */
+    char *user_agent;
 
     /** range */
     struct http_range range;
@@ -293,6 +295,7 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
     upipe_http_src->location = NULL;
     upipe_http_src->header_field = HEADER(NULL, 0);
     upipe_http_src->proxy = NULL;
+    upipe_http_src->user_agent = NULL;
     upipe_http_src->timeout = TIMEOUT;
     upipe_http_src->request.buf = NULL;
     upipe_http_src->request.len = 0;
@@ -322,6 +325,11 @@ static struct upipe *upipe_http_src_alloc(struct upipe_mgr *mgr,
 
     if (proxy && !ubase_check(upipe_http_src_set_proxy(upipe, proxy)))
         upipe_warn(upipe, "fail to set http proxy");
+
+    const char *user_agent = NULL;
+    upipe_http_src_mgr_get_user_agent(mgr, &user_agent);
+    if (!ubase_check(upipe_http_src_set_user_agent(upipe, user_agent)))
+        upipe_warn(upipe, "fail to set user agent");
 
     return upipe;
 }
@@ -368,6 +376,7 @@ static void upipe_http_src_free(struct upipe *upipe)
 
     ueventfd_clean(&upipe_http_src->data_in);
     ueventfd_clean(&upipe_http_src->data_out);
+    free(upipe_http_src->user_agent);
     free(upipe_http_src->proxy);
     free(upipe_http_src->url);
     free(upipe_http_src->location);
@@ -685,8 +694,11 @@ static int upipe_http_src_send_request(struct upipe *upipe)
     }
 
     /* User-Agent */
-    upipe_verbose_va(upipe, "User-Agent: %s", USER_AGENT);
-    upipe_http_src_request_add(upipe, "User-Agent: %s\r\n", USER_AGENT);
+    const char *user_agent = upipe_http_src->user_agent;
+    if (user_agent) {
+        upipe_verbose_va(upipe, "User-Agent: %s", user_agent);
+        upipe_http_src_request_add(upipe, "User-Agent: %s\r\n", user_agent);
+    }
 
     /* Host */
     const char *host = NULL;
@@ -1269,6 +1281,41 @@ static int _upipe_http_src_set_timeout(struct upipe *upipe, uint64_t timeout)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the user agent to use.
+ *
+ * @param upipe description structure of the pipe
+ * @param user_agent_p filled with the current user agent
+ * @return an error code
+ */
+static int _upipe_http_src_get_user_agent(struct upipe *upipe,
+                                          const char **user_agent_p)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    if (user_agent_p)
+        *user_agent_p = upipe_http_src->user_agent;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the user agent to use.
+ *
+ * @param upipe description structure of the pipe
+ * @param user_agent user agent to use
+ * @return an error code
+ */
+static int _upipe_http_src_set_user_agent(struct upipe *upipe,
+                                          const char *user_agent)
+{
+    struct upipe_http_src *upipe_http_src = upipe_http_src_from_upipe(upipe);
+    free(upipe_http_src->user_agent);
+    upipe_http_src->user_agent = NULL;
+    if (!user_agent)
+        return UBASE_ERR_NONE;
+    upipe_http_src->user_agent = strdup(user_agent);
+    if (!upipe_http_src->user_agent)
+        return UBASE_ERR_ALLOC;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a http source pipe.
  *
  * @param upipe description structure of the pipe
@@ -1341,6 +1388,17 @@ static int _upipe_http_src_control(struct upipe *upipe,
             return _upipe_http_src_set_timeout(upipe, timeout);
         }
 
+        case UPIPE_HTTP_SRC_GET_USER_AGENT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+            const char **user_agent_p = va_arg(args, const char **);
+            return _upipe_http_src_get_user_agent(upipe, user_agent_p);
+        }
+        case UPIPE_HTTP_SRC_SET_USER_AGENT: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+            const char *user_agent = va_arg(args, const char *);
+            return _upipe_http_src_set_user_agent(upipe, user_agent);
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -1371,6 +1429,8 @@ struct upipe_http_src_mgr {
     struct uchain cookies;
     /** proxy url */
     char *proxy;
+    /** user agent */
+    char *user_agent;
 };
 
 UBASE_FROM_TO(upipe_http_src_mgr, upipe_mgr, upipe_mgr, upipe_mgr)
@@ -1484,6 +1544,32 @@ static int _upipe_http_src_mgr_set_proxy(struct upipe_mgr *mgr,
     return UBASE_ERR_NONE;
 }
 
+static int _upipe_http_src_mgr_get_user_agent(struct upipe_mgr *mgr,
+                                              const char **user_agent_p)
+{
+    struct upipe_http_src_mgr *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_upipe_mgr(mgr);
+    if (user_agent_p)
+        *user_agent_p = upipe_http_src_mgr->user_agent;
+    return UBASE_ERR_NONE;
+}
+
+static int _upipe_http_src_mgr_set_user_agent(struct upipe_mgr *mgr,
+                                              const char *user_agent)
+{
+    struct upipe_http_src_mgr  *upipe_http_src_mgr =
+        upipe_http_src_mgr_from_upipe_mgr(mgr);
+
+    free(upipe_http_src_mgr->user_agent);
+    upipe_http_src_mgr->user_agent = NULL;
+    if (!user_agent)
+        return UBASE_ERR_NONE;
+    upipe_http_src_mgr->user_agent = strdup(user_agent);
+    if (!upipe_http_src_mgr->user_agent)
+        return UBASE_ERR_ALLOC;
+    return UBASE_ERR_NONE;
+}
+
 static int upipe_http_src_mgr_control(struct upipe_mgr *upipe_mgr,
                                       int command, va_list args)
 {
@@ -1512,6 +1598,17 @@ static int upipe_http_src_mgr_control(struct upipe_mgr *upipe_mgr,
         const char *proxy = va_arg(args, const char *);
         return _upipe_http_src_mgr_set_proxy(upipe_mgr, proxy);
     }
+
+    case UPIPE_HTTP_SRC_MGR_GET_USER_AGENT: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        const char **user_agent_p = va_arg(args, const char **);
+        return _upipe_http_src_mgr_get_user_agent(upipe_mgr, user_agent_p);
+    }
+    case UPIPE_HTTP_SRC_MGR_SET_USER_AGENT: {
+        UBASE_SIGNATURE_CHECK(args, UPIPE_HTTP_SRC_SIGNATURE)
+        const char *user_agent = va_arg(args, const char *);
+        return _upipe_http_src_mgr_set_user_agent(upipe_mgr, user_agent);
+    }
     }
     return UBASE_ERR_UNHANDLED;
 }
@@ -1529,6 +1626,7 @@ static void upipe_http_src_mgr_free(struct urefcount *urefcount)
         free(cookie->value);
         free(cookie);
     }
+    free(upipe_http_src_mgr->user_agent);
     free(upipe_http_src_mgr->proxy);
     urefcount_clean(urefcount);
     free(upipe_http_src_mgr);
@@ -1562,6 +1660,11 @@ struct upipe_mgr *upipe_http_src_mgr_alloc(void)
     upipe_mgr->refcount = urefcount;
     ulist_init(&upipe_http_src_mgr->cookies);
     upipe_http_src_mgr->proxy = NULL;
+    upipe_http_src_mgr->user_agent = strdup(USER_AGENT);
+    if (unlikely(!upipe_http_src_mgr->user_agent)) {
+        upipe_mgr_release(upipe_http_src_mgr_to_upipe_mgr(upipe_http_src_mgr));
+        return NULL;
+    }
 
     return upipe_http_src_mgr_to_upipe_mgr(upipe_http_src_mgr);
 }
