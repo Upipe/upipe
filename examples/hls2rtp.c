@@ -122,6 +122,7 @@ static uint64_t bandwidth_max = UINT64_MAX;
 static const char *url = NULL;
 static const char *addr = "127.0.0.1";
 static const char *dump = NULL;
+static const char *user_agent = "hls2rtp/1.0";
 static struct output video_output = {
     .port = 5004,
     .rtp_type = 96,
@@ -1282,6 +1283,7 @@ enum opt {
     OPT_MIN_DEVIATION,
     OPT_DELAY,
     OPT_QUIT_TIMEOUT,
+    OPT_USER_AGENT,
 };
 
 static struct option options[] = {
@@ -1311,6 +1313,7 @@ static struct option options[] = {
     { "min-deviation", required_argument, NULL, OPT_MIN_DEVIATION },
     { "delay", required_argument, NULL, OPT_DELAY },
     { "quit-timeout", required_argument, NULL, OPT_QUIT_TIMEOUT },
+    { "user-agent", required_argument, NULL, OPT_USER_AGENT },
     { 0, 0, 0, 0 },
 };
 
@@ -1442,6 +1445,9 @@ int main(int argc, char **argv)
             break;
         case OPT_QUIT_TIMEOUT:
             quit_timeout = strtoull(optarg, NULL, 10);
+            break;
+        case OPT_USER_AGENT:
+            user_agent = optarg;
             break;
 
         case OPT_HELP:
@@ -1754,6 +1760,7 @@ int main(int argc, char **argv)
         {
             struct upipe_mgr *upipe_fsrc_mgr = upipe_fsrc_mgr_alloc();
             struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
+            upipe_http_src_mgr_set_user_agent(upipe_http_src_mgr, user_agent);
             assert(upipe_fsrc_mgr && upipe_http_src_mgr);
             ubase_assert(upipe_auto_src_mgr_set_mgr(upipe_auto_src_mgr, "file",
                                                     upipe_fsrc_mgr));
