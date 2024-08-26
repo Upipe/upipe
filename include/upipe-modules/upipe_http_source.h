@@ -144,6 +144,10 @@ enum upipe_http_src_command {
     UPIPE_HTTP_SRC_SET_PROXY,
     /** set the http read/write timeout (uint64_t) */
     UPIPE_HTTP_SRC_SET_TIMEOUT,
+    /** get the current user agent (const char **) */
+    UPIPE_HTTP_SRC_GET_USER_AGENT,
+    /** set the user agent to use (const char *) */
+    UPIPE_HTTP_SRC_SET_USER_AGENT,
 };
 
 /** @This converts an enum upipe_http_src_command to a string.
@@ -156,6 +160,8 @@ static inline const char *upipe_http_src_command_str(int cmd)
     switch ((enum upipe_http_src_command)cmd) {
     UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_SET_PROXY);
     UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_SET_TIMEOUT);
+    UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_GET_USER_AGENT);
+    UBASE_CASE_TO_STR(UPIPE_HTTP_SRC_SET_USER_AGENT);
     case UPIPE_HTTP_SRC_SENTINEL: break;
     }
     return NULL;
@@ -172,6 +178,32 @@ static inline int upipe_http_src_set_proxy(struct upipe *upipe,
 {
     return upipe_control(upipe, UPIPE_HTTP_SRC_SET_PROXY,
                          UPIPE_HTTP_SRC_SIGNATURE, proxy);
+}
+
+/** @This gets the current user agent.
+ *
+ * @param upipe description structure of the pipe
+ * @param user_agent_p filled with the current user agent
+ * @return an error code
+ */
+static inline int upipe_http_src_get_user_agent(struct upipe *upipe,
+                                                const char **user_agent_p)
+{
+    return upipe_control(upipe, UPIPE_HTTP_SRC_GET_USER_AGENT,
+                         UPIPE_HTTP_SRC_SIGNATURE, user_agent_p);
+}
+
+/** @This sets the user agent to use.
+ *
+ * @param upipe description structure of the pipe
+ * @param user_agent user agent to use
+ * @return an error code
+ */
+static inline int upipe_http_src_set_user_agent(struct upipe *upipe,
+                                                const char *user_agent)
+{
+    return upipe_control(upipe, UPIPE_HTTP_SRC_SET_USER_AGENT,
+                         UPIPE_HTTP_SRC_SIGNATURE, user_agent);
 }
 
 /** @This sets the read/write timeout.
@@ -200,6 +232,11 @@ enum upipe_http_src_mgr_command {
     UPIPE_HTTP_SRC_MGR_SET_COOKIE,
     /** iterate over cookies */
     UPIPE_HTTP_SRC_MGR_ITERATE_COOKIE,
+
+    /** get user agent (const char **) */
+    UPIPE_HTTP_SRC_MGR_GET_USER_AGENT,
+    /** set user agent (const char *) */
+    UPIPE_HTTP_SRC_MGR_SET_USER_AGENT,
 };
 
 /** @This sets the proxy url to use by default for the new allocated pipes.
@@ -226,6 +263,32 @@ static inline int upipe_http_src_mgr_get_proxy(struct upipe_mgr *mgr,
 {
     return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_GET_PROXY,
                              UPIPE_HTTP_SRC_SIGNATURE, proxy_p);
+}
+
+/** @This sets the user agent to use by default for newly allocated pipes.
+ *
+ * @param mgr pointer to upipe manager
+ * @param user_agent the user_agent
+ * @return an error code
+ */
+static inline int upipe_http_src_mgr_set_user_agent(struct upipe_mgr *mgr,
+                                                    const char *user_agent)
+{
+    return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_SET_USER_AGENT,
+                             UPIPE_HTTP_SRC_SIGNATURE, user_agent);
+}
+
+/** @This gets the user agent to use by default for newly allocated pipes.
+ *
+ * @param mgr pointer to upipe manager
+ * @param user_agent_p a pointer filled with the current user agent
+ * @return an error code
+ */
+static inline int upipe_http_src_mgr_get_user_agent(struct upipe_mgr *mgr,
+                                                    const char **user_agent_p)
+{
+    return upipe_mgr_control(mgr, UPIPE_HTTP_SRC_MGR_GET_USER_AGENT,
+                             UPIPE_HTTP_SRC_SIGNATURE, user_agent_p);
 }
 
 /** @This adds a cookie in the manager cookie list.
