@@ -5,6 +5,8 @@ noinst_HEADERS = upipe_ts_psi_decoder.h
 libupipe_ts_la_SOURCES = \
 	upipe_ts_check.c \
 	upipe_ts_decaps.c \
+	upipe_ts_ait_decoder.c \
+	upipe_ts_ait_generator.c \
 	upipe_ts_eit_decoder.c \
 	upipe_ts_nit_decoder.c \
 	upipe_ts_cat_decoder.c \
