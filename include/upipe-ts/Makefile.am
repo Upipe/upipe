@@ -9,6 +9,8 @@ myinclude_HEADERS = \
 	upipe_ts_encaps.h \
 	upipe_ts_pcr_interpolator.h \
 	upipe_ts_mux.h \
+	upipe_ts_ait_decoder.h \
+	upipe_ts_ait_generator.h \
 	upipe_ts_eit_decoder.h \
 	upipe_ts_nit_decoder.h \
 	upipe_ts_cat_decoder.h \
