@@ -1217,11 +1217,11 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     static const uint64_t wrap = UINT64_C(4294967296);
     uint64_t delta = (wrap + ts - (upipe_srt_receiver->previous_ts % wrap)) % wrap;
     int32_t d32 = delta;
-    bool discontinuity = false;
+    bool discontinuity = upipe_srt_receiver->previous_ts == 0;
 
     uint64_t latency_us = (upipe_srt_receiver->latency * 1000000) / UCLOCK_FREQ;
     /* Note: d32 is converted to unsigned implictly */
-    if (d32 <= latency_us|| -d32 <= latency_us) {
+    if (!discontinuity && (d32 <= latency_us || -d32 <= latency_us)) {
         if (d32 <= latency_us) {
             upipe_srt_receiver->previous_ts += delta;
             assert(d32 >= 0);
@@ -1235,7 +1235,7 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     }
 
     upipe_verbose_va(upipe, "Data seq %u (retx %u)", seqnum, retransmit);
-    if (d32 < 0)
+    if (d32 < 0 && !discontinuity)
         uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts + d32) * UCLOCK_FREQ / 1000000);
     else
         uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts) * UCLOCK_FREQ / 1000000);
