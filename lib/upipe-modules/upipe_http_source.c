@@ -253,7 +253,7 @@ static int upipe_http_src_throw_scheme_hook(struct upipe *upipe,
 {
     const char *scheme = "(none)";
     uref_uri_get_scheme(flow_def, &scheme);
-    upipe_notice_va(upipe, "throw scheme hook for %s", scheme);
+    upipe_verbose_va(upipe, "throw scheme hook for %s", scheme);
     return upipe_throw(upipe, UPROBE_HTTP_SRC_SCHEME_HOOK,
                        UPIPE_HTTP_SRC_SIGNATURE, flow_def, hook);
 }
