@@ -102,7 +102,7 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (unlikely(discontinuity))
         upipe_warn(upipe, "[dejitter] discontinuity");
     else if (unlikely(uprobe_dejitter->offset && fabs(offset - uprobe_dejitter->offset) >
-                      MAX_JITTER + 3 * uprobe_dejitter->deviation)) {
+                      uprobe_dejitter->maximum_jitter + 3 * uprobe_dejitter->deviation)) {
         upipe_warn_va(upipe, "[dejitter] max jitter reached (%f ms)",
                       (offset - uprobe_dejitter->offset) * 1000 / UCLOCK_FREQ);
         discontinuity = 1;
@@ -331,6 +331,19 @@ void uprobe_dejitter_set_maximum_deviation(struct uprobe *uprobe,
         uprobe_dejitter->deviation = deviation;
 }
 
+/** @This sets the maximum jitter of the dejittering probe.
+ *
+ * @param uprobe pointer to probe
+ * @param jitter maximum jitter to set
+ */
+void uprobe_dejitter_set_maximum_jitter(struct uprobe *uprobe,
+                                        uint64_t jitter)
+{
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    uprobe_dejitter->maximum_jitter = jitter;
+}
+
 /** @This initializes an already allocated uprobe_dejitter structure.
  *
  * @param uprobe_pfx pointer to the already allocated structure
@@ -349,6 +362,7 @@ struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
     uprobe_dejitter->last_print = 0;
     uprobe_dejitter->minimum_deviation = 0;
     uprobe_dejitter->maximum_deviation = 0;
+    uprobe_dejitter->maximum_jitter = MAX_JITTER;
     uprobe_dejitter_set(uprobe, enabled, deviation);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;
