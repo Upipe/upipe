@@ -61,6 +61,9 @@ struct uprobe_dejitter {
     /** maximum deviation */
     double maximum_deviation;
 
+    /** maximum jitter */
+    uint64_t maximum_jitter;
+
     /** cr_prog of last clock ref */
     uint64_t last_cr_prog;
     /** cr_sys of last clock ref */
@@ -129,6 +132,14 @@ void uprobe_dejitter_set_minimum_deviation(struct uprobe *uprobe,
  */
 void uprobe_dejitter_set_maximum_deviation(struct uprobe *uprobe,
                                            double deviation);
+
+/** @This sets the maximum jitter of the dejittering probe.
+ *
+ * @param uprobe pointer to probe
+ * @param jitter maximum jitter to set
+ */
+void uprobe_dejitter_set_maximum_jitter(struct uprobe *uprobe,
+                                        uint64_t jitter);
 
 #ifdef __cplusplus
 }
