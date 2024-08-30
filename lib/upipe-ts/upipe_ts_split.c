@@ -344,8 +344,8 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
     uint16_t pid = ts_get_pid(ts_header);
     UBASE_FATAL(upipe, uref_block_peek_unmap(uref, 0, buffer, ts_header))
 
-    struct uchain *uchain;
-    ulist_foreach (&upipe_ts_split->pids[pid].subs, uchain) {
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&upipe_ts_split->pids[pid].subs, uchain, uchain_tmp) {
         struct upipe_ts_split_sub *output =
                 upipe_ts_split_sub_from_uchain_pid(uchain);
         if (likely(uchain->next == NULL)) {
