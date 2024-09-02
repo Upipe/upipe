@@ -574,11 +574,15 @@ static void upipe_bmd_sink_sub_init(struct upipe *upipe,
     upipe_bmd_sink_sub->uqueue_extra = malloc(uqueue_sizeof(length));
     assert(upipe_bmd_sink_sub->uqueue_extra);
     uqueue_init(&upipe_bmd_sink_sub->uqueue, length, upipe_bmd_sink_sub->uqueue_extra);
+
     upipe_bmd_sink_sub->uref = NULL;
     upipe_bmd_sink_sub->latency = 0;
     upipe_bmd_sink_sub_init_upump_mgr(upipe);
     upipe_bmd_sink_sub_init_upump(upipe);
     upipe_bmd_sink_sub->type = BMD_SUBPIPE_TYPE_UNKNOWN;
+    upipe_bmd_sink_sub->dolby_e = false;
+    upipe_bmd_sink_sub->s337 = false;
+    upipe_bmd_sink_sub->channels = 0;
 
     upipe_throw_ready(upipe);
     pthread_mutex_unlock(&upipe_bmd_sink->lock);
