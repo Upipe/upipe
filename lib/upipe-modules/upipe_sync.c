@@ -688,7 +688,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             uref_sound_size(src, &src_samples, NULL);
 
             /* XXX: Doesn't handle the case where multiple s337 packets needed in a single dst uref,
-                    i.e samples < uref_samples */
+                    i.e samples < output_samples */
             if (!ubase_check(uref_sound_read_int32_t(src, 0, src_samples, &src_buf, 1))) {
                 upipe_err_va(upipe_sub, "Could not map src");
             }
@@ -697,14 +697,14 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             memset(dst_buf, 0, samples * channels * sizeof(int32_t));
 
             /* Limit the number of samples written to the destination buffer size */
-            size_t uref_samples = src_samples;
-            if (uref_samples > samples) {
-                uref_samples = samples;
+            size_t output_samples = src_samples;
+            if (output_samples > samples) {
+                output_samples = samples;
             }
 
-            memcpy(dst_buf, src_buf, channels * sizeof(int32_t) * uref_samples);
-            src_samples -= uref_samples;
-            samples -= uref_samples;
+            memcpy(dst_buf, src_buf, channels * sizeof(int32_t) * output_samples);
+            src_samples -= output_samples;
+            samples -= output_samples;
             if (upipe_sync_sub->samples >= src_samples)
                 upipe_sync_sub->samples -= src_samples;
 
@@ -720,12 +720,12 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                     break;
             }
             else {
-                uref_sound_resize(src, uref_samples, -1);
+                uref_sound_resize(src, output_samples, -1);
                 assert(samples == 0);
 
                 /* shift forward by number of consumed samples */
                 uref_clock_get_pts_sys(src, &pts);
-                pts += uref_samples * UCLOCK_FREQ / 48000;
+                pts += output_samples * UCLOCK_FREQ / 48000;
                 uref_clock_set_pts_sys(src, pts);
 
                 /* TODO: Add metadata to uref to tell downstream pipes this is the second pair and
