@@ -1587,22 +1587,22 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             return UBASE_ERR_INVALID;
         }
         const AVChannelLayout *ch_layouts = context->codec->ch_layouts;
-        if (!ch_layouts) {
-            upipe_err_va(upipe, "codec has no channel layout");
-            uref_free(flow_def_check);
-            return UBASE_ERR_INVALID;
+        if (ch_layouts) {
+            while (ch_layouts->nb_channels != 0) {
+                if (ch_layouts->nb_channels == channels)
+                    break;
+                ch_layouts++;
+            }
+            if (ch_layouts->nb_channels == 0) {
+                upipe_err_va(upipe, "unsupported channel layout %"PRIu8,
+                             channels);
+                uref_free(flow_def_check);
+                return UBASE_ERR_INVALID;
+            }
+            av_channel_layout_copy(&context->ch_layout, ch_layouts);
+        } else {
+            av_channel_layout_default(&context->ch_layout, channels);
         }
-        while (ch_layouts->nb_channels != 0) {
-            if (ch_layouts->nb_channels == channels)
-                break;
-            ch_layouts++;
-        }
-        if (ch_layouts->nb_channels == 0) {
-            upipe_err_va(upipe, "unsupported channel layout %"PRIu8, channels);
-            uref_free(flow_def_check);
-            return UBASE_ERR_INVALID;
-        }
-        av_channel_layout_copy(&context->ch_layout, ch_layouts);
 
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
     }
