@@ -705,8 +705,8 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             memcpy(dst_buf, src_buf, channels * sizeof(int32_t) * output_samples);
             src_samples -= output_samples;
             samples -= output_samples;
-            if (upipe_sync_sub->samples >= src_samples)
-                upipe_sync_sub->samples -= src_samples;
+            if (upipe_sync_sub->samples >= output_samples)
+                upipe_sync_sub->samples -= output_samples;
 
             uref_sound_unmap(src, 0, -1, 1);
 
