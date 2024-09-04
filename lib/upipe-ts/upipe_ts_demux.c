@@ -765,13 +765,10 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
             upipe_warn_va(upipe, "late DTS %"PRIu64" (%"PRIu64" - %f ms)",
                           dts_orig, TS_CLOCK_MAX - delta,
                           (TS_CLOCK_MAX - delta) * 1000. / UCLOCK_FREQ);
-            uref_clock_delete_date_orig(uref);
-        } else {
+        } else
             upipe_warn_va(upipe, "too long delay for DTS %"PRIu64" "
                           "(%"PRIu64" - %f ms)",
                           dts_orig, delta, delta * 1000. / UCLOCK_FREQ);
-            uref_clock_delete_date_orig(uref);
-        }
     }
 
     return upipe_throw(upipe, event, uref);
@@ -956,7 +953,9 @@ static int upipe_ts_demux_output_telx_probe(struct uprobe *uprobe,
     struct uref *uref = va_arg(args_copy, struct uref *);
     va_end(args_copy);
 
-    if (ubase_check(uref_clock_get_dts_orig(uref, &output->last_dts_orig)))
+    uint64_t dts_prog;
+    if (ubase_check(uref_clock_get_dts_prog(uref, &dts_prog)) &&
+        ubase_check(uref_clock_get_dts_orig(uref, &output->last_dts_orig)))
         return UBASE_ERR_NONE; /* compliant teletext */
 
     struct upipe_ts_demux_program *program =
