@@ -1511,8 +1511,8 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
             }
 
             upipe_notice_va(upipe,
-                    " * service sid=%"PRIu64" name=\"%s\" provider=\"%s\"",
-                    sid, service_name_str, provider_name_str);
+                " * service sid=%"PRIu64" type=0x%x name=\"%s\" provider=\"%s\"",
+                sid, service_type, service_name_str, provider_name_str);
 
             j++;
             sdtn_init(service);
