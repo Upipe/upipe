@@ -570,7 +570,6 @@ static void upipe_srt_receiver_timer(struct upump *upump)
     struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
 
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
-    uint64_t rtt = upipe_srt_receiver_get_rtt(upipe);
 
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_srt_receiver->queue, uchain, uchain_tmp) {
