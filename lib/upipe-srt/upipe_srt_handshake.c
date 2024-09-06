@@ -784,7 +784,7 @@ static void upipe_srt_handshake_finalize(struct upipe *upipe)
             uref_flow_set_id(flow_def, upipe_srt_handshake->remote_socket_id);
             struct udict_opaque opaque;
             opaque.v = upipe_srt_handshake->salt;
-            opaque.size = 16;
+            opaque.size = (upipe_srt_handshake->cipher == SRT_KMREQ_CIPHER_AES_GCM) ? 12 : 14;
             if (!ubase_check(uref_attr_set_opaque(flow_def, opaque, UDICT_TYPE_OPAQUE, "enc.salt")))
                 upipe_err(upipe, "damn");
 
