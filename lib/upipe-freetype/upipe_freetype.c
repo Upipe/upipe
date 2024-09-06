@@ -189,6 +189,33 @@ static int upipe_freetype_check_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This loads the freetype font handle.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_freetype_load_face(struct upipe *upipe)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+
+    upipe_freetype->face = NULL;
+    if (!upipe_freetype->font)
+        return UBASE_ERR_INVALID;
+
+    FTC_ScalerRec scaler;
+    scaler.face_id = upipe_freetype->font;
+    scaler.width = upipe_freetype->pixel_size;
+    scaler.height = upipe_freetype->pixel_size;
+    scaler.pixel = 1;
+
+    FT_Size size;
+    if (FTC_Manager_LookupSize(upipe_freetype->cache_manager, &scaler, &size))
+        return UBASE_ERR_INVALID;
+
+    upipe_freetype->face = size->face;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This checks the compatibility of the ubuf manager.
  *
  * @param upipe description structure of the pipe
@@ -277,9 +304,9 @@ static void upipe_freetype_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_freetype_flush_cache(upipe);
-    free(upipe_freetype->font);
     FTC_Manager_Done(upipe_freetype->cache_manager);
     FT_Done_FreeType(upipe_freetype->library);
+    free(upipe_freetype->font);
 
     uref_free(upipe_freetype->flow_output);
     upipe_freetype_clean_input(upipe);
@@ -303,10 +330,7 @@ static FT_Error upipe_freetype_face_requester(FTC_FaceID face_id,
                                               FT_Pointer data,
                                               FT_Face *face)
 {
-    struct upipe *upipe = data;
-    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
-
-    return FT_New_Face(upipe_freetype->library, upipe_freetype->font, 0, face);
+    return FT_New_Face(library, face_id, 0, face);
 }
 
 /** @internal @This allocates a freetype pipe.
@@ -829,18 +853,13 @@ static int upipe_freetype_set_option(struct upipe *upipe,
         if (!value && !upipe_freetype->font)
             return UBASE_ERR_NONE;
 
+        upipe_freetype->face = NULL;
+        FTC_Manager_RemoveFaceID(upipe_freetype->cache_manager,
+                                 upipe_freetype->font);
         free(upipe_freetype->font);
         upipe_freetype->font = value ? strdup(value) : NULL;
-
-        if (FTC_Manager_LookupFace(upipe_freetype->cache_manager,
-                                   upipe_freetype->font,
-                                   &upipe_freetype->face)) {
-            upipe_err_va(upipe, "Couldn't open font %s", value);
-            upipe_freetype->face = NULL;
-            return UBASE_ERR_EXTERNAL;
-        }
         upipe_freetype_flush_cache(upipe);
-        return UBASE_ERR_NONE;
+        return upipe_freetype_load_face(upipe);
     }
     else if (!strcmp(option, "foreground-color")) {
         uint8_t rgba[4] = { 0xff, 0xff, 0xff, 0xff };
@@ -914,20 +933,8 @@ static int _upipe_freetype_set_pixel_size(struct upipe *upipe,
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
     upipe_freetype->pixel_size = pixel_size;
-
-    FT_Size size;
-    FTC_ScalerRec scaler;
-    scaler.face_id = upipe_freetype->face;
-    scaler.width = upipe_freetype->pixel_size;
-    scaler.height = upipe_freetype->pixel_size;
-    scaler.pixel = 1;
-    if (FTC_Manager_LookupSize(upipe_freetype->cache_manager,
-                               &scaler, &size)) {
-        upipe_err(upipe, "fail to get size");
-        return UBASE_ERR_EXTERNAL;
-    }
     upipe_freetype_flush_cache(upipe);
-    return UBASE_ERR_NONE;
+    return upipe_freetype_load_face(upipe);
 }
 
 /** @internal @This gets the x and y minimum and maximum values of the rendered
