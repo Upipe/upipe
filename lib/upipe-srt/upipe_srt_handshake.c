@@ -112,6 +112,7 @@ struct upipe_srt_handshake {
     uint8_t sek[2][32];
     uint8_t sek_len;
     uint8_t kk;
+    uint8_t cipher;
 
     struct uref *kmreq;
 
@@ -444,6 +445,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
 
     upipe_srt_handshake->sek_len = 0;
     upipe_srt_handshake->kk = 1;
+    upipe_srt_handshake->cipher = SRT_KMREQ_CIPHER_NONE;
     upipe_srt_handshake->kmreq = NULL;
     upipe_srt_handshake->password = NULL;
 
@@ -860,8 +862,14 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
 
     upipe_srt_handshake->kk = srt_km_get_kk(ext);
     uint8_t cipher = srt_km_get_cipher(ext);
-    if (cipher != SRT_KMREQ_CIPHER_AES) {
+    if (cipher != SRT_KMREQ_CIPHER_AES_CTR && cipher != SRT_KMREQ_CIPHER_AES_GCM) {
         upipe_err_va(upipe, "Unsupported cipher %u", cipher);
+        return false;
+    }
+
+    uint8_t auth = srt_km_get_auth(ext);
+    if (cipher == SRT_KMREQ_CIPHER_AES_GCM && auth != SRT_KMREQ_AUTH_AES_GCM) {
+        upipe_err_va(upipe, "Unsupported auth %u with AES-GCM cipher", auth);
         return false;
     }
 
@@ -918,6 +926,8 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
         memcpy(upipe_srt_handshake->sek[(upipe_srt_handshake->kk & (1<<0)) ? 0 : 1], osek, klen);
     }
 
+    upipe_srt_handshake->cipher = cipher;
+
     return true;
 
 key_error:
@@ -942,9 +952,13 @@ static void make_km_msg(struct upipe *upipe, uint8_t *out_ext, const uint8_t *wr
     out_ext[0] = 0x12;  // S V PT
     out_ext[1] = 0x20; out_ext[2] = 0x29; // Sign
     srt_km_set_kk(out_ext, upipe_srt_handshake->kk);
-    srt_km_set_cipher(out_ext, SRT_KMREQ_CIPHER_AES);
     out_ext[10] = 2; // SE
     out_ext[14] = 4; // slen;
+
+    uint8_t cipher = upipe_srt_handshake->cipher;
+    srt_km_set_cipher(out_ext, cipher);
+    if (cipher == SRT_KMREQ_CIPHER_AES_GCM)
+        srt_km_set_auth(out_ext, SRT_KMREQ_AUTH_AES_GCM);
 
     srt_km_set_klen(out_ext, klen / 4);
     memcpy(&out_ext[SRT_KMREQ_COMMON_SIZE-16], upipe_srt_handshake->salt, 16);
