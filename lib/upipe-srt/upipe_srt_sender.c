@@ -101,7 +101,8 @@ struct upipe_srt_sender {
     /** buffer latency */
     uint64_t latency;
 
-    uint8_t salt[16];
+    uint8_t salt[14];
+    uint8_t salt_len;
     uint8_t sek[2][32];
     uint8_t sek_len[2];
 
@@ -471,9 +472,10 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
 
     struct udict_opaque opaque;
     if (ubase_check(uref_attr_get_opaque(flow_def, &opaque, UDICT_TYPE_OPAQUE, "enc.salt"))) {
-        if (opaque.size > 16)
-            opaque.size = 16;
-        memcpy(upipe_srt_sender->salt, opaque.v, opaque.size);
+        upipe_srt_sender->salt_len = opaque.size;
+        if (upipe_srt_sender->salt_len > sizeof(upipe_srt_sender->salt))
+            upipe_srt_sender->salt_len = sizeof(upipe_srt_sender->salt);
+        memcpy(upipe_srt_sender->salt, opaque.v, upipe_srt_sender->salt_len);
     }
 
 #ifdef UPIPE_HAVE_GCRYPT_H
@@ -602,6 +604,7 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     */
     upipe_srt_sender->sek_len[0] = 0;
     upipe_srt_sender->sek_len[1] = 0;
+    upipe_srt_sender->salt_len = 0;
     upipe_srt_sender->even_key = true;
     upipe_srt_sender->packets_since_key = 0;
 
@@ -634,6 +637,10 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
         return;
     }
 
+    size_t total_size;
+    ubase_assert(uref_block_size(uref, &total_size));
+
+    struct ubuf *tag = NULL;
     struct ubuf *insert = ubuf_block_alloc(upipe_srt_sender->ubuf_mgr, SRT_HEADER_SIZE);
     if (!insert) {
         upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
@@ -689,7 +696,10 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
     /* invert the boolean to get the right index */
     int key = !upipe_srt_sender->even_key;
     if (upipe_srt_sender->sek_len[key]) {
-        //
+        srt_set_data_packet_encryption(buf, key ? SRT_DATA_ENCRYPTION_ODD : SRT_DATA_ENCRYPTION_EVEN);
+
+        bool gcm = upipe_srt_sender->salt_len == 12;
+
         uint8_t *data;
         int s = -1;
         if (ubase_check(uref_block_write(uref, 0, &s, &data))) {
@@ -699,16 +709,18 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
 
             uint8_t iv[16];
             memset(&iv, 0, 16);
-            iv[10] = (seqnum >> 24) & 0xff;
-            iv[11] = (seqnum >> 16) & 0xff;
-            iv[12] = (seqnum >>  8) & 0xff;
-            iv[13] =  seqnum & 0xff;
-            for (int i = 0; i < 112/8; i++)
+            uint8_t seq_idx = upipe_srt_sender->salt_len - 4;
+            iv[seq_idx++] = (seqnum >> 24) & 0xff;
+            iv[seq_idx++] = (seqnum >> 16) & 0xff;
+            iv[seq_idx++] = (seqnum >>  8) & 0xff;
+            iv[seq_idx++] =  seqnum & 0xff;
+            for (int i = 0; i < upipe_srt_sender->salt_len; i++)
                 iv[i] ^= salt[i];
 
             gcry_cipher_hd_t aes;
             gpg_error_t err;
-            err = gcry_cipher_open(&aes, GCRY_CIPHER_AES, GCRY_CIPHER_MODE_CTR, 0);
+            err = gcry_cipher_open(&aes, GCRY_CIPHER_AES,
+                    gcm ? GCRY_CIPHER_MODE_GCM : GCRY_CIPHER_MODE_CTR, 0);
             if (err) {
                 upipe_err_va(upipe, "Cipher open failed (0x%x)", err);
                 goto error;
@@ -720,16 +732,56 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
                 goto error_close;
             }
 
-            err = gcry_cipher_setctr(aes, iv, 16);
-            if (err) {
-                upipe_err_va(upipe, "Couldn't set encryption ctr (0x%x)", err);
-                goto error_close;
-            }
+            if (gcm) {
+                err = gcry_cipher_setiv(aes, iv, upipe_srt_sender->salt_len);
+                if (err) {
+                    upipe_err_va(upipe, "Couldn't set iv (0x%x)", err);
+                    goto error_close;
+                }
 
-            err = gcry_cipher_encrypt(aes, data, s, NULL, 0);
-            if (err) {
-                upipe_err_va(upipe, "Couldn't encrypt packet (0x%x)", err);
-                goto error_close;
+                err = gcry_cipher_authenticate(aes, buf, 16);
+                if (err) {
+                    upipe_err_va(upipe, "Couldn't set aad (0x%x)", err);
+                    goto error_close;
+                }
+
+                err = gcry_cipher_encrypt(aes, data, s, NULL, 0);
+                if (err) {
+                    upipe_err_va(upipe, "Couldn't decrypt packet (0x%x)", err);
+                    goto error_close;
+                }
+
+                tag = ubuf_block_alloc(upipe_srt_sender->ubuf_mgr, 16);
+                if (!tag) {
+                    upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
+                    goto error_close;
+                }
+
+                uint8_t *buf_tag;
+                int s_tag = -1;
+                if (unlikely(!ubase_check(ubuf_block_write(tag, 0, &s_tag, &buf_tag)))) {
+                    upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
+                    goto error_close;
+                }
+
+                err = gcry_cipher_gettag(aes, buf_tag, 16);
+                ubuf_block_unmap(tag, 0);
+                if (err) {
+                    upipe_err_va(upipe, "Couldn't get tag (0x%x)", err);
+                    goto error_close;
+                }
+            } else {
+                err = gcry_cipher_setctr(aes, iv, 16);
+                if (err) {
+                    upipe_err_va(upipe, "Couldn't set encryption ctr (0x%x)", err);
+                    goto error_close;
+                }
+
+                err = gcry_cipher_encrypt(aes, data, s, NULL, 0);
+                if (err) {
+                    upipe_err_va(upipe, "Couldn't encrypt packet (0x%x)", err);
+                    goto error_close;
+                }
             }
 
 error_close:
@@ -742,12 +794,13 @@ error:
                 ubuf_block_unmap(insert, 0);
                 ubuf_free(insert);
                 uref_free(uref);
+                if (tag)
+                    ubuf_free(tag);
                 return;
             }
         }
 
         //
-        srt_set_data_packet_encryption(buf, key ? SRT_DATA_ENCRYPTION_ODD : SRT_DATA_ENCRYPTION_EVEN);
     } else
 #endif
         srt_set_data_packet_encryption(buf, SRT_DATA_ENCRYPTION_CLEAR);
@@ -757,7 +810,19 @@ error:
         upipe_throw_fatal(upipe, UBASE_ERR_UNKNOWN);
         ubuf_free(insert);
         uref_free(uref);
+        if (tag)
+            ubuf_free(tag);
         return;
+    }
+
+    if (tag ) {
+        int ret = uref_block_append(uref, tag);
+        if (!ubase_check(ret)) {
+            upipe_throw_fatal(upipe, ret);
+            uref_free(uref);
+            ubuf_free(tag);
+            return;
+        }
     }
 
     uref_attr_set_priv(uref, seqnum);
