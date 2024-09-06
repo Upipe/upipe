@@ -956,6 +956,8 @@ static void make_km_msg(struct upipe *upipe, uint8_t *out_ext, const uint8_t *wr
     out_ext[14] = 4; // slen;
 
     uint8_t cipher = upipe_srt_handshake->cipher;
+    if (cipher == SRT_KMREQ_CIPHER_NONE)
+        cipher = SRT_KMREQ_CIPHER_AES_CTR; // TODO : favor GCM?
     srt_km_set_cipher(out_ext, cipher);
     if (cipher == SRT_KMREQ_CIPHER_AES_GCM)
         srt_km_set_auth(out_ext, SRT_KMREQ_AUTH_AES_GCM);
