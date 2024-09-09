@@ -246,8 +246,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
     enum AVCodecID codec_id;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (ubase_ncmp(def, "block.") ||
-        !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
-        codec_id >= AV_CODEC_ID_FIRST_SUBTITLE) {
+        !(codec_id = upipe_av_from_flow_def(def + strlen("block.")))) {
         upipe_err_va(upipe, "bad codec for %s", def);
         return UBASE_ERR_INVALID;
     }
@@ -267,7 +266,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
             return UBASE_ERR_INVALID;
         }
         uref_pic_flow_get_sar(flow_def, &sar);
-    } else {
+    } else if (codec_id < AV_CODEC_ID_FIRST_SUBTITLE) {
         if (unlikely(!ubase_check(uref_sound_flow_get_channels(flow_def, &channels)) ||
                      !ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) ||
                      !ubase_check(uref_sound_flow_get_samples(flow_def, &samples)))) {
@@ -321,7 +320,7 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
-    } else {
+    } else if (codec_id < AV_CODEC_ID_FIRST_SUBTITLE) {
         if (unlikely(!ubase_check(uref_sound_flow_set_channels(flow_def_check, channels)) ||
                      !ubase_check(uref_sound_flow_set_rate(flow_def_check, rate)) ||
                      !ubase_check(uref_sound_flow_set_samples(flow_def_check, samples)))) {
@@ -399,12 +398,14 @@ static int upipe_avfsink_sub_set_flow_def(struct upipe *upipe,
         stream->time_base.den = fps.num * 2;
         stream->r_frame_rate.num = fps.num;
         stream->r_frame_rate.den = fps.den;
-    } else {
+    } else if (codec_id < AV_CODEC_ID_FIRST_SUBTITLE) {
         codecpar->codec_type = AVMEDIA_TYPE_AUDIO;
         codecpar->ch_layout.nb_channels = channels;
         codecpar->sample_rate = rate;
         stream->time_base = (AVRational){ 1, codecpar->sample_rate };
         codecpar->frame_size = samples;
+    } else if (codec_id < AV_CODEC_ID_FIRST_UNKNOWN) {
+        codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
     }
 
     if (upipe_avfsink_sub->time_base != UINT64_MAX)
@@ -662,8 +663,7 @@ static int upipe_avfsink_sub_mgr_check_flow_def(struct upipe_mgr *mgr,
     enum AVCodecID codec_id;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
     if (ubase_ncmp(def, "block.") ||
-        !(codec_id = upipe_av_from_flow_def(def + strlen("block."))) ||
-        codec_id >= AV_CODEC_ID_FIRST_SUBTITLE)
+        !(codec_id = upipe_av_from_flow_def(def + strlen("block."))))
         return UBASE_ERR_INVALID;
 
     return UBASE_ERR_NONE;
