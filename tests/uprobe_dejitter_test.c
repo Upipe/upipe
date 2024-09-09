@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts == systime + 2);
+    assert(pts == systime + 3);
 
     systime += 8000;
     clock += 10000;
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     uref_clock_set_pts_prog(uref, clock);
     upipe_throw_clock_ts(upipe, uref);
     ubase_assert(uref_clock_get_pts_sys(uref, &pts));
-    assert(pts == systime + 2002);
+    assert(pts == systime + 2003);
 
     uref_free(uref);
     uprobe_release(uprobe_dejitter);

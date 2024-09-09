@@ -110,8 +110,13 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     if (unlikely(discontinuity)) {
         uprobe_dejitter->offset_count = 0;
         uprobe_dejitter->offset = 0;
+        uprobe_dejitter->first_real_offset = 0;
         /* but do not reset the deviation */
     }
+
+    /* offset has an arbitrary value, as it is the difference between 2 unrelated clocks. */
+    if (uprobe_dejitter->first_real_offset == 0)
+        uprobe_dejitter->first_real_offset = offset;
 
     /* low-pass filter */
     uprobe_dejitter->offset =
@@ -121,10 +126,11 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
         uprobe_dejitter->offset_count++;
 
     double deviation = offset - uprobe_dejitter->offset;
-    uprobe_dejitter->deviation =
-        sqrt((uprobe_dejitter->deviation * uprobe_dejitter->deviation *
-              uprobe_dejitter->deviation_count + deviation * deviation) /
-             (uprobe_dejitter->deviation_count + 1));
+    if (uprobe_dejitter->deviation_count)
+        uprobe_dejitter->deviation =
+            sqrt((uprobe_dejitter->deviation * uprobe_dejitter->deviation *
+                        uprobe_dejitter->deviation_count + deviation * deviation) /
+                    (uprobe_dejitter->deviation_count + 1));
     if (uprobe_dejitter->deviation_count < uprobe_dejitter->deviation_divider)
         uprobe_dejitter->deviation_count++;
 
@@ -194,16 +200,19 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
 
     if (cr_sys > uprobe_dejitter->last_print + PRINT_PERIODICITY) {
         upipe_dbg_va(upipe,
-                "dejitter drift %f error %"PRId64" deviation %g",
+                "dejitter drift %f error %g us deviation %g us",
                 (double)uprobe_dejitter->drift_rate.num /
                 uprobe_dejitter->drift_rate.den,
-                error_offset, uprobe_dejitter->deviation);
+                (double)error_offset * 1000000 / UCLOCK_FREQ,
+                uprobe_dejitter->deviation * 1000000 / UCLOCK_FREQ);
         uprobe_dejitter->last_print = cr_sys;
     }
 
     upipe_verbose_va(upipe,
-            "new ref offset %"PRId64" error %"PRId64" deviation %g",
-            real_offset, error_offset, uprobe_dejitter->deviation);
+            "new ref offset %g us error %g us deviation %g us",
+            (double)(real_offset - uprobe_dejitter->first_real_offset) * 1000000. / UCLOCK_FREQ,
+            (double)error_offset * 1000000. / UCLOCK_FREQ,
+            uprobe_dejitter->deviation * 1000000. / UCLOCK_FREQ);
     return UBASE_ERR_NONE;
 }
 
@@ -282,7 +291,8 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
     uprobe_dejitter->offset_divider = enabled ? OFFSET_DIVIDER : 0;
     uprobe_dejitter->deviation_divider = enabled ? DEVIATION_DIVIDER : 0;
     uprobe_dejitter->offset_count = 0;
-    uprobe_dejitter->deviation_count = 1;
+    uprobe_dejitter->first_real_offset = 0;
+    uprobe_dejitter->deviation_count = 0;
     uprobe_dejitter->offset = 0;
     if (deviation)
         uprobe_dejitter->deviation = deviation;
