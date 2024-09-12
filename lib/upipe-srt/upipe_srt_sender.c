@@ -31,7 +31,7 @@
 #include "upipe/upipe.h"
 #include "upipe/uref_block.h"
 #include "upipe/uref_block_flow.h"
-#include "upipe/uref_pic.h" // XXX
+#include "upipe/uref_pic.h" // XXX are we abusing picture number?
 #include "upipe/uref_flow.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_subpipe.h"
@@ -262,7 +262,7 @@ static void upipe_srt_sender_lost_sub_n(struct upipe *upipe, uint32_t seq, uint3
             return;
     }
 
-    /* XXX: Is it needed? */
+    /* XXX: Do we really need to send DROPREQ ? */
 
     int s = SRT_HEADER_SIZE + SRT_DROPREQ_CIF_SIZE;
     struct uref *uref = uref_block_alloc(upipe_srt_sender->uref_mgr,
@@ -356,7 +356,7 @@ static void upipe_srt_sender_timer(struct upump *upump)
 
     if (now - upipe_srt_sender->last_sent > UCLOCK_FREQ) {
         struct uref *uref = uref_block_alloc(upipe_srt_sender->uref_mgr,
-                upipe_srt_sender->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
+                upipe_srt_sender->ubuf_mgr, SRT_HEADER_SIZE + 4 /* undocumented extra padding */);
         if (uref) {
             uint8_t *out;
             int output_size = -1;
@@ -799,8 +799,6 @@ error:
                 return;
             }
         }
-
-        //
     } else
 #endif
         srt_set_data_packet_encryption(buf, SRT_DATA_ENCRYPTION_CLEAR);

@@ -33,7 +33,7 @@
 #include "upipe/uref.h"
 #include "upipe/uref_block.h"
 #include "upipe/uref_block_flow.h"
-#include "upipe/uref_pic.h" // XXX
+#include "upipe/uref_pic.h" // XXX are we abusing picture number?
 #include "upipe/uref_clock.h"
 #include "upipe/uref_attr.h"
 #include "upipe/upipe.h"
@@ -197,7 +197,14 @@ static void upipe_srt_handshake_shutdown(struct upipe *upipe)
     uint32_t timestamp = (now - upipe_srt_handshake->establish_time) / 27;
 
     struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
-            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 4 /* wtf */);
+            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE \
+                /*
+                    libsrt will not handle this packet if we don't add an undocumented 4 bytes.
+                    libsrt source code has this to say:
+                        "control info field should be none but "writev" does not allow this"
+                 */
+                + 4
+                );
     if (!uref)
         return;
     uint8_t *out;
@@ -1567,7 +1574,7 @@ static struct uref *upipe_srt_handshake_handle_ack(struct upipe *upipe, const ui
         return NULL;
 
     struct uref *uref = uref_block_alloc(upipe_srt_handshake->uref_mgr,
-            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
+            upipe_srt_handshake->ubuf_mgr, SRT_HEADER_SIZE + 4 /* undocumented extra padding */);
     if (!uref)
         return NULL;
     uint8_t *out;

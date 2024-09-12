@@ -350,7 +350,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
 
     if (now - upipe_srt_receiver->last_sent > UCLOCK_FREQ) {
         struct uref *uref = uref_block_alloc(upipe_srt_receiver->uref_mgr,
-                upipe_srt_receiver->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
+                upipe_srt_receiver->ubuf_mgr, SRT_HEADER_SIZE + 4 /* undocumented extra padding */);
         if (uref) {
             uint8_t *out;
             int output_size = -1;

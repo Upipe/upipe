@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short Upipe module for SRT handshakes
+ * @short Upipe module receiving SRT
  */
 
 #ifndef _UPIPE_SRT_UPIPE_SRT_RECEIVER_H_
