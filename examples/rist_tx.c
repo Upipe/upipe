@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
                                                    0);
     struct upump_mgr *upump_mgr = upump_ev_mgr_alloc_default(UPUMP_POOL,
                                                      UPUMP_BLOCKER_POOL);
-    struct uclock *uclock = uclock_std_alloc(UCLOCK_FLAG_REALTIME);
+    struct uclock *uclock = uclock_std_alloc(0);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
     struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout, loglevel);
