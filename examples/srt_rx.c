@@ -73,7 +73,7 @@
 
 
 /* structure */
-struct uprobe_obe_log {
+struct uprobe_log {
     struct urefcount urefcount;
     struct uclock *uclock;
     struct uprobe uprobe;
@@ -82,15 +82,15 @@ struct uprobe_obe_log {
 };
 
 /* helper */
-UPROBE_HELPER_UPROBE(uprobe_obe_log, uprobe)
+UPROBE_HELPER_UPROBE(uprobe_log, uprobe)
 
 /* alloc */
-struct uprobe *uprobe_obe_log_alloc(struct uprobe *next);
+struct uprobe *uprobe_log_alloc(struct uprobe *next);
 
-static int uprobe_obe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
+static int uprobe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
                               int event, va_list args)
 {
-    struct uprobe_obe_log *probe_obe_log = uprobe_obe_log_from_uprobe(uprobe);
+    struct uprobe_log *probe_obe_log = uprobe_log_from_uprobe(uprobe);
     if (event != UPROBE_LOG)
         return uprobe_throw_next(uprobe, upipe, event, args);
 
@@ -117,41 +117,41 @@ static int uprobe_obe_log_throw(struct uprobe *uprobe, struct upipe *upipe,
     return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
-static void uprobe_obe_log_set_loglevel(struct uprobe *uprobe, int loglevel)
+static void uprobe_log_set_loglevel(struct uprobe *uprobe, int loglevel)
 {
-    struct uprobe_obe_log *probe_obe_log = uprobe_obe_log_from_uprobe(uprobe);
+    struct uprobe_log *probe_obe_log = uprobe_log_from_uprobe(uprobe);
     uatomic_store(&probe_obe_log->loglevel, loglevel);
 }
 
-static void uprobe_obe_log_set_uclock(struct uprobe *uprobe, struct uclock *uclock)
+static void uprobe_log_set_uclock(struct uprobe *uprobe, struct uclock *uclock)
 {
-    struct uprobe_obe_log *probe_obe_log = uprobe_obe_log_from_uprobe(uprobe);
+    struct uprobe_log *probe_obe_log = uprobe_log_from_uprobe(uprobe);
     uclock_release(probe_obe_log->uclock);
     probe_obe_log->uclock = uclock_use(uclock);
     probe_obe_log->start = uclock_now(uclock);
 }
 
-static struct uprobe *uprobe_obe_log_init(struct uprobe_obe_log *probe_obe_log,
+static struct uprobe *uprobe_log_init(struct uprobe_log *probe_obe_log,
                                        struct uprobe *next)
 {
-    struct uprobe *probe = uprobe_obe_log_to_uprobe(probe_obe_log);
+    struct uprobe *probe = uprobe_log_to_uprobe(probe_obe_log);
     probe_obe_log->uclock = NULL;
     probe_obe_log->start = UINT64_MAX;
     uatomic_init(&probe_obe_log->loglevel, UPROBE_LOG_DEBUG);
-    uprobe_init(probe, uprobe_obe_log_throw, next);
+    uprobe_init(probe, uprobe_log_throw, next);
     return probe;
 }
 
-static void uprobe_obe_log_clean(struct uprobe_obe_log *probe_obe_log)
+static void uprobe_log_clean(struct uprobe_log *probe_obe_log)
 {
-    uprobe_clean(uprobe_obe_log_to_uprobe(probe_obe_log));
+    uprobe_clean(uprobe_log_to_uprobe(probe_obe_log));
     uclock_release(probe_obe_log->uclock);
     uatomic_clean(&probe_obe_log->loglevel);
 }
 
 #define ARGS_DECL struct uprobe *next
 #define ARGS next
-UPROBE_HELPER_ALLOC(uprobe_obe_log);
+UPROBE_HELPER_ALLOC(uprobe_log);
 #undef ARGS
 #undef ARGS_DECL
 
@@ -446,10 +446,10 @@ int main(int argc, char *argv[])
 
     uclock = uclock_std_alloc(0);
 
-    logger = uprobe_obe_log_alloc(logger);
+    logger = uprobe_log_alloc(logger);
 
-    uprobe_obe_log_set_loglevel(logger, loglevel);
-    uprobe_obe_log_set_uclock(logger, uclock);
+    uprobe_log_set_loglevel(logger, loglevel);
+    uprobe_log_set_uclock(logger, uclock);
 
     logger = uprobe_uclock_alloc(logger, uclock);
     assert(logger != NULL);
