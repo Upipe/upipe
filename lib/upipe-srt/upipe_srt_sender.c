@@ -106,7 +106,7 @@ struct upipe_srt_sender {
     uint8_t sek[2][32];
     uint8_t sek_len[2];
 
-    int even_key;
+    int key_index;
 
     size_t packets_since_key;
 
@@ -493,7 +493,7 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
         memcpy(upipe_srt_sender->sek[1], opaque.v, opaque.size);
     }
 
-    int even_key = upipe_srt_sender->even_key;
+    int even_key = upipe_srt_sender->key_index;
     if (upipe_srt_sender->sek_len[0] && upipe_srt_sender->sek_len[1])
         upipe_srt_sender->packets_since_key = 0;
     else
@@ -511,7 +511,7 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
             upipe_dbg(upipe, "No encryption key in handshake");
     }
 
-    upipe_srt_sender->even_key = even_key;
+    upipe_srt_sender->key_index = even_key;
 #endif
 
     return uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF);
@@ -599,13 +599,13 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender->establish_time = 0;
 
     /* Note: 0 is the even key and 1 is the odd key.
-       When upipe_srt_sender->even_key = true
-       upipe_srt_sender->sek[!upipe_srt_sender->even_key] is the even key
+       When upipe_srt_sender->key_index = true
+       upipe_srt_sender->sek[!upipe_srt_sender->key_index] is the even key
     */
     upipe_srt_sender->sek_len[0] = 0;
     upipe_srt_sender->sek_len[1] = 0;
     upipe_srt_sender->salt_len = 0;
-    upipe_srt_sender->even_key = true;
+    upipe_srt_sender->key_index = true;
     upipe_srt_sender->packets_since_key = 0;
 
     upipe_srt_sender->last_sent = 0;
@@ -674,7 +674,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
 #ifdef UPIPE_HAVE_GCRYPT_H
     if (++upipe_srt_sender->packets_since_key == SRT_KM_PRE_ANNOUNCEMENT_PERIOD) {
         /* invert the boolean to get the right index */
-        int even_key = !upipe_srt_sender->even_key;
+        int even_key = !upipe_srt_sender->key_index;
 
         if (!upipe_srt_sender->sek_len[!even_key] && upipe_srt_sender->sek_len[even_key]) {
             upipe_err_va(upipe, "Couldn't switch encryption keys: %s key is absent",
@@ -688,13 +688,13 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
             upipe_dbg(upipe, "Encryption disabled");
         }
 
-        upipe_srt_sender->even_key = even_key;
+        upipe_srt_sender->key_index = even_key;
     } else if (upipe_srt_sender->packets_since_key == 2 * SRT_KM_PRE_ANNOUNCEMENT_PERIOD) {
-        memset(upipe_srt_sender->sek[upipe_srt_sender->even_key], 0, sizeof(upipe_srt_sender->sek[0]));
+        memset(upipe_srt_sender->sek[upipe_srt_sender->key_index], 0, sizeof(upipe_srt_sender->sek[0]));
     }
 
     /* invert the boolean to get the right index */
-    int key = !upipe_srt_sender->even_key;
+    int key = !upipe_srt_sender->key_index;
     if (upipe_srt_sender->sek_len[key]) {
         srt_set_data_packet_encryption(buf, key ? SRT_DATA_ENCRYPTION_ODD : SRT_DATA_ENCRYPTION_EVEN);
 
