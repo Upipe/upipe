@@ -59,6 +59,8 @@
 #include <assert.h>
 #include <sys/socket.h>
 
+#include <netinet/in.h>
+
 /** default size of buffers when unspecified */
 #define UBUF_DEFAULT_SIZE       4096
 
@@ -205,9 +207,39 @@ static void upipe_udpsrc_worker(struct upump *upump)
     struct sockaddr_storage addr;
     socklen_t addrlen = sizeof(addr);
 
-    ssize_t ret = recvfrom(upipe_udpsrc->fd, buffer, upipe_udpsrc->output_size,
-                        0, (struct sockaddr*)&addr, &addrlen);
+    int ifindex = -1;
+
+    uint8_t ancillary[CMSG_SPACE(sizeof(struct in_pktinfo))];
+    struct iovec iov[1] = {
+        {
+            .iov_base = buffer,
+            .iov_len = upipe_udpsrc->output_size,
+        }
+    };
+
+    struct msghdr msg = {
+        .msg_name = (struct sockaddr*)&addr,
+        .msg_namelen = addrlen,
+        .msg_iov = iov,
+        .msg_iovlen = 1,
+        .msg_control = ancillary,
+        .msg_controllen = sizeof(ancillary),
+    };
+
+    ssize_t ret = recvmsg(upipe_udpsrc->fd, &msg, 0);
+    addrlen = msg.msg_namelen;
+
+    for (struct cmsghdr *c = CMSG_FIRSTHDR(&msg); c; c = CMSG_NXTHDR(&msg, c)) {
+        if (c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_PKTINFO) {
+            struct in_pktinfo *info = (void*)CMSG_DATA(c);
+            ifindex = info->ipi_ifindex;
+        }
+    }
+
     uref_block_unmap(uref, 0);
+
+    if (ifindex >= 0)
+        uref_block_set_net_ifindex(uref, ifindex);
 
     if (unlikely(ret == -1)) {
         uref_free(uref);
