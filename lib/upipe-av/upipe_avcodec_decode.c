@@ -1307,11 +1307,31 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     else if (frame->top_field_first)
         UBASE_FATAL(upipe, uref_pic_set_tff(uref))
 
-    if (context->time_base.den)
-        UBASE_FATAL(upipe, uref_clock_set_duration(uref,
-                (uint64_t)(2 + frame->repeat_pict) * context->ticks_per_frame *
-                UCLOCK_FREQ * context->time_base.num /
-                (2 * context->time_base.den)))
+    uint64_t duration = 0;
+    AVRational uclock_time_base = av_make_q(1, UCLOCK_FREQ);
+
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 30, 100)
+    if (frame->duration) {
+        AVRational time_base = frame->time_base;
+        if (!time_base.num || !time_base.den)
+            time_base = context->pkt_timebase;
+        duration = av_rescale_q(frame->duration, time_base, uclock_time_base);
+    }
+#endif
+
+    if (!duration && context->framerate.num && context->framerate.den) {
+        AVRational time_base = av_make_q(context->framerate.den,
+                                         context->framerate.num);
+        duration = av_rescale_q(1, time_base, uclock_time_base);
+    }
+
+    if (!duration && frame->time_base.den)
+        duration = (uint64_t)(2 + frame->repeat_pict) *
+            context->ticks_per_frame * UCLOCK_FREQ * frame->time_base.num /
+            (2 * frame->time_base.den);
+
+    if (duration)
+        UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
     if (frame->key_frame)
         uref_pic_set_key(uref);
