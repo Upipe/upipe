@@ -93,6 +93,8 @@ struct upipe_avfilt_media {
             struct urational fps;
             /** sample aspect ratio */
             struct urational sar;
+            /** matrix coefficients */
+            int matrix_coefficients;
             /** interlaced? */
             bool interlaced;
             /** color range */
@@ -390,11 +392,13 @@ static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
                     av_buffersink_get_sample_aspect_ratio(
                         upipe_avfilt_sub->buffer_ctx));
             bool interlaced = frame->interlaced_frame;
-            enum AVColorRange color_range =
+            enum AVColorRange color_range = frame->color_range;
+            int matrix_coefficients = frame->colorspace;
 #if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-                av_buffersink_get_color_range(upipe_avfilt_sub->buffer_ctx);
-#else
-                frame->color_range;
+            color_range = av_buffersink_get_color_range(
+                upipe_avfilt_sub->buffer_ctx);
+            matrix_coefficients = av_buffersink_get_colorspace(
+                upipe_avfilt_sub->buffer_ctx);
 #endif
             bool full_range = color_range == AVCOL_RANGE_JPEG;
 
@@ -406,7 +410,8 @@ static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
                 !urational_cmp(&video->fps, &fps) &&
                 !urational_cmp(&video->sar, &sar) &&
                 video->interlaced == interlaced &&
-                video->full_range == full_range;
+                video->full_range == full_range &&
+                video->matrix_coefficients == matrix_coefficients;
         }
 
         case AVMEDIA_TYPE_AUDIO: {
@@ -454,11 +459,11 @@ static int build_video_flow_def(struct uref *flow_def,
     if (!fps.den)
         fps = av_inv_q(av_buffersink_get_time_base(buffer_ctx));
     AVRational sar = av_buffersink_get_sample_aspect_ratio(buffer_ctx);
-    enum AVColorRange color_range =
+    enum AVColorRange color_range = frame->color_range;
+    int matrix_coefficients = frame->colorspace;
 #if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-        av_buffersink_get_color_range(buffer_ctx);
-#else
-        frame->color_range;
+    color_range = av_buffersink_get_color_range(buffer_ctx);
+    matrix_coefficients = av_buffersink_get_colorspace(buffer_ctx);
 #endif
 
     if (width <= 0 || height <= 0)
@@ -489,7 +494,7 @@ static int build_video_flow_def(struct uref *flow_def,
     UBASE_RETURN(uref_pic_flow_set_transfer_characteristics_val(
             flow_def, frame->color_trc))
     UBASE_RETURN(uref_pic_flow_set_matrix_coefficients_val(
-            flow_def, frame->colorspace))
+            flow_def, matrix_coefficients))
 
     return UBASE_ERR_NONE;
 }
@@ -543,6 +548,8 @@ static int upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
             uref_pic_flow_get_sar(flow_def, &video->sar);
             video->interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
             video->full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
+            uref_pic_flow_get_matrix_coefficients_val(
+                flow_def, &video->matrix_coefficients);
             return UBASE_ERR_NONE;
         }
 
@@ -912,6 +919,7 @@ static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
                 p->width = video->width;
                 p->height = video->height;
 #if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
+                p->color_space = video->matrix_coefficients;
                 p->color_range = video->full_range ?
                     AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
 #endif
@@ -1847,12 +1855,17 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
     uint64_t height;
     struct urational sar = { 0, 0 };
     struct urational fps = { 0, 0 };
+    bool full_range;
+    int matrix_coefficients;
 
     pix_fmt = upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &width));
     UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
     uref_pic_flow_get_sar(flow_def, &sar);
     uref_pic_flow_get_fps(flow_def, &fps);
+    full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
+    UBASE_RETURN(uref_pic_flow_get_matrix_coefficients_val(
+            flow_def, &matrix_coefficients))
 
     upipe_avfilt_media_clean(&upipe_avfilt->media);
     upipe_avfilt->media.type = AVMEDIA_TYPE_VIDEO;
@@ -1863,6 +1876,8 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
     video->height = height;
     video->sar = sar;
     video->fps = fps;
+    video->full_range = full_range;
+    video->matrix_coefficients = matrix_coefficients;
 
     if (unlikely(upipe_avfilt->buffer_ctx))
         return UBASE_ERR_BUSY;
@@ -1899,6 +1914,11 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
         p->frame_rate.num = fps.num;
         p->frame_rate.den = fps.den;
     }
+
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
+    p->color_space = matrix_coefficients;
+    p->color_range = full_range ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+#endif
 
     int err = av_buffersrc_parameters_set(ctx, p);
     av_free(p);
@@ -2117,6 +2137,11 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
     p->width = frame->width;
     p->height = frame->height;
     p->hw_frames_ctx = frame->hw_frames_ctx;
+
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
+    p->color_space = frame->colorspace;
+    p->color_range = frame->color_range;
+#endif
 
     int err = av_buffersrc_parameters_set(upipe_avfilt->buffer_ctx, p);
     av_free(p);
