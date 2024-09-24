@@ -387,6 +387,7 @@ static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
 static int upipe_vblk_check_flow_format(struct upipe *upipe,
                                         struct uref *flow_format)
 {
+    uref_pic_flow_delete_surface_type(flow_format);
     upipe_vblk_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
 }
