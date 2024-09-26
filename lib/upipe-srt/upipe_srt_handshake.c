@@ -1355,6 +1355,19 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
     return uref;
 }
 
+static const char *get_hs_type(uint32_t type)
+{
+    switch (type) {
+    case SRT_HANDSHAKE_TYPE_DONE:       return "done";
+    case SRT_HANDSHAKE_TYPE_AGREEMENT:  return "agreement";
+    case SRT_HANDSHAKE_TYPE_CONCLUSION: return "conclusion";
+    case SRT_HANDSHAKE_TYPE_WAVEHAND:   return "wavehand";
+    case SRT_HANDSHAKE_TYPE_INDUCTION:  return "induction";
+    /* rejections */
+    }
+    return "?";
+}
+
 static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uint8_t *buf, int size, uint64_t now)
 {
     struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
@@ -1401,12 +1414,12 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
     if (conclusion) {
         /* Don't send a rejection as it could be a duplicate Induction on a long latency link */
         if (hs_type != SRT_HANDSHAKE_TYPE_CONCLUSION) {
-            upipe_dbg_va(upipe, "Expected conclusion, ignore hs type 0x%x", hs_type);
+            upipe_dbg_va(upipe, "Expected conclusion, ignore hs type %s", get_hs_type(hs_type));
             return NULL;
         }
     } else {
         if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
-            upipe_err_va(upipe, "Expected induction, ignore hs type 0x%x", hs_type);
+            upipe_err_va(upipe, "Expected induction, ignore hs type %s", get_hs_type(hs_type));
             return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                     hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
