@@ -770,6 +770,10 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
             upipe_x264->chroma_subsampling = X264_CSP_I422;
         else if (ubase_check(uref_pic_flow_check_yuv444p(uref)))
             upipe_x264->chroma_subsampling = X264_CSP_I444;
+        else if (ubase_check(uref_pic_flow_check_nv12(uref)))
+            upipe_x264->chroma_subsampling = X264_CSP_NV12;
+        else if (ubase_check(uref_pic_flow_check_nv16(uref)))
+            upipe_x264->chroma_subsampling = X264_CSP_NV16;
         else
             upipe_err(upipe, "invalid chroma subsampling");
 
@@ -781,7 +785,6 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    static const char *const chromas[] = {"y8", "u8", "v8"};
     size_t width, height;
     x264_picture_t pic;
     x264_nal_t *nals;
@@ -871,7 +874,21 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         }
 
         /* map */
-        for (i = 0; i < 3; i++) {
+        static const char *chromas_planar[] = {"y8", "u8", "v8"};
+        static const char *chromas_semiplanar[] = {"y8", "u8v8"};
+        const char **chromas;
+        int chromas_count;
+
+        if (upipe_x264->chroma_subsampling == X264_CSP_NV12 ||
+            upipe_x264->chroma_subsampling == X264_CSP_NV16) {
+            chromas = chromas_semiplanar;
+            chromas_count = 2;
+        } else {
+            chromas = chromas_planar;
+            chromas_count = 3;
+        }
+
+        for (i = 0; i < chromas_count; i++) {
             size_t stride;
             const uint8_t *plane;
             if (unlikely(!ubase_check(uref_pic_plane_size(uref, chromas[i], &stride,
@@ -894,7 +911,7 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
                                   &nals, &nals_num, &pic, &pic);
 
         /* unmap */
-        for (i = 0; i < 3; i++) {
+        for (i = 0; i < chromas_count; i++) {
             uref_pic_plane_unmap(uref, chromas[i], 0, 0, -1, -1);
         }
         ubuf_free(uref_detach_ubuf(uref));
@@ -1125,7 +1142,9 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
 
     if (unlikely(!ubase_check(uref_pic_flow_check_yuv420p(flow_def)) &&
                  !ubase_check(uref_pic_flow_check_yuv422p(flow_def)) &&
-                 !ubase_check(uref_pic_flow_check_yuv444p(flow_def))))
+                 !ubase_check(uref_pic_flow_check_yuv444p(flow_def)) &&
+                 !ubase_check(uref_pic_flow_check_nv12(flow_def)) &&
+                 !ubase_check(uref_pic_flow_check_nv16(flow_def))))
         return UBASE_ERR_INVALID;
 
     /* Extract relevant attributes to flow def check. */
@@ -1207,15 +1226,13 @@ static int _upipe_x264_provide_flow_format(struct upipe *upipe,
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
 
-    uint8_t macropixel;
-    if (ubase_check(uref_pic_flow_get_macropixel(flow_format, &macropixel)) &&
-        macropixel == 1 &&
-        (ubase_check(uref_pic_flow_check_yuv420p(flow_format)) ||
-         ubase_check(uref_pic_flow_check_yuv422p(flow_format)) ||
-         ubase_check(uref_pic_flow_check_yuv444p(flow_format))))
+    if (ubase_check(uref_pic_flow_check_yuv420p(flow_format)) ||
+        ubase_check(uref_pic_flow_check_yuv422p(flow_format)) ||
+        ubase_check(uref_pic_flow_check_yuv444p(flow_format)) ||
+        ubase_check(uref_pic_flow_check_nv12(flow_format)) ||
+        ubase_check(uref_pic_flow_check_nv16(flow_format)))
         return urequest_provide_flow_format(request, flow_format);
 
-    uref_pic_flow_set_macropixel(flow_format, 1);
     uref_pic_flow_set_yuv420p(flow_format);
     return urequest_provide_flow_format(request, flow_format);
 }
