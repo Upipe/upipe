@@ -516,6 +516,18 @@ static void upipe_ts_pmtd_parse_es_descs(struct upipe *upipe,
                 break;
 
             case 0x6b: /* Ancillary data descriptor */
+                break;
+
+            case 0x6f: /* Application signalling descriptor */
+                if ((valid = desc6f_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block,mpegts.mpegtspsi.mpegtsait."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspsi.mpegtsait."))
+                    copy = true;
+                }
+                break;
+
             case 0x70: /* Adaptation field data descriptor */
                 break;
 
