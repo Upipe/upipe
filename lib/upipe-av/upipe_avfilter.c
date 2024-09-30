@@ -2230,6 +2230,26 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
             upipe_throw_error(upipe, UBASE_ERR_ALLOC);
             return;
         }
+
+        uint64_t latency = 0;
+        if (frame->pts != AV_NOPTS_VALUE) {
+            AVRational time_base = av_buffersink_get_time_base(
+                upipe_avfilt->buffersink_ctx);
+            uint64_t pts = av_rescale_q(frame->pts, time_base,
+                                        av_make_q(1, UCLOCK_FREQ));
+            uint64_t input_pts;
+            if (ubase_check(uref_clock_get_pts_prog(
+                        upipe_avfilt->uref, &input_pts)) &&
+                input_pts >= pts) {
+                latency = input_pts - pts;
+                upipe_notice_va(upipe, "latency: %" PRIu64 " ms",
+                                1000 * latency / UCLOCK_FREQ);
+            }
+        }
+        uint64_t input_latency = 0;
+        uref_clock_get_latency(upipe_avfilt->flow_def_input, &input_latency);
+        uref_clock_set_latency(flow_def, input_latency + latency);
+
         upipe_avfilt_store_flow_def(upipe, flow_def);
     }
 
