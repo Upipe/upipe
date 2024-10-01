@@ -1281,6 +1281,7 @@ static int upipe_bmd_sink_sub_set_flow_def(struct upipe *upipe,
 
         const size_t n = sizeof(table) / 2 / sizeof(**table);
 
+        upipe_bmd_sink->dolbye_offset = 0;
         for (size_t i = 0; i < n; i++) {
             const struct dolbye_offset *e = &t[i];
             if (e->mode == bmdMode) {
