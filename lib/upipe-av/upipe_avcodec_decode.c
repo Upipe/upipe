@@ -170,8 +170,6 @@ struct upipe_avcdec {
     enum AVHWDeviceType hw_device_type;
     /** hardware device, or NULL for default device */
     char *hw_device;
-    /** reference to hardware device context */
-    AVBufferRef *hw_device_ctx;
     /** hw pixel format */
     enum AVPixelFormat hw_pix_fmt;
     /** avcodec context */
@@ -742,18 +740,12 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
     /* open hardware decoder */
     int err;
     if (upipe_avcdec->hw_device_type != AV_HWDEVICE_TYPE_NONE) {
-        if (unlikely((err = av_hwdevice_ctx_create(&upipe_avcdec->hw_device_ctx,
+        if (unlikely((err = av_hwdevice_ctx_create(&context->hw_device_ctx,
                                                    upipe_avcdec->hw_device_type,
                                                    upipe_avcdec->hw_device,
                                                    NULL, 0)) < 0)) {
             upipe_av_strerror(err, buf);
             upipe_warn_va(upipe, "could not create hw device context (%s)", buf);
-            upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-            return false;
-        }
-        context->hw_device_ctx = av_buffer_ref(upipe_avcdec->hw_device_ctx);
-        if (context->hw_device_ctx == NULL) {
-            upipe_warn_va(upipe, "could not create hw device reference");
             upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
             return false;
         }
@@ -1934,7 +1926,6 @@ static void upipe_avcdec_free(struct upipe *upipe)
     }
     av_frame_free(&upipe_avcdec->frame);
     av_packet_free(&upipe_avcdec->avpkt);
-    av_buffer_unref(&upipe_avcdec->hw_device_ctx);
     free(upipe_avcdec->hw_device);
 
     upipe_throw_dead(upipe);
@@ -1993,7 +1984,6 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     upipe_avcdec->hw_device_type = AV_HWDEVICE_TYPE_NONE;
     upipe_avcdec->hw_device = NULL;
-    upipe_avcdec->hw_device_ctx = NULL;
     upipe_avcdec->hw_pix_fmt = AV_PIX_FMT_NONE;
     upipe_avcdec->context = NULL;
     upipe_avcdec->frame = frame;
