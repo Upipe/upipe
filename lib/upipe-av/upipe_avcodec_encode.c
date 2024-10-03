@@ -337,8 +337,7 @@ static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
     /* open new context */
     int err;
     if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
-        upipe_av_strerror(err, buf);
-        upipe_warn_va(upipe, "could not open codec (%s)", buf);
+        upipe_warn_va(upipe, "could not open codec (%s)", av_err2str(err));
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         return false;
     }
@@ -1815,9 +1814,8 @@ static int upipe_avcenc_set_option(struct upipe *upipe,
     int error = av_opt_set(upipe_avcenc->context, option, content,
                            AV_OPT_SEARCH_CHILDREN);
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
-                     buf);
+                     av_err2str(error));
         return UBASE_ERR_EXTERNAL;
     }
 

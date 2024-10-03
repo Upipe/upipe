@@ -39,9 +39,6 @@
 #include <libavutil/error.h>
 #include <libavcodec/avcodec.h>
 
-/** typical size of the buffer for av_strerror() */
-#define UPIPE_AV_STRERROR_SIZE 64
-
 /** extra hardware frames for decode and filter */
 #define UPIPE_AV_EXTRA_HW_FRAMES 32
 
@@ -112,16 +109,6 @@ static inline void upipe_av_deal_abort(struct upump *upump)
 {
     udeal_abort(&upipe_av_deal, upump);
 }
-
-/** @This wraps around av_strerror() using ulog storage.
- *
- * @param ulog utility structure passed to the module
- * @param errnum avutil error code
- * @return pointer to a buffer containing a description of the error
- */
-#define upipe_av_strerror(errnum, buf)                                      \
-    char buf[UPIPE_AV_STRERROR_SIZE];                                       \
-    av_strerror(errnum, buf, UPIPE_AV_STRERROR_SIZE);
 
 /** @This allows to convert from avcodec ID to flow definition.
  *
