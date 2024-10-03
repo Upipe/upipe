@@ -873,8 +873,73 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_h26xf_stream_ue(s); /* bottom offset */
     }
 
-    upipe_h26xf_stream_ue(s); /* bit_depth_luma */
-    upipe_h26xf_stream_ue(s); /* bit_depth_chroma */
+    uint32_t luma_depth = upipe_h26xf_stream_ue(s) + 8;
+    if (luma_depth > 16) {
+        upipe_err_va(upipe, "invalid SPS (bit_depth_luma %"PRIu32")",
+                     luma_depth);
+        ubuf_block_stream_clean(s);
+        return false;
+    }
+
+    uint32_t chroma_depth = upipe_h26xf_stream_ue(s) + 8;
+    if (chroma_depth > 16) {
+        upipe_err_va(upipe, "invalid SPS (bit_depth_chroma %"PRIu32")",
+                     chroma_depth);
+        ubuf_block_stream_clean(s);
+        return false;
+    }
+
+#ifdef UPIPE_WORDS_BIGENDIAN
+# define ENDIANNESS "b"
+#else
+# define ENDIANNESS "l"
+#endif
+
+    UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
+    UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
+    UBASE_FATAL(upipe, uref_pic_flow_add_plane_va(
+            flow_def, 1, 1, (luma_depth + 7) / 8, "y%"PRIu8"%s",
+            luma_depth, luma_depth > 8 ? ENDIANNESS : ""))
+    if (chroma_idc == H265SPS_CHROMA_MONO) {
+        UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
+                UPIPE_H265F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_mono.",
+                luma_depth))
+    } else {
+        uint8_t hsub, vsub;
+        const char *chroma;
+        switch (chroma_idc) {
+            case H265SPS_CHROMA_420:
+                hsub = 2;
+                vsub = 2;
+                chroma = "420";
+                break;
+            case H265SPS_CHROMA_422:
+                hsub = 2;
+                vsub = 1;
+                chroma = "422";
+                break;
+            case H265SPS_CHROMA_444:
+                hsub = 1;
+                vsub = 1;
+                chroma = "444";
+                break;
+            default:
+                upipe_err_va(upipe, "invalid chroma format %"PRIu32,
+                             chroma_idc);
+                ubuf_block_stream_clean(s);
+                return false;
+        }
+        uint8_t msize = (chroma_depth + 7) / 8;
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane_va(
+                flow_def, hsub, vsub, msize, "u%"PRIu8"%s",
+                chroma_depth, chroma_depth > 8 ? ENDIANNESS : ""))
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane_va(
+                flow_def, hsub, vsub, msize, "v%"PRIu8"%s",
+                chroma_depth, chroma_depth > 8 ? ENDIANNESS : ""))
+        UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
+                UPIPE_H265F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_%"PRIu8"_%s.",
+                luma_depth, chroma_depth, chroma))
+    }
 
     uint32_t log2_max_pic_order_cnt = upipe_h26xf_stream_ue(s) + 4;
     if (log2_max_pic_order_cnt > 16) {
