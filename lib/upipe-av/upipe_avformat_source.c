@@ -596,9 +596,8 @@ static void upipe_avfsrc_worker(struct upump *upump)
     int error = av_read_frame(upipe_avfsrc->context, &pkt);
     if (unlikely(error < 0)) {
         if (error != AVERROR_EOF) {
-            upipe_av_strerror(error, buf);
             upipe_err_va(upipe, "read error from %s (%s)",
-                         upipe_avfsrc->url, buf);
+                         upipe_avfsrc->url, av_err2str(error));
         }
         upipe_avfsrc_set_upump(upipe, NULL);
         upipe_throw_source_end(upipe);
@@ -930,8 +929,8 @@ static void upipe_avfsrc_probe(struct upump *upump)
     upipe_avfsrc->probed = true;
 
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "can't probe URL %s (%s)", upipe_avfsrc->url, buf);
+        upipe_err_va(upipe, "can't probe URL %s (%s)", upipe_avfsrc->url,
+                     av_err2str(error));
         if (likely(upipe_avfsrc->url != NULL))
             upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
         avformat_close_input(&upipe_avfsrc->context);
@@ -1075,9 +1074,8 @@ static int _upipe_avfsrc_set_option(struct upipe *upipe, const char *option,
     assert(option != NULL);
     int error = av_dict_set(&upipe_avfsrc->options, option, content, 0);
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
-                     buf);
+                     av_err2str(error));
         return UBASE_ERR_EXTERNAL;
     }
     return UBASE_ERR_NONE;
@@ -1139,8 +1137,7 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
                                     &options);
     av_dict_free(&options);
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "can't open URL %s (%s)", url, buf);
+        upipe_err_va(upipe, "can't open URL %s (%s)", url, av_err2str(error));
         return UBASE_ERR_EXTERNAL;
     }
 

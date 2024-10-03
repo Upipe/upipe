@@ -791,8 +791,8 @@ static int upipe_avfsink_avio_open(struct upipe *upipe, struct upipe_avfsink_sub
                            AVIO_FLAG_WRITE, NULL, &options);
     av_dict_free(&options);
     if (error < 0) {
-        upipe_av_strerror(error, buf);
-        upipe_err_va(upipe, "couldn't open file %s (%s)", url, buf);
+        upipe_err_va(upipe, "couldn't open file %s (%s)", url,
+                     av_err2str(error));
         upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
         while (!ulist_empty(&input->urefs)) {
             uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
@@ -905,8 +905,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             av_dict_copy(&options, upipe_avfsink->options, 0);
             int error = avformat_write_header(upipe_avfsink->context, &options);
             if (unlikely(error < 0)) {
-                upipe_av_strerror(error, buf);
-                upipe_err_va(upipe, "couldn't write header (%s)", buf);
+                upipe_err_va(upipe, "couldn't write header (%s)",
+                             av_err2str(error));
                 upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
                 while (!ulist_empty(&input->urefs)) {
                     uref_free(uref_from_uchain(ulist_pop(&input->urefs)));
@@ -923,9 +923,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
             if (upipe_avfsink->init_uri != NULL) {
                 int error = av_write_frame(upipe_avfsink->context, NULL);
                 if (unlikely(error < 0)) {
-                    upipe_av_strerror(error, buf);
                     upipe_warn_va(upipe, "write error to %s (%s)",
-                                  upipe_avfsink->init_uri, buf);
+                                  upipe_avfsink->init_uri, av_err2str(error));
                     upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
                     return;
                 }
@@ -1025,8 +1024,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
                 prft->wallclock = wallclock / UCLOCK_MICROSECOND;
                 prft->flags = 0;
             } else {
-                upipe_av_strerror(AVERROR(ENOMEM), buf);
-                upipe_err_va(upipe, "cannot allocate side data (%s)", buf);
+                upipe_err_va(upipe, "cannot allocate side data (%s)",
+                             av_err2str(AVERROR(ENOMEM)));
                 upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
             }
 #endif
@@ -1045,8 +1044,8 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         av_packet_unref(&avpkt);
 
         if (unlikely(error < 0)) {
-            upipe_av_strerror(error, buf);
-            upipe_warn_va(upipe, "write error to %s (%s)", upipe_avfsink->uri, buf);
+            upipe_warn_va(upipe, "write error to %s (%s)", upipe_avfsink->uri,
+                          av_err2str(error));
             upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
             return;
         }
@@ -1105,9 +1104,8 @@ static int upipe_avfsink_set_option(struct upipe *upipe,
     assert(option != NULL);
     int error = av_dict_set(&upipe_avfsink->options, option, content, 0);
     if (unlikely(error < 0)) {
-        upipe_av_strerror(error, buf);
         upipe_err_va(upipe, "can't set option %s:%s (%s)", option, content,
-                     buf);
+                     av_err2str(error));
         return UBASE_ERR_EXTERNAL;
     }
     return UBASE_ERR_NONE;
