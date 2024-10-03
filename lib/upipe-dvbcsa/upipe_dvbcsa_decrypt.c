@@ -415,7 +415,7 @@ static void upipe_dvbcsa_dec_input(struct upipe *upipe,
             break;
     }
 
-    if (!valid || !has_payload || !upipe_dvbcsa_common_check_pid(common, pid)) {
+    if (!valid || !upipe_dvbcsa_common_check_pid(common, pid)) {
         if (first)
             upipe_dvbcsa_dec_output(upipe, uref, upump_p);
         else
@@ -432,8 +432,9 @@ static void upipe_dvbcsa_dec_input(struct upipe *upipe,
             uref_free(uref);
             return;
         }
-        if (unlikely(af_length >= 183)) {
-            upipe_warn(upipe, "invalid adaptation field received");
+        if (unlikely(af_length > 183)) {
+            upipe_warn_va(upipe, "invalid adaptation field received, "
+                          "pid %u length %u", pid, af_length);
             uref_free(uref);
             return;
         }
@@ -460,6 +461,14 @@ static void upipe_dvbcsa_dec_input(struct upipe *upipe,
     }
 
     ts_set_scrambling(ts, 0);
+
+    if (!has_payload) {
+        if (first)
+            upipe_dvbcsa_dec_output(upipe, uref, upump_p);
+        else
+            upipe_dvbcsa_dec_hold_input(upipe, uref);
+        return;
+    }
 
 #ifdef UPIPE_HAVE_GCRYPT_H
     if (upipe_dvbcsa_dec->mode == AES) {
