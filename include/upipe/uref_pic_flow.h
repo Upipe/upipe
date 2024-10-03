@@ -147,6 +147,25 @@ static inline int uref_pic_flow_add_plane(struct uref *uref,
     return UBASE_ERR_NONE;
 }
 
+/** @This registers a new plane in the picture flow definition packet, with
+ * printf-style chroma generation
+ *
+ * @param uref uref control packet
+ * @param hsub horizontal subsampling
+ * @param vsub vertical subsampling
+ * @param macropixel_size size in octets of a compound
+ * @param format format string for chroma type (see chroma reference)
+ * @return an error code
+ */
+UBASE_FMT_PRINTF(5, 6)
+static inline int uref_pic_flow_add_plane_va(
+    struct uref *uref, uint8_t hsub, uint8_t vsub, uint8_t macropixel_size,
+    const char *format, ...)
+{
+    UBASE_VARARG(uref_pic_flow_add_plane(
+            uref, hsub, vsub, macropixel_size, string), UBASE_ERR_INVALID)
+}
+
 /** @internal @This finds a plane by its chroma.
  *
  * @param uref uref control packet

@@ -573,7 +573,8 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     upipe_h264f->separate_colour_plane = false;
     if (profile == 100 || profile == 110 || profile == 122 || profile == 244 ||
         profile ==  44 || profile ==  83 || profile ==  86 || profile == 118 ||
-        profile == 128)
+        profile == 128 || profile == 138 || profile == 139 || profile == 134 ||
+        profile == 135)
     {
         chroma_idc = upipe_h26xf_stream_ue(s);
         if (chroma_idc == H264SPS_CHROMA_444) {
@@ -582,9 +583,25 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 !!ubuf_block_stream_show_bits(s, 1);
             ubuf_block_stream_skip_bits(s, 1);
         }
-        luma_depth += upipe_h26xf_stream_ue(s);
+        uint32_t bit_depth_luma = upipe_h26xf_stream_ue(s) + 8;
+        if (bit_depth_luma > 14) {
+            upipe_err_va(upipe, "invalid bit_depth_luma %"PRIu32,
+                         bit_depth_luma);
+            ubuf_block_stream_clean(s);
+            uref_free(flow_def);
+            return false;
+        }
+        luma_depth = bit_depth_luma;
+        uint32_t bit_depth_chroma = upipe_h26xf_stream_ue(s) + 8;
+        if (bit_depth_chroma > 14) {
+            upipe_err_va(upipe, "invalid bit_depth_chroma %"PRIu32,
+                         bit_depth_chroma);
+            ubuf_block_stream_clean(s);
+            uref_free(flow_def);
+            return false;
+        }
         if (!upipe_h264f->separate_colour_plane)
-            chroma_depth += upipe_h26xf_stream_ue(s);
+            chroma_depth = bit_depth_chroma;
         else
             chroma_depth = luma_depth;
         upipe_h26xf_stream_fill_bits(s, 2);
@@ -597,14 +614,17 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                     chroma_idc != H264SPS_CHROMA_444 ? 8 : 12);
     }
 
+#ifdef UPIPE_WORDS_BIGENDIAN
+# define ENDIANNESS "b"
+#else
+# define ENDIANNESS "l"
+#endif
+
     UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
     UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
-    if (luma_depth == 8) {
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
-    } else {
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y16"))
-        luma_depth = 16;
-    }
+    UBASE_FATAL(upipe, uref_pic_flow_add_plane_va(
+            flow_def, 1, 1, (luma_depth + 7) / 8, "y%"PRIu8"%s",
+            luma_depth, luma_depth > 8 ? ENDIANNESS : ""))
     if (chroma_idc == H264SPS_CHROMA_MONO) {
         UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
                 UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_mono.",
@@ -635,19 +655,16 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                 uref_free(flow_def);
                 return false;
         }
-        if (chroma_depth == 8) {
-            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "u8"))
-            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 1, "v8"))
-            UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
-                    UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_8_%s.",
-                    luma_depth, chroma))
-        } else {
-            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 2, "u16"))
-            UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, hsub, vsub, 2, "v16"))
-            UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
-                    UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_16_%s.",
-                    luma_depth, chroma))
-        }
+        uint8_t msize = (chroma_depth + 7) / 8;
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane_va(
+                flow_def, hsub, vsub, msize, "u%"PRIu8"%s",
+                chroma_depth, chroma_depth > 8 ? ENDIANNESS : ""))
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane_va(
+                flow_def, hsub, vsub, msize, "v%"PRIu8"%s",
+                chroma_depth, chroma_depth > 8 ? ENDIANNESS : ""))
+        UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def,
+                UPIPE_H264F_EXPECTED_FLOW_DEF "pic.planar%"PRIu8"_%"PRIu8"_%s.",
+                luma_depth, chroma_depth, chroma))
     }
 
     /* Skip i_log2_max_frame_num */
