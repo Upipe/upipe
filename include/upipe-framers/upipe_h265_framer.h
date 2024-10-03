@@ -33,7 +33,7 @@ extern "C" {
 
 #define UPIPE_H265F_SIGNATURE UBASE_FOURCC('h','e','v','f')
 /** We only accept the ISO 14496-10 annex B elementary stream. */
-#define UPIPE_H265F_EXPECTED_FLOW_DEF "block.h265."
+#define UPIPE_H265F_EXPECTED_FLOW_DEF "block.hevc."
 
 /** @This returns the management structure for all h265f pipes.
  *
