@@ -1002,6 +1002,7 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
             size_t   *repaired           = va_arg(args, size_t*);
             size_t   *loss               = va_arg(args, size_t*);
             size_t   *dups               = va_arg(args, size_t*);
+            unsigned *rtt                = va_arg(args, unsigned*);
 
             struct upipe_srt_receiver *upipe_srt_receiver = upipe_srt_receiver_from_upipe(upipe);
             *buffered = upipe_srt_receiver->buffered;
@@ -1011,6 +1012,7 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
             *repaired = upipe_srt_receiver->repaired;
             *loss = upipe_srt_receiver->loss;
             *dups = upipe_srt_receiver->dups;
+            *rtt = upipe_srt_receiver->rtt * 1000 / UCLOCK_FREQ;
 
             upipe_srt_receiver->nacks = 0;
             upipe_srt_receiver->repaired = 0;
