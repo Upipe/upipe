@@ -1056,6 +1056,7 @@ static bool upipe_bmd_sink_sub_output(struct upipe *upipe, struct uref *uref)
         upipe_err_va(upipe, "Buffer is empty");
     }
 
+    /* XXX: pts_to_time is buggy and can produce nonsense output */
     upipe_notice_va(upipe, "PREROLLING %.2f", pts_to_time(pts));
     schedule_frame(upipe, uref, pts);
 
