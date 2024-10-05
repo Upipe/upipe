@@ -720,8 +720,6 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                     ulist_pop(&upipe_sync_sub->urefs);
                 uref_free(src);
                 src = uref_from_uchain(ulist_peek(&upipe_sync_sub->urefs));
-                if (!src)
-                    break;
             }
             else {
                 /* The whole uref has not been consumed (e.g half a Dolby E frame) */
@@ -738,7 +736,10 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
 
                 /* FIXME: reinsert this cached uref if possible */
                 if (wait)
+                {
                     uref_free(src);
+                    src = NULL;
+                }
 
                 /* keep the uref in the queue */
             }
