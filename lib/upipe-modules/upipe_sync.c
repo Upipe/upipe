@@ -724,6 +724,7 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
                     break;
             }
             else {
+                /* The whole uref has not been consumed (e.g half a Dolby E frame) */
                 uref_sound_resize(src, output_samples, -1);
                 assert(samples == 0);
 
