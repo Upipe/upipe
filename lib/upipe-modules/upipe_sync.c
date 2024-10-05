@@ -645,7 +645,11 @@ static void output_sound(struct upipe *upipe, const struct urational *fps,
             if (!uchain) {
                 upipe_dbg_va(upipe_sub, "no urefs");
 
+                /* Silence is not the best as it causes a Dolby E splat but it's needed in NTSC mode
+                   to keep NTSC cadence with the other tracks */
                 src = upipe_sync_get_cached_compressed_audio(upipe_sub);
+                if (!src)
+                    src = get_silence(upipe_sub, samples);
                 if (!src)
                     continue;
             } else {
