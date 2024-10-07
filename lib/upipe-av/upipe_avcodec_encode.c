@@ -74,6 +74,7 @@
 #include <libavutil/avutil.h>
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <bitstream/mpeg/h264.h>
 #include <bitstream/itu/h265.h>
 #include <bitstream/mpeg/mp2v.h>
@@ -879,8 +880,12 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
         frame->format = context->pix_fmt;
         frame->width = hsize;
         frame->height = vsize;
-        frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
-        frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
+
+        if (!ubase_check(upipe_av_set_frame_properties(
+                    upipe, frame, upipe_avcenc->flow_def_attr, uref))) {
+            uref_free(uref);
+            return;
+        }
     }
 
     /* set picture type */
@@ -1402,6 +1407,12 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
                      !ubase_check(uref_pic_flow_copy_transfer_characteristics(
                              flow_def_check, flow_def)) ||
                      !ubase_check(uref_pic_flow_copy_matrix_coefficients(
+                             flow_def_check, flow_def)) ||
+                     !ubase_check(uref_pic_flow_copy_mdcv(
+                             flow_def_check, flow_def)) ||
+                     !ubase_check(uref_pic_flow_copy_max_cll(
+                             flow_def_check, flow_def)) ||
+                     !ubase_check(uref_pic_flow_copy_max_fall(
                              flow_def_check, flow_def)))) {
             uref_free(flow_def_check);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1533,6 +1544,58 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             else
                 context->field_order = AV_FIELD_BB;
         }
+
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 2, 100)
+        uint64_t max_cll;
+        uint64_t max_fall;
+        if (ubase_check(uref_pic_flow_get_max_cll(flow_def, &max_cll)) &&
+            ubase_check(uref_pic_flow_get_max_fall(flow_def, &max_fall))) {
+            AVFrameSideData *sd = av_frame_side_data_new(
+                &context->decoded_side_data,
+                &context->nb_decoded_side_data,
+                AV_FRAME_DATA_CONTENT_LIGHT_LEVEL,
+                sizeof(AVContentLightMetadata),
+                AV_FRAME_SIDE_DATA_FLAG_UNIQUE);
+            if (!sd) {
+                uref_free(flow_def_check);
+                return UBASE_ERR_EXTERNAL;
+            }
+            AVContentLightMetadata *clm =
+                (AVContentLightMetadata *)sd->data;
+            clm->MaxCLL = max_cll;
+            clm->MaxFALL = max_fall;
+        }
+
+        struct uref_pic_mastering_display mdcv;
+        if (ubase_check(uref_pic_flow_get_mastering_display(flow_def, &mdcv))) {
+            AVFrameSideData *sd = av_frame_side_data_new(
+                &context->decoded_side_data,
+                &context->nb_decoded_side_data,
+                AV_FRAME_DATA_MASTERING_DISPLAY_METADATA,
+                sizeof(AVMasteringDisplayMetadata),
+                AV_FRAME_SIDE_DATA_FLAG_UNIQUE);
+            if (!sd) {
+                uref_free(flow_def_check);
+                return UBASE_ERR_EXTERNAL;
+            }
+            AVMasteringDisplayMetadata *mdm =
+                (AVMasteringDisplayMetadata *)sd->data;
+            int chroma = 50000;
+            int luma = 10000;
+            mdm->display_primaries[0][0] = av_make_q(mdcv.red_x, chroma);
+            mdm->display_primaries[0][1] = av_make_q(mdcv.red_y, chroma);
+            mdm->display_primaries[1][0] = av_make_q(mdcv.green_x, chroma);
+            mdm->display_primaries[1][1] = av_make_q(mdcv.green_y, chroma);
+            mdm->display_primaries[2][0] = av_make_q(mdcv.blue_x, chroma);
+            mdm->display_primaries[2][1] = av_make_q(mdcv.blue_y, chroma);
+            mdm->white_point[0] = av_make_q(mdcv.white_x, chroma);
+            mdm->white_point[1] = av_make_q(mdcv.white_y, chroma);
+            mdm->has_primaries = 1;
+            mdm->max_luminance = av_make_q(mdcv.max_luminance, luma);
+            mdm->min_luminance = av_make_q(mdcv.min_luminance, luma);
+            mdm->has_luminance = 1;
+        }
+#endif
 
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 

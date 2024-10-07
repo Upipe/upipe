@@ -43,6 +43,11 @@
 #define UPIPE_AV_EXTRA_HW_FRAMES 32
 
 /** @hidden */
+struct uref;
+/** @hidden */
+struct upipe;
+
+/** @hidden */
 enum AVCodecID;
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(54, 51, 100)
 /** @hidden */
@@ -123,5 +128,18 @@ const char *upipe_av_to_flow_def(enum AVCodecID id);
  * @return avcodec ID, or 0 if not found
  */
 enum AVCodecID upipe_av_from_flow_def(const char *flow_def);
+
+/** @This sets frame properties from flow definition and uref packets.
+ *
+ * @param upipe upipe used for logging
+ * @param frame av frame to setup
+ * @param flow_def flow definition packet
+ * @param uref uref structure
+ * @return an error code
+ */
+int upipe_av_set_frame_properties(struct upipe *upipe,
+                                  AVFrame *frame,
+                                  struct uref *flow_def,
+                                  struct uref *uref);
 
 #endif
