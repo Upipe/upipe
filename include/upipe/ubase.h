@@ -553,6 +553,48 @@ static inline int ubase_clip(int i, int min, int max)
     else              return i;
 }
 
+/** @This writes a big-endian unsigned 16-bit integer
+ *
+ * @param p destination address
+ * @param v 16-bit value
+ */
+static inline void ubase_write_u16(uint8_t *p, uint16_t v)
+{
+    p[0] = v >> 8;
+    p[1] = v;
+}
+
+/** @This writes a big-endian unsigned 32-bit integer
+ *
+ * @param p destination address
+ * @param v 32-bit value
+ */
+static inline void ubase_write_u32(uint8_t *p, uint32_t v)
+{
+    ubase_write_u16(p, v >> 16);
+    ubase_write_u16(p + 2, v);
+}
+
+/** @This reads a big-endian unsigned 16-bit integer
+ *
+ * @param p source address
+ * @return 16-bit value
+ */
+static inline uint16_t ubase_read_u16(const uint8_t *p)
+{
+    return ((uint16_t) p[0] << 8) | p[1];
+}
+
+/** @This reads a big-endian unsigned 32-bit integer
+ *
+ * @param p source address
+ * @return 32-bit value
+ */
+static inline uint32_t ubase_read_u32(const uint8_t *p)
+{
+    return ((uint32_t) ubase_read_u16(p) << 16) | ubase_read_u16(p + 2);
+}
+
 #ifdef __cplusplus
 }
 #endif

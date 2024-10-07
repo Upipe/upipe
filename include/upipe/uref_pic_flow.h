@@ -99,6 +99,13 @@ UREF_ATTR_VOID(pic_flow, sepfields, "p.separate_fields", whether the flow will s
 UREF_ATTR_SMALL_UNSIGNED(pic_flow, afd, "p.afd", Active Format Description)
 UREF_ATTR_OPAQUE(pic_flow, bar, "p.bar", bar data)
 
+UREF_ATTR_OPAQUE(pic_flow, mdcv, "p.mdcv",
+                 mastering display color volume)
+UREF_ATTR_UNSIGNED(pic_flow, max_fall, "p.max_fall",
+                   max average light level per frame)
+UREF_ATTR_UNSIGNED(pic_flow, max_cll, "p.max_cll",
+                   max content light level)
+
 /** @This allocates a control packet to define a new picture flow. For each
  * plane, uref_pic_flow_add_plane() has to be called afterwards.
  *
@@ -460,6 +467,110 @@ int uref_pic_flow_set_matrix_coefficients_val(struct uref *flow_def,
  */
 int uref_pic_flow_get_matrix_coefficients_val(struct uref *flow_def,
                                               int *matrix_coefficients);
+
+/** @This gets the bit depth from flow def attributes.
+ *
+ * @param flow_def flow definition packet
+ * @param p_bit_depth pointer to returned bit depth
+ * @return an error code
+ */
+int uref_pic_flow_get_bit_depth(struct uref *flow_def, int *p_bit_depth);
+
+/** @This defines the mastering display color volume (SMPTE 2086). */
+struct uref_pic_mastering_display {
+    uint16_t green_x, green_y;
+    uint16_t blue_x, blue_y;
+    uint16_t red_x, red_y;
+    uint16_t white_x, white_y;
+    uint32_t max_luminance;
+    uint32_t min_luminance;
+};
+
+/** @This sets mastering display metadata to flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param metadata mastering display color volume
+ * @return an error code
+ */
+static inline int uref_pic_flow_set_mastering_display(
+    struct uref *flow_def,
+    struct uref_pic_mastering_display *metadata)
+{
+    uint8_t buf[24];
+    ubase_write_u16(buf +  0, metadata->green_x);
+    ubase_write_u16(buf +  2, metadata->green_y);
+    ubase_write_u16(buf +  4, metadata->blue_x);
+    ubase_write_u16(buf +  6, metadata->blue_y);
+    ubase_write_u16(buf +  8, metadata->red_x);
+    ubase_write_u16(buf + 10, metadata->red_y);
+    ubase_write_u16(buf + 12, metadata->white_x);
+    ubase_write_u16(buf + 14, metadata->white_y);
+    ubase_write_u32(buf + 16, metadata->max_luminance);
+    ubase_write_u32(buf + 20, metadata->min_luminance);
+    return uref_pic_flow_set_mdcv(flow_def, buf, sizeof buf);
+}
+
+/** @This gets mastering display metadata from flow def attribute.
+ *
+ * @param flow_def flow definition packet
+ * @param metadata mastering display color volume
+ * @return an error code
+ */
+static inline int uref_pic_flow_get_mastering_display(
+    struct uref *flow_def,
+    struct uref_pic_mastering_display *metadata)
+{
+    const uint8_t *buf;
+    size_t size;
+    UBASE_RETURN(uref_pic_flow_get_mdcv(flow_def, &buf, &size))
+    if (size != 24)
+        return UBASE_ERR_INVALID;
+    if (metadata) {
+        metadata->green_x = ubase_read_u16(buf + 0);
+        metadata->green_y = ubase_read_u16(buf + 2);
+        metadata->blue_x = ubase_read_u16(buf + 4);
+        metadata->blue_y = ubase_read_u16(buf + 6);
+        metadata->red_x = ubase_read_u16(buf + 8);
+        metadata->red_y = ubase_read_u16(buf + 10);
+        metadata->white_x = ubase_read_u16(buf + 12);
+        metadata->white_y = ubase_read_u16(buf + 14);
+        metadata->max_luminance = ubase_read_u32(buf + 16);
+        metadata->min_luminance = ubase_read_u32(buf + 20);
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @This checks whether the flow definition conforms
+ * to the SDR format.
+ *
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+int uref_pic_flow_check_sdr(struct uref *flow_def);
+
+/** @This checks whether the flow definition conforms
+ * to the HLG format.
+ *
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+int uref_pic_flow_check_hlg(struct uref *flow_def);
+
+/** @This checks whether the flow definition conforms
+ * to the PQ10 format.
+ *
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+int uref_pic_flow_check_pq10(struct uref *flow_def);
+
+/** @This checks whether the flow definition conforms
+ * to the HDR10 Media Profile.
+ *
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+int uref_pic_flow_check_hdr10(struct uref *flow_def);
 
 #ifdef __cplusplus
 }
