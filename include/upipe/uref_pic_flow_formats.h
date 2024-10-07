@@ -569,6 +569,21 @@ uref_pic_flow_get_format(struct uref *uref)
     return NULL;
 }
 
+/** @This finds a picture format with the given name.
+ *
+ * @param name name of the picture format to lookup
+ * @return the corresponding picture format, or NULL if not found
+ */
+static inline const struct uref_pic_flow_format *
+uref_pic_flow_get_format_by_name(const char *name)
+{
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(uref_pic_flow_formats); i++)
+        if (!strcmp(uref_pic_flow_formats[i]->name, name))
+            return uref_pic_flow_formats[i];
+
+    return NULL;
+}
+
 #ifdef __cplusplus
 }
 #endif
