@@ -59,6 +59,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext.h>
 #include "upipe_av_internal.h"
 
@@ -495,6 +496,35 @@ static int build_video_flow_def(struct uref *flow_def,
             flow_def, frame->color_trc))
     UBASE_RETURN(uref_pic_flow_set_matrix_coefficients_val(
             flow_def, matrix_coefficients))
+
+    AVFrameSideData *sd = av_frame_get_side_data(
+        frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+    if (sd) {
+        AVContentLightMetadata *clm = (AVContentLightMetadata *)sd->data;
+        UBASE_RETURN(uref_pic_flow_set_max_cll(flow_def, clm->MaxCLL))
+        UBASE_RETURN(uref_pic_flow_set_max_fall(flow_def, clm->MaxFALL))
+    }
+    sd = av_frame_get_side_data(
+        frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+    if (sd) {
+        AVMasteringDisplayMetadata *mdcv =
+            (AVMasteringDisplayMetadata *)sd->data;
+        AVRational chroma = { 1, 50000 };
+        AVRational luma = { 1, 10000 };
+        UBASE_RETURN(uref_pic_flow_set_mastering_display(flow_def,
+            &(struct uref_pic_mastering_display){
+                .red_x = av_rescale_q(1, mdcv->display_primaries[0][0], chroma),
+                .red_y = av_rescale_q(1, mdcv->display_primaries[0][1], chroma),
+                .green_x = av_rescale_q(1, mdcv->display_primaries[1][0], chroma),
+                .green_y = av_rescale_q(1, mdcv->display_primaries[1][1], chroma),
+                .blue_x = av_rescale_q(1, mdcv->display_primaries[2][0], chroma),
+                .blue_y = av_rescale_q(1, mdcv->display_primaries[2][1], chroma),
+                .white_x = av_rescale_q(1, mdcv->white_point[0], chroma),
+                .white_y = av_rescale_q(1, mdcv->white_point[1], chroma),
+                .min_luminance = av_rescale_q(1, mdcv->min_luminance, luma),
+                .max_luminance = av_rescale_q(1, mdcv->max_luminance, luma),
+            }))
+    }
 
     return UBASE_ERR_NONE;
 }
@@ -1108,20 +1138,13 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
     frame->extended_data = frame->data;
     frame->width = hsize;
     frame->height = vsize;
-    frame->key_frame = ubase_check(uref_pic_get_key(uref));
     frame->format = video->pix_fmt;
-    frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
-    frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
-    frame->color_range = ubase_check(uref_pic_flow_get_full_range(
-            flow_def)) ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
 
-    int val;
-    if (ubase_check(uref_pic_flow_get_colour_primaries_val(flow_def, &val)))
-        frame->color_primaries = val;
-    if (ubase_check(uref_pic_flow_get_transfer_characteristics_val(flow_def, &val)))
-        frame->color_trc = val;
-    if (ubase_check(uref_pic_flow_get_matrix_coefficients_val(flow_def, &val)))
-        frame->colorspace = val;
+    int err = upipe_av_set_frame_properties(upipe, frame, flow_def, uref);
+    if (!ubase_check(err)) {
+        uref_free(uref);
+        return err;
+    }
 
     uint64_t pts = UINT64_MAX;
     if (ubase_check(uref_clock_get_pts_prog(uref, &pts)))
