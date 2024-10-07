@@ -1313,6 +1313,48 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
     upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt));
 }
 
+/** @internal @This sets the media video attributes from flow definition.
+ *
+ * @param flow_def input flow definition
+ * @param video media video attributes
+ * @return an error code
+ */
+static int upipe_avfilt_set_media_video(struct uref *flow_def,
+                                        struct upipe_avfilt_media_video *video)
+{
+    video->sar = (struct urational){ 0, 0 };
+    video->fps = (struct urational){ 0, 0 };
+    video->pix_fmt = upipe_av_pixfmt_from_flow_def(
+        flow_def, NULL, video->chroma_map);
+    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &video->width))
+    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &video->height))
+    uref_pic_flow_get_sar(flow_def, &video->sar);
+    uref_pic_flow_get_fps(flow_def, &video->fps);
+    video->full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
+    UBASE_RETURN(uref_pic_flow_get_matrix_coefficients_val(
+            flow_def, &video->matrix_coefficients))
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the media audio attributes from flow definition.
+ *
+ * @param flow_def input flow definition
+ * @param audio media audio attributes
+ * @return an error code
+ */
+static int upipe_avfilt_set_media_audio(struct uref *flow_def,
+                                        struct upipe_avfilt_media_audio *audio)
+{
+    uint8_t channels = 0;
+
+    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &audio->sample_rate));
+    audio->sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
+    av_channel_layout_default(&audio->ch_layout, channels);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input sub pipe flow definition for video.
  *
  * @param upipe description structure of the sub pipe
@@ -1326,36 +1368,24 @@ static int upipe_avfilt_sub_set_flow_def_pic(struct upipe *upipe,
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    const char *chroma_map[UPIPE_AV_MAX_PLANES];
-    enum AVPixelFormat pix_fmt;
-    uint64_t width;
-    uint64_t height;
-    struct urational sar = { 1, 1 };
-    struct urational fps = { 1, 1 };
+    struct upipe_avfilt_media_video video;
+    UBASE_RETURN(upipe_avfilt_set_media_video(flow_def, &video))
 
-    pix_fmt = upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &width));
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
-    uref_pic_flow_get_sar(flow_def, &sar);
-    uref_pic_flow_get_fps(flow_def, &fps);
-
-    struct upipe_avfilt_media_video *video = &upipe_avfilt_sub->media.video;
+    struct upipe_avfilt_media_video *v = &upipe_avfilt_sub->media.video;
     if (upipe_avfilt->filter_graph &&
         upipe_avfilt_sub->media.type == AVMEDIA_TYPE_VIDEO &&
-        video->pix_fmt == pix_fmt &&
-        video->width == width && video->height == height &&
-        !urational_cmp(&video->sar, &sar) && !urational_cmp(&video->fps, &fps))
+        video.pix_fmt == v->pix_fmt &&
+        video.width == v->width &&
+        video.height == v->height &&
+        !urational_cmp(&video.sar, &v->sar) &&
+        !urational_cmp(&video.fps, &v->fps) &&
+        video.full_range == v->full_range &&
+        video.matrix_coefficients == v->matrix_coefficients)
         return UBASE_ERR_NONE;
-
 
     upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
     upipe_avfilt_sub->media.type = AVMEDIA_TYPE_VIDEO;
-    memcpy(video->chroma_map, chroma_map, sizeof (chroma_map));
-    video->pix_fmt = pix_fmt;
-    video->width = width;
-    video->height = height;
-    video->sar = sar;
-    video->fps = fps;
+    upipe_avfilt_sub->media.video = video;
 
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
     upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
@@ -1376,42 +1406,22 @@ static int upipe_avfilt_sub_set_flow_def_sound(struct upipe *upipe,
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    uint8_t channels = 0;
-    AVChannelLayout ch_layout;
-    uint64_t sample_rate;
-    enum AVSampleFormat sample_fmt;
+    struct upipe_avfilt_media_audio audio;
+    UBASE_RETURN(upipe_avfilt_set_media_audio(flow_def, &audio))
 
-    sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &sample_rate));
-    switch (channels) {
-        case 1:
-            av_channel_layout_from_mask(&ch_layout, AV_CH_LAYOUT_MONO);
-            break;
-        case 2:
-            av_channel_layout_from_mask(&ch_layout, AV_CH_LAYOUT_STEREO);
-            break;
-        case 5:
-            av_channel_layout_from_mask(&ch_layout, AV_CH_LAYOUT_5POINT1_BACK);
-            break;
-        default:
-            upipe_warn(upipe, "unsupported channel layout");
-            return UBASE_ERR_INVALID;
-    }
-
-    struct upipe_avfilt_media_audio *audio = &upipe_avfilt_sub->media.audio;
+    struct upipe_avfilt_media_audio *a = &upipe_avfilt_sub->media.audio;
     if (upipe_avfilt->filter_graph &&
         upipe_avfilt_sub->media.type == AVMEDIA_TYPE_AUDIO &&
-        audio->sample_fmt == sample_fmt && audio->sample_rate == sample_rate &&
-        !av_channel_layout_compare(&audio->ch_layout, &ch_layout)) {
-        av_channel_layout_uninit(&ch_layout);
+        audio.sample_fmt == a->sample_fmt &&
+        audio.sample_rate == a->sample_rate &&
+        !av_channel_layout_compare(&audio.ch_layout, &a->ch_layout)) {
+        av_channel_layout_uninit(&audio.ch_layout);
         return UBASE_ERR_NONE;
     }
 
+    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
     upipe_avfilt_sub->media.type = AVMEDIA_TYPE_AUDIO;
-    audio->sample_fmt = sample_fmt;
-    audio->sample_rate = sample_rate;
-    av_channel_layout_copy(&audio->ch_layout, &ch_layout);
-    av_channel_layout_uninit(&ch_layout);
+    upipe_avfilt_sub->media.audio = audio;
 
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
     upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
@@ -1849,35 +1859,12 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
-    const char *chroma_map[UPIPE_AV_MAX_PLANES];
-    enum AVPixelFormat pix_fmt;
-    uint64_t width;
-    uint64_t height;
-    struct urational sar = { 0, 0 };
-    struct urational fps = { 0, 0 };
-    bool full_range;
-    int matrix_coefficients;
-
-    pix_fmt = upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &width));
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &height));
-    uref_pic_flow_get_sar(flow_def, &sar);
-    uref_pic_flow_get_fps(flow_def, &fps);
-    full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
-    UBASE_RETURN(uref_pic_flow_get_matrix_coefficients_val(
-            flow_def, &matrix_coefficients))
+    struct upipe_avfilt_media_video video;
+    UBASE_RETURN(upipe_avfilt_set_media_video(flow_def, &video))
 
     upipe_avfilt_media_clean(&upipe_avfilt->media);
     upipe_avfilt->media.type = AVMEDIA_TYPE_VIDEO;
-    struct upipe_avfilt_media_video *video = &upipe_avfilt->media.video;
-    memcpy(video->chroma_map, chroma_map, sizeof (chroma_map));
-    video->pix_fmt = pix_fmt;
-    video->width = width;
-    video->height = height;
-    video->sar = sar;
-    video->fps = fps;
-    video->full_range = full_range;
-    video->matrix_coefficients = matrix_coefficients;
+    upipe_avfilt->media.video = video;
 
     if (unlikely(upipe_avfilt->buffer_ctx))
         return UBASE_ERR_BUSY;
@@ -1903,21 +1890,21 @@ static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
     }
     p->time_base.num = 1;
     p->time_base.den = UCLOCK_FREQ;
-    p->format = pix_fmt;
-    p->width = width;
-    p->height = height;
-    if (sar.num) {
-        p->sample_aspect_ratio.num = sar.num;
-        p->sample_aspect_ratio.den = sar.den;
+    p->format = video.pix_fmt;
+    p->width = video.width;
+    p->height = video.height;
+    if (video.sar.num) {
+        p->sample_aspect_ratio.num = video.sar.num;
+        p->sample_aspect_ratio.den = video.sar.den;
     }
-    if (fps.num) {
-        p->frame_rate.num = fps.num;
-        p->frame_rate.den = fps.den;
+    if (video.fps.num) {
+        p->frame_rate.num = video.fps.num;
+        p->frame_rate.den = video.fps.den;
     }
 
 #if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-    p->color_space = matrix_coefficients;
-    p->color_range = full_range ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+    p->color_space = video.matrix_coefficients;
+    p->color_range = video.full_range ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
 #endif
 
     int err = av_buffersrc_parameters_set(ctx, p);
@@ -1945,27 +1932,12 @@ static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
+    struct upipe_avfilt_media_audio audio;
+    UBASE_RETURN(upipe_avfilt_set_media_audio(flow_def, &audio))
+
     upipe_avfilt_media_clean(&upipe_avfilt->media);
     upipe_avfilt->media.type = AVMEDIA_TYPE_AUDIO;
-    struct upipe_avfilt_media_audio *audio = &upipe_avfilt->media.audio;
-
-    uint8_t channels = 0;
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &audio->sample_rate));
-    audio->sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
-    switch (channels) {
-        case 1:
-            av_channel_layout_from_mask(&audio->ch_layout, AV_CH_LAYOUT_MONO);
-            break;
-        case 2:
-            av_channel_layout_from_mask(&audio->ch_layout, AV_CH_LAYOUT_STEREO);
-            break;
-        case 5:
-            av_channel_layout_from_mask(&audio->ch_layout, AV_CH_LAYOUT_5POINT1_BACK);
-            break;
-        default:
-            upipe_warn(upipe, "unsupported channel layout");
-            return UBASE_ERR_INVALID;
-    }
+    upipe_avfilt->media.audio = audio;
 
     if (unlikely(upipe_avfilt->buffer_ctx))
         return UBASE_ERR_BUSY;
@@ -1991,9 +1963,9 @@ static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
     }
     p->time_base.num = 1;
     p->time_base.den = UCLOCK_FREQ;
-    p->format = audio->sample_fmt;
-    p->sample_rate = audio->sample_rate;
-    av_channel_layout_copy(&p->ch_layout, &audio->ch_layout);
+    p->format = audio.sample_fmt;
+    p->sample_rate = audio.sample_rate;
+    av_channel_layout_copy(&p->ch_layout, &audio.ch_layout);
 
     int err = av_buffersrc_parameters_set(ctx, p);
     av_free(p);
