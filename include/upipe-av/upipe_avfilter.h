@@ -106,7 +106,13 @@ enum upipe_avfilt_mgr_command {
     UPIPE_AVFILT_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
 
     /** gets the pixel format name from flow def (struct uref *, const char **, bool) */
-    UPIPE_AVFILT_MGR_GET_PIXFMT_NAME
+    UPIPE_AVFILT_MGR_GET_PIXFMT_NAME,
+    /** gets the color primaries name (int, const char **) */
+    UPIPE_AVFILT_MGR_GET_COLOR_PRIMARIES_NAME,
+    /** gets the color transfer characteristics name (int, const char **) */
+    UPIPE_AVFILT_MGR_GET_COLOR_TRANSFER_NAME,
+    /** gets the color space name (int, const char **) */
+    UPIPE_AVFILT_MGR_GET_COLOR_SPACE_NAME,
 };
 
 /** @This returns the pixel format name for the given flow definition.
@@ -123,6 +129,48 @@ static inline int upipe_avfilt_mgr_get_pixfmt_name(struct upipe_mgr *mgr,
 {
     return upipe_mgr_control(mgr, UPIPE_AVFILT_MGR_GET_PIXFMT_NAME,
                              UPIPE_AVFILT_SIGNATURE, flow_def, name, software);
+}
+
+/** @This returns the color primaries name for the given value.
+ *
+ * @param mgr pointer to manager
+ * @param color_primaries color primaries value
+ * @param name color primaries name
+ * @return an error code
+ */
+static inline int upipe_avfilt_mgr_get_color_primaries_name(
+    struct upipe_mgr *mgr, int color_primaries, const char **name)
+{
+    return upipe_mgr_control(mgr, UPIPE_AVFILT_MGR_GET_COLOR_PRIMARIES_NAME,
+                             UPIPE_AVFILT_SIGNATURE, color_primaries, name);
+}
+
+/** @This returns the color transfer name for the given value.
+ *
+ * @param mgr pointer to manager
+ * @param color_transfer color transfer characteristics value
+ * @param name color transfer characteristics name
+ * @return an error code
+ */
+static inline int upipe_avfilt_mgr_get_color_transfer_name(
+    struct upipe_mgr *mgr, int color_transfer, const char **name)
+{
+    return upipe_mgr_control(mgr, UPIPE_AVFILT_MGR_GET_COLOR_TRANSFER_NAME,
+                             UPIPE_AVFILT_SIGNATURE, color_transfer, name);
+}
+
+/** @This returns the color space name for the given value.
+ *
+ * @param mgr pointer to manager
+ * @param color_space color space value
+ * @param name color space name
+ * @return an error code
+ */
+static inline int upipe_avfilt_mgr_get_color_space_name(
+    struct upipe_mgr *mgr, int color_space, const char **name)
+{
+    return upipe_mgr_control(mgr, UPIPE_AVFILT_MGR_GET_COLOR_SPACE_NAME,
+                             UPIPE_AVFILT_SIGNATURE, color_space, name);
 }
 
 #ifdef __cplusplus

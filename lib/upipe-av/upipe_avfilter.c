@@ -2609,6 +2609,43 @@ static int upipe_avfilt_mgr_control(struct upipe_mgr *mgr,
             bool software = va_arg(args, int);
             return _upipe_avfilt_mgr_get_pixfmt_name(flow_def, name_p,
                                                      software);
+
+        case UPIPE_AVFILT_MGR_GET_COLOR_PRIMARIES_NAME: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
+            int color_primaries = va_arg(args, int);
+            const char **name_p = va_arg(args, const char **);
+            const char *name = av_color_primaries_name(color_primaries);
+            if (!name)
+                return UBASE_ERR_INVALID;
+            if (name_p)
+                *name_p = name;
+            return UBASE_ERR_NONE;
+        }
+
+        case UPIPE_AVFILT_MGR_GET_COLOR_TRANSFER_NAME: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
+            int color_transfer = va_arg(args, int);
+            const char **name_p = va_arg(args, const char **);
+            const char *name = av_color_transfer_name(color_transfer);
+            if (!name)
+                return UBASE_ERR_INVALID;
+            if (name_p)
+                *name_p = name;
+            return UBASE_ERR_NONE;
+        }
+
+        case UPIPE_AVFILT_MGR_GET_COLOR_SPACE_NAME: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
+            int color_space = va_arg(args, int);
+            const char **name_p = va_arg(args, const char **);
+            const char *name = av_color_space_name(color_space);
+            if (!name)
+                return UBASE_ERR_INVALID;
+            if (name_p)
+                *name_p = name;
+            return UBASE_ERR_NONE;
+        }
+
         default:
             return UBASE_ERR_UNHANDLED;
     }
