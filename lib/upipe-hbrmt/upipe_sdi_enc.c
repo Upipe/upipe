@@ -1003,8 +1003,9 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
         * then the following sequence of groups will be sent: 1 2 3 4 1 2 3 4 */
     for(int sample = 0; sample < upipe_sdi_enc->num_buffered_pkts; sample++) {
         for (int group = 0; group < UPIPE_SDI_MAX_GROUPS; group++) {
-            /* memcpy works in bytes, and len is also in terms of chroma so *4 is needed */
-            memcpy(&dst[dst_pos], upipe_sdi_enc->buffered_audio_pkt[group][sample], UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2 * 2);
+            /* This needs to be a loop as memcpy will trash payload ID and other data */
+            for(int i = 0; i < UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2; i += 2)
+                dst[dst_pos+i] = upipe_sdi_enc->buffered_audio_pkt[group][sample][i];
             dst_pos += UPIPE_SMPTE_299_AUDIO_PKT_LEN * 2;
         }
     }
@@ -1094,7 +1095,7 @@ static void upipe_hd_sdi_enc_encode_line(struct upipe *upipe, int line_num, uint
                 sdi_write_cdp(upipe_sdi_enc->cea708, upipe_sdi_enc->cea708_size, vanc_start, 2,
                             &upipe_sdi_enc->cdp_hdr_sequence_cntr, fps);
                 sdi_calc_parity_checksum(vanc_start, 2);
-            } 
+            }
             else {
                 upipe_warn(upipe, "Unexpected closed caption packet size, dropping packet");
             }
