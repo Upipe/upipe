@@ -342,7 +342,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
     int family;
     socklen_t sockaddr_len;
     in_addr_t miface = 0;
-#if !defined(__APPLE__) && !defined(__native_client__)
+#ifdef SO_BINDTODEVICE
     char *ifname = NULL;
 #endif
 
@@ -429,7 +429,7 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                 char *option = config_stropt(ARG_OPTION("ifaddr="));
                 if_addr = inet_addr(option);
                 free( option );
-#if !defined(__APPLE__) && !defined(__native_client__)
+#ifdef SO_BINDTODEVICE
             } else if ( IS_OPTION("ifname=") ) {
                 ifname = config_stropt( ARG_OPTION("ifname=") );
                 if (strlen(ifname) >= IFNAMSIZ) {
