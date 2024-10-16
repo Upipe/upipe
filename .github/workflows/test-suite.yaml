@@ -26,11 +26,11 @@ jobs:
             version: 14
             static: true
 
-          - name: ubuntu-amd64-clang-18
+          - name: ubuntu-amd64-clang-19
             os: ubuntu-24.04
             arch: amd64
             compiler: clang
-            version: 18
+            version: 19
 
         # - name: ubuntu-i386-gcc-12
         #   os: ubuntu-22.04
