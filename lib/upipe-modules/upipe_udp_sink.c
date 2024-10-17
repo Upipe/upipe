@@ -54,6 +54,7 @@
 #include <sys/socket.h>
 #include <errno.h>
 #include <assert.h>
+#include <netinet/in.h>
 
 /** tolerance for late packets */
 #define SYSTIME_TOLERANCE UCLOCK_FREQ
@@ -288,6 +289,17 @@ write_buffer:
             .msg_controllen = 0,
             .msg_flags = 0,
         };
+
+        uint8_t ancillary[CMSG_SPACE(sizeof(struct in_pktinfo))];
+        uint64_t ifindex;
+        if (ubase_check(uref_block_get_net_ifindex(uref, &ifindex))) {
+            struct in_pktinfo *info = (void*)ancillary;
+            info->ipi_ifindex = ifindex;
+            info->ipi_spec_dst.s_addr = 0,
+            info->ipi_addr.s_addr = 0,
+            msghdr.msg_control = ancillary;
+            msghdr.msg_controllen = sizeof(ancillary);
+        }
 
         ssize_t ret = sendmsg(upipe_udpsink->fd, &msghdr, 0);
         uref_block_iovec_unmap(uref, 0, -1, iovecs);
