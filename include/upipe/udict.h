@@ -68,6 +68,8 @@ enum udict_type {
     UDICT_TYPE_RATIONAL = 9,
     /** float attribute, stores a double-precision floating point */
     UDICT_TYPE_FLOAT = 10,
+    /** sockaddr attribute, stores a socket address */
+    UDICT_TYPE_SOCKADDR = 11,
 
     /* short-hand types */
     UDICT_TYPE_SHORTHAND = 0x10,
