@@ -239,6 +239,14 @@ static void upipe_udpsrc_worker(struct upump *upump)
         } else if (c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_PKTINFO) {
             struct in6_pktinfo *info = (void*)CMSG_DATA(c);
             ifindex = info->ipi6_ifindex;
+            struct sockaddr_in6 in6 = {
+                .sin6_family = AF_INET6,
+                .sin6_port = 0,
+                .sin6_flowinfo = 0,
+                .sin6_scope_id = 0,
+            };
+            memcpy(&in6.sin6_addr, &info->ipi6_addr, sizeof(in6.sin6_addr));
+            uref_block_set_net_ipi6_addr(uref, (struct sockaddr*)&in6, sizeof(in6));
         }
     }
 
@@ -274,6 +282,8 @@ static void upipe_udpsrc_worker(struct upump *upump)
         upipe_udpsrc->addrlen = addrlen;
         memcpy(&upipe_udpsrc->addr, &addr, addrlen);
     }
+
+    uref_block_set_net_srcaddr(uref, (struct sockaddr*)&addr, addrlen);
 
     if (unlikely(ret == 0)) {
         uref_free(uref);
