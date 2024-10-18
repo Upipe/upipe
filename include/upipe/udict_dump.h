@@ -40,6 +40,38 @@ extern "C" {
 
 #include <stdint.h>
 #include <inttypes.h>
+#include <arpa/inet.h>
+
+static void addr_to_str(const struct sockaddr *addr, socklen_t addrlen, char uri[INET6_ADDRSTRLEN+8])
+{
+    uint16_t port = 0;
+    uri[0] = '\0';
+
+    switch(addr->sa_family) {
+    case AF_INET: {
+        struct sockaddr_in *in = (struct sockaddr_in *)addr;
+        if (addrlen < sizeof(*in))
+            return;
+        inet_ntop(AF_INET, &in->sin_addr, uri, INET6_ADDRSTRLEN);
+        port = ntohs(in->sin_port);
+        break;
+    }
+    case AF_INET6: {
+        struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)addr;
+        if (addrlen < sizeof(*in6))
+            return;
+        inet_ntop(AF_INET6, &in6->sin6_addr, uri+1, INET6_ADDRSTRLEN);
+        uri[0] = '[';
+        port = ntohs(in6->sin6_port);
+        break;
+    }
+    default:
+        return;
+    }
+
+    size_t uri_len = strlen(uri);
+    snprintf(&uri[uri_len], INET6_ADDRSTRLEN+8-uri_len, (addr->sa_family == AF_INET6) ? "]:%hu" : ":%hu", port);
+}
 
 /** @internal @This dumps the content of a udict for debug purposes.
  *
@@ -118,6 +150,22 @@ static inline void udict_dump(struct udict *udict, struct uprobe *uprobe)
                 else
                     uprobe_dbg_va(uprobe, NULL,
                                   " - \"%s\" [rational]: [invalid]", name);
+                break;
+            }
+
+            case UDICT_TYPE_SOCKADDR: {
+                struct udict_opaque val;
+                if (likely(ubase_check(udict_get_opaque(udict, &val,
+                                                        itype, iname)))) {
+                    struct sockaddr *addr = (struct sockaddr*)val.v;
+                    socklen_t addrlen = val.size;
+                    char uri[INET6_ADDRSTRLEN+8];
+                    addr_to_str(addr, addrlen, uri);
+                    uprobe_dbg_va(uprobe, NULL,
+                                  " - \"%s\" [sockaddr]: %s", name, uri);
+                } else
+                    uprobe_dbg_va(uprobe, NULL,
+                                  " - \"%s\" [sockaddr]: [invalid]", name);
                 break;
             }
 
