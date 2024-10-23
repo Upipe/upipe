@@ -1708,6 +1708,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
             upipe_srt_handshake->socket_id);
         ubase_assert(uref_block_unmap(uref, 0));
         uref_free(uref);
+        upipe_throw_source_end(upipe);
         return;
     }
 
