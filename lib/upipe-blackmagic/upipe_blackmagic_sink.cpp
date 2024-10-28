@@ -1441,14 +1441,16 @@ static uint64_t uclock_bmd_sink_now(struct uclock *uclock)
         return UINT64_MAX;
     }
 
-
     HRESULT res = upipe_bmd_sink->deckLinkOutput->GetHardwareReferenceClock(
             UCLOCK_FREQ, &hardware_time, &time_in_frame, &ticks_per_frame);
     if (res != S_OK) {
         hardware_time = 0;
     }
-
-    hardware_time += upipe_bmd_sink->offset;
+    /* Make sure hardware_time is monotonically increasing without big jumps */
+    if (hardware_time < upipe_bmd_sink->offset) {
+        upipe_bmd_sink->offset -= hardware_time;
+        hardware_time += upipe_bmd_sink->offset;
+    }
 
     return (uint64_t)hardware_time;
 }
