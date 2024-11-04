@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2023 EasyTools S.A.S.
+ * Copyright (C) 2023-2024 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -757,6 +757,11 @@ static int upipe_ts_demux_output_clock_ts(struct upipe *upipe,
         uint64_t max_pcr_interval = MAX_PCR_INTERVAL_ISO;
         if (demux->conformance == UPIPE_TS_CONFORMANCE_DVB)
             max_pcr_interval = MAX_PCR_INTERVAL_DVB;
+
+        /* handle overflow */
+        if (output->max_delay + max_pcr_interval < output->max_delay)
+            max_pcr_interval = UINT64_MAX - output->max_delay;
+
         /* handle 2^33 wrap-arounds */
         uint64_t delta = (TS_CLOCK_MAX + dts_orig -
                           (program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
