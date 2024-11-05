@@ -1355,18 +1355,8 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     uint64_t duration = 0;
     AVRational uclock_time_base = av_make_q(1, UCLOCK_FREQ);
 
-#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 30, 100)
-    if (frame->duration) {
-        AVRational time_base = frame->time_base;
-        if (!time_base.num || !time_base.den)
-            time_base = context->pkt_timebase;
-        duration = av_rescale_q(frame->duration, time_base, uclock_time_base);
-    }
-#endif
-
-    if (!duration && context->framerate.num && context->framerate.den) {
-        AVRational time_base = av_make_q(context->framerate.den,
-                                         context->framerate.num);
+    if (context->framerate.num && context->framerate.den) {
+        AVRational time_base = av_inv_q(context->framerate);
         duration = av_rescale_q(1, time_base, uclock_time_base);
     }
 
