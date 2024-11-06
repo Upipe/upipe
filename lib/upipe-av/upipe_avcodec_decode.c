@@ -366,17 +366,17 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         fps.num = context->framerate.num;
         fps.den = context->framerate.den;
     }
+    uint64_t latency = 0;
     if (fps.num && fps.den) {
         urational_simplify(&fps);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def_attr, fps))
 
-        uint64_t latency = upipe_avcdec->input_latency +
-                           context->delay * UCLOCK_FREQ * fps.den / fps.num;
-        if (context->active_thread_type == FF_THREAD_FRAME &&
-            context->thread_count != -1)
-            latency += context->thread_count * UCLOCK_FREQ * fps.den / fps.num;
-        UBASE_FATAL(upipe, uref_clock_set_latency(flow_def_attr, latency))
+        latency = (context->delay + context->has_b_frames) *
+            UCLOCK_FREQ * fps.den / fps.num;
     }
+    UBASE_FATAL(upipe, uref_clock_set_latency(
+            flow_def_attr, upipe_avcdec->input_latency + latency))
+
     /* set aspect-ratio */
     if (frame->sample_aspect_ratio.num) {
         struct urational sar;
@@ -455,6 +455,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         /* flow format changed */
         ubuf_mgr_release(upipe_avcdec->ubuf_mgr);
         upipe_avcdec->ubuf_mgr = NULL;
+        upipe_notice_va(upipe, "latency: %" PRIu64 " ms",
+                        1000 * latency / UCLOCK_FREQ);
     }
 
     bool use_ubuf_av = upipe_avcdec->uref == NULL ||
