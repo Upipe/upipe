@@ -1428,6 +1428,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         if (!upipe_srt_handshake->listener)
             upipe_srt_handshake->syn_cookie = 0;
         upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+        upipe_throw_source_end(upipe);
         upipe_srt_handshake->expect_conclusion = false;
         return NULL;
     }
