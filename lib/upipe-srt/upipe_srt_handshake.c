@@ -1702,7 +1702,20 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    bool control = srt_get_packet_control(buf);
     uint32_t dst_socket_id = srt_get_packet_dst_socket_id(buf);
+
+    if (dst_socket_id == 0) {
+        uint16_t type = srt_get_control_packet_type(buf);
+        if (!control || type != SRT_CONTROL_TYPE_HANDSHAKE) {
+            upipe_dbg(upipe, "dst socket id unset");
+            ubase_assert(uref_block_unmap(uref, 0));
+            uref_free(uref);
+            upipe_throw_source_end(upipe);
+            return;
+        }
+    }
+
     if (dst_socket_id && dst_socket_id != upipe_srt_handshake->socket_id) {
         upipe_dbg_va(upipe, "0x%08x != 0x%08x", dst_socket_id,
             upipe_srt_handshake->socket_id);
@@ -1716,7 +1729,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
     if (upipe_srt_handshake->upump_keepalive_timeout && dst_socket_id == upipe_srt_handshake->socket_id)
         upipe_srt_handshake_restart_keepalive_timeout(upipe);
 
-    if (srt_get_packet_control(buf)) {
+    if (control) {
         bool handled = false;
         struct uref *reply = upipe_srt_handshake_input_control(upipe, buf, size, &handled);
         ubase_assert(uref_block_unmap(uref, 0));
