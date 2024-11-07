@@ -1447,16 +1447,17 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             return NULL;
         }
     } else {
+        /* We do not expect a conclusion, this means we're either connected,
+         * or still expecting first packet */
+        if (upipe_srt_handshake->upump_keepalive_timeout) {
+            /* We're already connected but received a new socket id */
+            upipe_dbg(upipe, "Ignore handshake, already connected");
+            return NULL;
+        }
+
         if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
             upipe_err_va(upipe, "Expected induction, ignore hs type %s", get_hs_type(hs_type));
             upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-            return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
-                    hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
-        }
-
-        if (upipe_srt_handshake->upump_keepalive_timeout) {
-            upipe_dbg(upipe, "Ignore handshake, already connected");
-
             return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                     hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
