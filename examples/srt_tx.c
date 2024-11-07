@@ -150,7 +150,9 @@ static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
         va_arg(args, unsigned int); // signature
         bool connected = va_arg(args, int );
         upipe_notice_va(upipe, "%sCONNECTED", connected ? "" : "DIS");
-        if (!connected)
+
+        bool listener = dirpath && strchr(dirpath, '@');
+        if (!connected && listener)
             ubase_assert(upipe_set_uri(upipe_udpsink, NULL));
         return UBASE_ERR_NONE;
     case UPROBE_SOURCE_END:
