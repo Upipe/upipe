@@ -143,6 +143,16 @@ static int catch_hs(struct uprobe *uprobe, struct upipe *upipe,
     uint16_t latency_ms;
 
     switch (event) {
+    case UPROBE_SRT_HANDSHAKE_CONNECTED:
+        if (ubase_get_signature(args) != UPIPE_SRT_HANDSHAKE_SIGNATURE) {
+            return uprobe_throw_next(uprobe, upipe, event, args);
+        }
+        va_arg(args, unsigned int); // signature
+        bool connected = va_arg(args, int );
+        upipe_notice_va(upipe, "%sCONNECTED", connected ? "" : "DIS");
+        if (!connected)
+            ubase_assert(upipe_set_uri(upipe_udpsink, NULL));
+        return UBASE_ERR_NONE;
     case UPROBE_SOURCE_END:
         upipe_warn(upipe, "Remote shutdown");
         struct upump *u = upump_alloc_timer(upump_mgr, stop, upipe_udpsrc,
