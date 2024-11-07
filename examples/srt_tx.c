@@ -205,11 +205,11 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
         upump_start(u);
         return uprobe_throw_next(uprobe, upipe, event, args);
     case UPROBE_UDPSRC_NEW_PEER: {
-        int udp_fd;
-        int sig = va_arg(args, int);
-        if (sig != UPIPE_UDPSRC_SIGNATURE)
+        if (ubase_get_signature(args) != UPIPE_UDPSRC_SIGNATURE)
             break;
 
+        va_arg(args, unsigned int); // signature
+        int udp_fd;
         ubase_assert(upipe_udpsink_get_fd(upipe_udpsink, &udp_fd));
         if (udp_fd >= 0) {
             upipe_err(upipe, "Already connected, ignoring");
