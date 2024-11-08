@@ -1254,7 +1254,6 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
         upipe_err(upipe, "Malformed conclusion handshake (invalid syn cookie)");
         upipe_srt_handshake->expect_conclusion = false;
         upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-        upipe_throw_source_end(upipe);
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                 hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
@@ -1264,7 +1263,6 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
         upipe_err(upipe, "Malformed conclusion handshake (size)");
         upipe_srt_handshake->expect_conclusion = false;
         upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-        upipe_throw_source_end(upipe);
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                 hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
@@ -1307,7 +1305,6 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
     if (upipe_srt_handshake->password && !got_key) {
         upipe_err(upipe, "Password specified but could not get streaming key");
         upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-        upipe_throw_source_end(upipe);
         upipe_srt_handshake->expect_conclusion = false;
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                 hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
