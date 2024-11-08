@@ -408,7 +408,7 @@ static int _upipe_udpsink_set_uri(struct upipe *upipe, const char *uri)
     if (unlikely(upipe_udpsink->fd != -1)) {
         if (likely(upipe_udpsink->uri != NULL))
             upipe_notice_va(upipe, "closing socket %s", upipe_udpsink->uri);
-        close(upipe_udpsink->fd);
+        ubase_clean_fd(&upipe_udpsink->fd);
     }
     ubase_clean_str(&upipe_udpsink->uri);
     upipe_udpsink_set_upump(upipe, NULL);
