@@ -99,6 +99,7 @@
 /* From pciutils' pci.ids */
 #define VENDOR_ID_MELLANOX 0x15b3
 #define DEVICE_ID_CONNECTX6DX 0x101d
+#define DEVICE_ID_CONNECTX7   0x1021
 
 static struct upipe_mgr upipe_netmap_sink_audio_mgr;
 
@@ -640,9 +641,11 @@ static int upipe_netmap_sink_open_dev(struct upipe *upipe, const char *dev)
     }
 
     if (upipe_netmap_sink->intf[0].vendor_id == VENDOR_ID_MELLANOX
-            && upipe_netmap_sink->intf[0].device_id == DEVICE_ID_CONNECTX6DX
+            && (upipe_netmap_sink->intf[0].device_id == DEVICE_ID_CONNECTX6DX
+                || upipe_netmap_sink->intf[0].device_id == DEVICE_ID_CONNECTX7)
             && upipe_netmap_sink->intf[1].vendor_id == VENDOR_ID_MELLANOX
-            && upipe_netmap_sink->intf[1].device_id == DEVICE_ID_CONNECTX6DX)
+            && (upipe_netmap_sink->intf[1].device_id == DEVICE_ID_CONNECTX6DX
+                || upipe_netmap_sink->intf[1].device_id == DEVICE_ID_CONNECTX7))
     {
         /* Device is a Mellanox ConnectX-6 Dx assuming REAL_TIME_CLOCK_ENABLE=1 */
         /* TODO: eventually add detection of the config variables. */
