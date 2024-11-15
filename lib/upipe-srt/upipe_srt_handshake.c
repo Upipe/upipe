@@ -851,11 +851,6 @@ static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *
         return false;
     }
 
-    if (!upipe_srt_handshake->password) {
-        upipe_warn(upipe, "Received a Key Message, but passphrase was not set");
-        return false;
-    }
-
 #ifdef UPIPE_HAVE_GCRYPT_H
 
     upipe_srt_handshake->kk = srt_km_get_kk(ext);
@@ -1276,6 +1271,13 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
                 upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
                         SRT_HANDSHAKE_HSREQ_SIZE);
         } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
+            if (!upipe_srt_handshake->password) {
+                upipe_err(upipe, "Password not specified but remote requested encryption.");
+                upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+                upipe_srt_handshake->expect_conclusion = false;
+                return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                        hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
+            }
             got_key = upipe_srt_handshake_parse_kmreq(upipe, ext, ext_len, &wrap, &wrap_len);
         }
 
@@ -1513,6 +1515,14 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
 
     const uint8_t *cif = srt_get_control_packet_cif(buf);
     size -= SRT_HEADER_SIZE;
+
+    if (!upipe_srt_handshake->password) {
+        upipe_err(upipe, "Password not specified but remote requested encryption in user packet.");
+        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+        upipe_srt_handshake->expect_conclusion = false;
+        return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                srt_get_packet_dst_socket_id(buf), SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
+    }
 
     if (!upipe_srt_handshake_parse_kmreq(upipe, cif, size, &wrap, &wrap_len)) {
         return NULL;
