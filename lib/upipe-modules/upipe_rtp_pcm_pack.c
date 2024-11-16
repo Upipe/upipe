@@ -295,6 +295,7 @@ static struct upipe *upipe_rtp_pcm_pack_alloc(struct upipe_mgr *mgr,
     upipe_rtp_pcm_pack->output_time = 0;
     upipe_rtp_pcm_pack->output_samples = 0;
 
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
