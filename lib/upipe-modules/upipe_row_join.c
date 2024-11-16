@@ -153,6 +153,7 @@ static int upipe_row_join_control(struct upipe *upipe, int command,
 
 static void upipe_row_join_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
     upipe_row_join_clean_ubuf_mgr(upipe);
     upipe_row_join_clean_urefcount(upipe);
     upipe_row_join_clean_output(upipe);
@@ -178,6 +179,7 @@ static struct upipe *upipe_row_join_alloc(struct upipe_mgr *mgr,
     upipe_row_join_init_ubuf_mgr(upipe);
     upipe_row_join_init_urefcount(upipe);
 
+    upipe_throw_ready(upipe);
     return upipe;
 }
 

@@ -131,6 +131,7 @@ static int upipe_separate_fields_control(struct upipe *upipe, int command,
 
 static void upipe_separate_fields_free(struct upipe *upipe)
 {
+    upipe_throw_dead(upipe);
     upipe_separate_fields_clean_urefcount(upipe);
     upipe_separate_fields_clean_output(upipe);
     upipe_separate_fields_free_void(upipe);
@@ -148,6 +149,7 @@ static struct upipe *upipe_separate_fields_alloc(struct upipe_mgr *mgr,
 
     upipe_separate_fields_init_urefcount(upipe);
     upipe_separate_fields_init_output(upipe);
+    upipe_throw_ready(upipe);
 
     return upipe;
 }
