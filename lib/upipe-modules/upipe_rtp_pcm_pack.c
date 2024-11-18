@@ -293,6 +293,7 @@ static struct upipe *upipe_rtp_pcm_pack_alloc(struct upipe_mgr *mgr,
     upipe_rtp_pcm_pack_init_uref_stream(upipe);
     upipe_rtp_pcm_pack_init_output(upipe);
 
+    upipe_throw_ready(upipe);
     return upipe;
 }
 
