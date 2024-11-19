@@ -404,7 +404,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
                 flow_def_attr, clm->MaxCLL))
         UBASE_FATAL(upipe, uref_pic_flow_set_max_fall(
                 flow_def_attr, clm->MaxFALL))
-    } else if (!frame->key_frame) {
+    } else if (!frame->key_frame && upipe_avcdec->flow_def_format) {
         uint64_t max_cll;
         if (ubase_check(uref_pic_flow_get_max_cll(
                     upipe_avcdec->flow_def_format, &max_cll))) {
@@ -439,7 +439,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
                 .min_luminance = av_rescale_q(1, mdcv->min_luminance, luma),
                 .max_luminance = av_rescale_q(1, mdcv->max_luminance, luma),
             }))
-    } else if (!frame->key_frame) {
+    } else if (!frame->key_frame && upipe_avcdec->flow_def_format) {
         const uint8_t *mdcv;
         size_t size;
         if (ubase_check(uref_pic_flow_get_mdcv(upipe_avcdec->flow_def_format,
