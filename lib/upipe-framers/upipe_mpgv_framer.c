@@ -1312,6 +1312,11 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
                     break;
             }
             continue;
+        } else if (upipe_mpgvf->complete_input) {
+            if (start == MP2VSEQ_START_CODE) {
+                upipe_mpgvf->next_frame_sequence = true;
+                upipe_mpgvf->seq_rap = upipe_mpgvf->dts_rap;
+            }
         }
 
         if (unlikely(upipe_mpgvf->next_frame_offset == -1)) {
