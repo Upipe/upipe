@@ -101,8 +101,8 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     double offset = (double)((int64_t)cr_sys - (int64_t)cr_prog);
     if (unlikely(discontinuity))
         upipe_warn(upipe, "[dejitter] discontinuity");
-    else if (unlikely(fabs(offset - uprobe_dejitter->offset) >
-                      MAX_JITTER + 3 * uprobe_dejitter->deviation)) {
+    else if (unlikely(uprobe_dejitter->offset && fabs(offset - uprobe_dejitter->offset) >
+                      uprobe_dejitter->maximum_jitter + 3 * uprobe_dejitter->deviation)) {
         upipe_warn_va(upipe, "[dejitter] max jitter reached (%f ms)",
                       (offset - uprobe_dejitter->offset) * 1000 / UCLOCK_FREQ);
         discontinuity = 1;
@@ -121,15 +121,18 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
         uprobe_dejitter->offset_count++;
 
     double deviation = offset - uprobe_dejitter->offset;
-    uprobe_dejitter->deviation =
-        sqrt((uprobe_dejitter->deviation * uprobe_dejitter->deviation *
-              uprobe_dejitter->deviation_count + deviation * deviation) /
-             (uprobe_dejitter->deviation_count + 1));
+    if (uprobe_dejitter->deviation_count)
+        uprobe_dejitter->deviation =
+            sqrt((uprobe_dejitter->deviation * uprobe_dejitter->deviation *
+                        uprobe_dejitter->deviation_count + deviation * deviation) /
+                    (uprobe_dejitter->deviation_count + 1));
     if (uprobe_dejitter->deviation_count < uprobe_dejitter->deviation_divider)
         uprobe_dejitter->deviation_count++;
 
     if (uprobe_dejitter->deviation < uprobe_dejitter->minimum_deviation)
         uprobe_dejitter->deviation = uprobe_dejitter->minimum_deviation;
+    if (uprobe_dejitter->deviation > uprobe_dejitter->maximum_deviation)
+        uprobe_dejitter->deviation = uprobe_dejitter->maximum_deviation;
 
     int64_t wanted_offset = uprobe_dejitter->offset +
                             3 * uprobe_dejitter->deviation;
@@ -194,16 +197,19 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
 
     if (cr_sys > uprobe_dejitter->last_print + PRINT_PERIODICITY) {
         upipe_dbg_va(upipe,
-                "dejitter drift %f error %"PRId64" deviation %g",
+                "dejitter drift %f error %g ms  deviation %g ms",
                 (double)uprobe_dejitter->drift_rate.num /
                 uprobe_dejitter->drift_rate.den,
-                error_offset, uprobe_dejitter->deviation);
+                (double)error_offset * 1000 / UCLOCK_FREQ,
+                uprobe_dejitter->deviation * 1000 / UCLOCK_FREQ);
         uprobe_dejitter->last_print = cr_sys;
     }
 
     upipe_verbose_va(upipe,
-            "new ref offset %"PRId64" error %"PRId64" deviation %g",
-            real_offset, error_offset, uprobe_dejitter->deviation);
+            "new ref offset %.2g ms error %.2g ms deviation %g ms",
+            (double)real_offset * 1000. / UCLOCK_FREQ,
+            (double)error_offset * 1000. / UCLOCK_FREQ,
+            uprobe_dejitter->deviation * 1000. / UCLOCK_FREQ);
     return UBASE_ERR_NONE;
 }
 
@@ -282,7 +288,7 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
     uprobe_dejitter->offset_divider = enabled ? OFFSET_DIVIDER : 0;
     uprobe_dejitter->deviation_divider = enabled ? DEVIATION_DIVIDER : 0;
     uprobe_dejitter->offset_count = 0;
-    uprobe_dejitter->deviation_count = 1;
+    uprobe_dejitter->deviation_count = 0;
     uprobe_dejitter->offset = 0;
     if (deviation)
         uprobe_dejitter->deviation = deviation;
@@ -291,6 +297,8 @@ void uprobe_dejitter_set(struct uprobe *uprobe, bool enabled,
 
     if (uprobe_dejitter->deviation < uprobe_dejitter->minimum_deviation)
         uprobe_dejitter->deviation = uprobe_dejitter->minimum_deviation;
+    if (uprobe_dejitter->deviation > uprobe_dejitter->maximum_deviation)
+        uprobe_dejitter->deviation = uprobe_dejitter->maximum_deviation;
 }
 
 /** @This sets the minimum deviation of the dejittering probe.
@@ -306,6 +314,34 @@ void uprobe_dejitter_set_minimum_deviation(struct uprobe *uprobe,
     uprobe_dejitter->minimum_deviation = deviation;
     if (uprobe_dejitter->deviation < deviation)
         uprobe_dejitter->deviation = deviation;
+}
+
+/** @This sets the maximum deviation of the dejittering probe.
+ *
+ * @param uprobe pointer to probe
+ * @param deviation maximum deviation to set
+ */
+void uprobe_dejitter_set_maximum_deviation(struct uprobe *uprobe,
+                                           double deviation)
+{
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    uprobe_dejitter->maximum_deviation = deviation;
+    if (uprobe_dejitter->deviation > deviation)
+        uprobe_dejitter->deviation = deviation;
+}
+
+/** @This sets the maximum jitter of the dejittering probe.
+ *
+ * @param uprobe pointer to probe
+ * @param jitter maximum jitter to set
+ */
+void uprobe_dejitter_set_maximum_jitter(struct uprobe *uprobe,
+                                        uint64_t jitter)
+{
+    struct uprobe_dejitter *uprobe_dejitter =
+        uprobe_dejitter_from_uprobe(uprobe);
+    uprobe_dejitter->maximum_jitter = jitter;
 }
 
 /** @This initializes an already allocated uprobe_dejitter structure.
@@ -325,6 +361,8 @@ struct uprobe *uprobe_dejitter_init(struct uprobe_dejitter *uprobe_dejitter,
     uprobe_dejitter->drift_rate.num = uprobe_dejitter->drift_rate.den = 1;
     uprobe_dejitter->last_print = 0;
     uprobe_dejitter->minimum_deviation = 0;
+    uprobe_dejitter->maximum_deviation = 0;
+    uprobe_dejitter->maximum_jitter = MAX_JITTER;
     uprobe_dejitter_set(uprobe, enabled, deviation);
     uprobe_init(uprobe, uprobe_dejitter_throw, next);
     return uprobe;
