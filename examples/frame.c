@@ -88,7 +88,7 @@ static enum uprobe_log_level uprobe_log_level = UPROBE_LOG_DEBUG;
 static struct uref_mgr *uref_mgr = NULL;
 static struct uclock *uclock = NULL;
 static struct uprobe *main_probe = NULL;
-static bool second_framer = false;
+static unsigned additional_framer = 0;
 static bool decode = false;
 static bool dump_date = false;
 static bool dump_size = false;
@@ -200,23 +200,23 @@ static int catch_es(struct uprobe *uprobe, struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "probe"));
             assert(upipe);
 
-            if (second_framer) {
-                struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+            struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+            for (unsigned i = 0; i < additional_framer; i++) {
                 upipe = upipe_void_chain_output(
                     upipe, upipe_autof_mgr,
-                    uprobe_pfx_alloc(
+                    uprobe_pfx_alloc_va(
                         uprobe_use(uprobe),
-                        UPROBE_LOG_VERBOSE, "framer 2"));
+                        UPROBE_LOG_VERBOSE, "framer %u", i));
                 assert(upipe);
-                upipe_mgr_release(upipe_autof_mgr);
 
                 upipe = upipe_void_chain_output(
                     upipe, upipe_probe_uref_mgr,
-                    uprobe_pfx_alloc(
+                    uprobe_pfx_alloc_va(
                         uprobe_alloc(catch_uref, uprobe_use(uprobe)),
-                        UPROBE_LOG_VERBOSE, "probe 2"));
+                        UPROBE_LOG_VERBOSE, "probe %u", i));
                 assert(upipe);
             }
+            upipe_mgr_release(upipe_autof_mgr);
 
             if (decode) {
                 struct upipe_mgr *upipe_fdec_mgr = upipe_fdec_mgr_alloc();
@@ -514,7 +514,7 @@ int main(int argc, char *argv[])
                 break;
 
             case OPT_REFRAME:
-                second_framer = true;
+                additional_framer++;
                 break;
 
             case OPT_DECODE:
