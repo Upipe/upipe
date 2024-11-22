@@ -93,7 +93,7 @@ struct upipe_srt_sender {
     /** list of output requests */
     struct uchain request_list;
 
-    uint32_t socket_id;
+    uint64_t socket_id;
     uint32_t seqnum;
 
     uint64_t establish_time;
@@ -353,7 +353,7 @@ static void upipe_srt_sender_timer(struct upump *upump)
 
     uint64_t now = uclock_now(upipe_srt_sender->uclock);
 
-    if (now - upipe_srt_sender->last_sent > UCLOCK_FREQ) {
+    if (upipe_srt_sender->socket_id != UINT64_MAX && now - upipe_srt_sender->last_sent > UCLOCK_FREQ) {
         struct uref *uref = uref_block_alloc(upipe_srt_sender->uref_mgr,
                 upipe_srt_sender->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
         if (uref) {
@@ -460,9 +460,12 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
+    upipe_srt_sender->socket_id = UINT64_MAX;
     uint64_t id;
     if (ubase_check(uref_flow_get_id(flow_def, &id)))
         upipe_srt_sender->socket_id = id;
+    else /* if socket_id is not in the flow def it means we got disconnected */
+        upipe_srt_sender_set_upump_timer(upipe_super, NULL);
 
     uint64_t isn;
     if (ubase_check(uref_pic_get_number(flow_def, &isn)))
@@ -505,7 +508,7 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
     if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
         upipe_dbg_va(upipe, "Using %s key", even_key ? "even" : "odd");
     } else {
-        if (upipe_srt_sender->socket_id)
+        if (upipe_srt_sender->socket_id != UINT64_MAX)
             upipe_dbg(upipe, "No encryption key in handshake");
     }
 
@@ -592,7 +595,7 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender_init_uref_mgr(upipe);
     ulist_init(&upipe_srt_sender->queue);
     upipe_srt_sender->latency = UCLOCK_FREQ; /* 1 sec */
-    upipe_srt_sender->socket_id = 0;
+    upipe_srt_sender->socket_id = UINT64_MAX;
     upipe_srt_sender->seqnum = 0;
     upipe_srt_sender->establish_time = 0;
 
@@ -629,7 +632,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
         return;
     }
 
-    if (upipe_srt_sender->socket_id == 0) {
+    if (upipe_srt_sender->socket_id == UINT64_MAX) {
         uref_free(uref);
         return;
     }
