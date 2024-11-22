@@ -312,6 +312,20 @@ static void sig_cb(struct upump *upump)
 static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
 {
+    if (event == UPROBE_SRT_HANDSHAKE_CONNECTED) {
+        if (ubase_get_signature(args) != UPIPE_SRT_HANDSHAKE_SIGNATURE) {
+            return uprobe_throw_next(uprobe, upipe, event, args);
+        }
+        va_arg(args, unsigned int); // signature
+        bool connected = va_arg(args, int );
+        bool listener = srcpath && strchr(srcpath, '@');
+        upipe_notice_va(upipe, "%sCONNECTED", connected ? "" : "DIS");
+        if (!connected && listener)
+            ubase_assert(upipe_set_uri(upipe_udp_sink, NULL));
+        return UBASE_ERR_NONE;
+
+    }
+
     if (event == UPROBE_SOURCE_END) {
         restart = true;
         struct upump *u = upump_alloc_timer(upump_mgr, stop, NULL, NULL, 0, 0);
