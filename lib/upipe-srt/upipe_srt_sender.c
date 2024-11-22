@@ -507,7 +507,7 @@ static int upipe_srt_sender_input_set_flow_def(struct upipe *upipe, struct uref 
     if (upipe_srt_sender->sek_len[0] || upipe_srt_sender->sek_len[1]) {
         upipe_dbg_va(upipe, "Using %s key", even_key ? "even" : "odd");
     } else {
-        if (upipe_srt_sender->socket_id)
+        if (upipe_srt_sender->socket_id != UINT64_MAX)
             upipe_dbg(upipe, "No encryption key in handshake");
     }
 
@@ -632,7 +632,7 @@ static inline void upipe_srt_sender_input(struct upipe *upipe, struct uref *uref
         return;
     }
 
-    if (upipe_srt_sender->socket_id == 0) {
+    if (upipe_srt_sender->socket_id == UINT64_MAX) {
         uref_free(uref);
         return;
     }
