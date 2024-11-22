@@ -103,7 +103,7 @@ struct upipe_srt_receiver {
     /** list of output requests */
     struct uchain request_list;
 
-    uint32_t socket_id;
+    uint64_t socket_id;
 
     struct upipe *control;
 
@@ -350,7 +350,7 @@ static void upipe_srt_receiver_timer_lost(struct upump *upump)
 
     uint64_t now = uclock_now(upipe_srt_receiver->uclock);
 
-    if (now - upipe_srt_receiver->last_sent > UCLOCK_FREQ) {
+    if (upipe_srt_receiver->socket_id != UINT64_MAX && now - upipe_srt_receiver->last_sent > UCLOCK_FREQ) {
         struct uref *uref = uref_block_alloc(upipe_srt_receiver->uref_mgr,
                 upipe_srt_receiver->ubuf_mgr, SRT_HEADER_SIZE + 4 /* WTF */);
         if (uref) {
@@ -766,7 +766,7 @@ static struct upipe *upipe_srt_receiver_alloc(struct upipe_mgr *mgr,
     upipe_srt_receiver_require_uclock(upipe);
 
     // FIXME
-    upipe_srt_receiver->socket_id = 0;
+    upipe_srt_receiver->socket_id = UINT64_MAX;
     upipe_srt_receiver->control = NULL;
 
     ulist_init(&upipe_srt_receiver->queue);
