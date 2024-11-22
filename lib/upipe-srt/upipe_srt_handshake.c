@@ -1457,6 +1457,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
             upipe_err_va(upipe, "Expected induction, ignore hs type %s", get_hs_type(hs_type));
             upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+            upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
             return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                     hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
@@ -1480,6 +1481,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                 upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
                         hs_packet.dst_socket_id, upipe_srt_handshake->socket_id);
                 upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+                upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
                 return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                         hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
             }
