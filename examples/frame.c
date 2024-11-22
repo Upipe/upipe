@@ -446,6 +446,7 @@ static struct upipe *upipe_source_alloc(const char *uri, struct uprobe *uprobe)
 enum {
     OPT_VERBOSE,
     OPT_QUIET,
+    OPT_HELP,
     OPT_TS,
     OPT_FRAMER,
     OPT_REFRAME,
@@ -459,6 +460,7 @@ enum {
 static struct option options[] = {
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "quiet", no_argument, NULL, OPT_QUIET },
+    { "help", no_argument, NULL, OPT_HELP },
     { "ts", no_argument, NULL, OPT_TS },
     { "framer", required_argument, NULL, OPT_FRAMER },
     { "reframe", no_argument, NULL, OPT_REFRAME },
@@ -503,6 +505,11 @@ int main(int argc, char *argv[])
             case OPT_VERBOSE:
                 if (uprobe_log_level > 0)
                     uprobe_log_level--;
+                break;
+
+            case OPT_HELP:
+                usage(argv[0]);
+                exit(0);
                 break;
 
             case OPT_TS:
