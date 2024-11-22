@@ -92,6 +92,7 @@ static unsigned additional_framer = 0;
 static bool decode = false;
 static bool dump_date = false;
 static bool dump_size = false;
+static bool dump_random = false;
 
 struct pid {
     struct uchain uchain;
@@ -159,6 +160,11 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
 
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
+
+    if (dump_random) {
+        if (ubase_check(uref_flow_get_random(uref)))
+            upipe_notice_va(upipe, "random");
+    }
 
     if (dump_date)
         uref_dump_clock_dbg(uref, upipe->uprobe);
@@ -455,6 +461,7 @@ enum {
     OPT_PID,
     OPT_DATE,
     OPT_SIZE,
+    OPT_RANDOM,
 };
 
 static struct option options[] = {
@@ -469,6 +476,7 @@ static struct option options[] = {
     { "pid", required_argument, NULL, OPT_PID },
     { "date", no_argument, NULL, OPT_DATE },
     { "size", no_argument, NULL, OPT_SIZE },
+    { "random", no_argument, NULL, OPT_RANDOM },
     { NULL, 0, NULL, 0 },
 };
 
@@ -542,6 +550,10 @@ int main(int argc, char *argv[])
 
             case OPT_SIZE:
                 dump_size = true;
+                break;
+
+            case OPT_RANDOM:
+                dump_random = true;
                 break;
 
             default:
