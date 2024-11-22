@@ -93,7 +93,7 @@ struct upipe_srt_sender {
     /** list of output requests */
     struct uchain request_list;
 
-    uint32_t socket_id;
+    uint64_t socket_id;
     uint32_t seqnum;
 
     uint64_t establish_time;
@@ -354,7 +354,7 @@ static void upipe_srt_sender_timer(struct upump *upump)
 
     uint64_t now = uclock_now(upipe_srt_sender->uclock);
 
-    if (now - upipe_srt_sender->last_sent > UCLOCK_FREQ) {
+    if (upipe_srt_sender->socket_id != UINT64_MAX && now - upipe_srt_sender->last_sent > UCLOCK_FREQ) {
         struct uref *uref = uref_block_alloc(upipe_srt_sender->uref_mgr,
                 upipe_srt_sender->ubuf_mgr, SRT_HEADER_SIZE + 4 /* undocumented extra padding */);
         if (uref) {
@@ -594,7 +594,7 @@ static struct upipe *upipe_srt_sender_alloc(struct upipe_mgr *mgr,
     upipe_srt_sender_init_uref_mgr(upipe);
     ulist_init(&upipe_srt_sender->queue);
     upipe_srt_sender->latency = UCLOCK_FREQ; /* 1 sec */
-    upipe_srt_sender->socket_id = 0;
+    upipe_srt_sender->socket_id = UINT64_MAX;
     upipe_srt_sender->seqnum = 0;
     upipe_srt_sender->establish_time = 0;
 
