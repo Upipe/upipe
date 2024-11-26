@@ -62,6 +62,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include <x265_config.h>
+
 /* fix undef warnings in x265.h */
 #ifndef ENABLE_LIBVMAF
 # define ENABLE_LIBVMAF 0
@@ -71,6 +73,15 @@
 #endif
 #ifndef X265_DEPTH
 # define X265_DEPTH 0
+#endif
+#ifndef ENABLE_MULTIVIEW
+# define ENABLE_MULTIVIEW 0
+#endif
+#ifndef ENABLE_ALPHA
+# define ENABLE_ALPHA 0
+#endif
+#ifndef ENABLE_SCC_EXT
+# define ENABLE_SCC_EXT 0
 #endif
 
 #include <x265.h>
@@ -989,6 +1000,12 @@ err_invalid:
     bool needopen = false;
     int ret = 0;
 
+#if X265_BUILD >= 210 && X265_BUILD < 213
+    x265_picture *pic_out[MAX_SCALABLE_LAYERS] = { &pic };
+#else
+    x265_picture *pic_out = &pic;
+#endif
+
     /* init x265 picture */
     upipe_x265->api->picture_init(&upipe_x265->params, &pic);
 
@@ -1078,7 +1095,7 @@ err_invalid:
         /* encode frame */
         ret = upipe_x265->api->encoder_encode(upipe_x265->encoder,
                                               &nals, &nals_num,
-                                              &pic, &pic);
+                                              &pic, pic_out);
 
         /* unmap */
         for (i = 0; i < 3; i++)
@@ -1094,7 +1111,7 @@ err_invalid:
         /* NULL uref, flushing delayed frame */
         ret = upipe_x265->api->encoder_encode(upipe_x265->encoder,
                                               &nals, &nals_num,
-                                              NULL, &pic);
+                                              NULL, pic_out);
         if (ret <= 0)
             upipe_x265->delayed_frames = false;
     }
