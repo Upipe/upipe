@@ -93,6 +93,43 @@ static bool decode = false;
 static bool dump_date = false;
 static bool dump_size = false;
 static bool dump_random = false;
+static bool dump_hex = false;
+static int dump_hex_size = -1;
+
+enum {
+    OPT_VERBOSE,
+    OPT_QUIET,
+    OPT_HELP,
+    OPT_TS,
+    OPT_FRAMER,
+    OPT_REFRAME,
+    OPT_DECODE,
+    OPT_PID_FILTER_OUT,
+    OPT_PID,
+    OPT_DATE,
+    OPT_SIZE,
+    OPT_RANDOM,
+    OPT_HEX,
+    OPT_HEX_SIZE,
+};
+
+static struct option options[] = {
+    { "verbose", no_argument, NULL, OPT_VERBOSE },
+    { "quiet", no_argument, NULL, OPT_QUIET },
+    { "help", no_argument, NULL, OPT_HELP },
+    { "ts", no_argument, NULL, OPT_TS },
+    { "framer", required_argument, NULL, OPT_FRAMER },
+    { "reframe", no_argument, NULL, OPT_REFRAME },
+    { "decode", no_argument, NULL, OPT_DECODE },
+    { "pid-filter-out", no_argument, NULL, OPT_PID_FILTER_OUT },
+    { "pid", required_argument, NULL, OPT_PID },
+    { "date", no_argument, NULL, OPT_DATE },
+    { "size", no_argument, NULL, OPT_SIZE },
+    { "random", no_argument, NULL, OPT_RANDOM },
+    { "hex", no_argument, NULL, OPT_HEX},
+    { "hex-size", required_argument, NULL, OPT_HEX_SIZE },
+    { NULL, 0, NULL, 0 },
+};
 
 struct pid {
     struct uchain uchain;
@@ -179,6 +216,45 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
         else if (ubase_check(uref_pic_size(uref, &size, &vsize, &sample_size)))
             upipe_dbg_va(upipe, "pic size %zux%zu (sample %u)",
                          size, vsize, sample_size);
+    }
+
+    if (dump_hex) {
+        size_t block_size = 0;
+        if (ubase_check(uref_block_size(uref, &block_size))) {
+            const uint8_t *buffer = NULL;
+            int offset = 0;
+
+            printf("hexdump uref %p (block_size %zu)\n", uref, block_size);
+
+            if (dump_hex_size > 0 && dump_hex_size < block_size)
+                block_size = dump_hex_size;
+
+            while (block_size) {
+                int size = block_size;
+                if (!ubase_check(uref_block_read(uref, offset, &size, &buffer)) || !size) {
+                    upipe_err(upipe, "fail to read buffer");
+                    break;
+                }
+
+                for (int i = offset; i < offset + size; i++)
+                {
+                    if (!(i % 16)) {
+                        if (i)
+                            printf("\n");
+                        printf("%08x:", i);
+                    }
+                    if (!(i % 2 ))
+                        printf(" ");
+                    printf("%02x", buffer[i - offset]);
+                }
+                block_size -= size;
+                offset += size;
+            }
+            if (offset)
+                printf("\n");
+        } else {
+            upipe_err(upipe, "block size failed");
+        }
     }
 
     return UBASE_ERR_NONE;
@@ -449,37 +525,6 @@ static struct upipe *upipe_source_alloc(const char *uri, struct uprobe *uprobe)
     return upipe_src;
 }
 
-enum {
-    OPT_VERBOSE,
-    OPT_QUIET,
-    OPT_HELP,
-    OPT_TS,
-    OPT_FRAMER,
-    OPT_REFRAME,
-    OPT_DECODE,
-    OPT_PID_FILTER_OUT,
-    OPT_PID,
-    OPT_DATE,
-    OPT_SIZE,
-    OPT_RANDOM,
-};
-
-static struct option options[] = {
-    { "verbose", no_argument, NULL, OPT_VERBOSE },
-    { "quiet", no_argument, NULL, OPT_QUIET },
-    { "help", no_argument, NULL, OPT_HELP },
-    { "ts", no_argument, NULL, OPT_TS },
-    { "framer", required_argument, NULL, OPT_FRAMER },
-    { "reframe", no_argument, NULL, OPT_REFRAME },
-    { "decode", no_argument, NULL, OPT_DECODE },
-    { "pid-filter-out", no_argument, NULL, OPT_PID_FILTER_OUT },
-    { "pid", required_argument, NULL, OPT_PID },
-    { "date", no_argument, NULL, OPT_DATE },
-    { "size", no_argument, NULL, OPT_SIZE },
-    { "random", no_argument, NULL, OPT_RANDOM },
-    { NULL, 0, NULL, 0 },
-};
-
 static void usage(const char *name)
 {
     fprintf(stderr, "usage: %s [options] <source>\n", name);
@@ -554,6 +599,14 @@ int main(int argc, char *argv[])
 
             case OPT_RANDOM:
                 dump_random = true;
+                break;
+
+            case OPT_HEX:
+                dump_hex = true;
+                break;
+
+            case OPT_HEX_SIZE:
+                dump_hex_size = atoi(optarg);
                 break;
 
             default:
