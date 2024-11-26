@@ -377,6 +377,9 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
                 default:
                     break;
             }
+        else if (!ubase_ncmp(sub_def, ".s302m.")) {
+            *descriptors_size_p += DESC05_HEADER_SIZE;
+        }
         else if (ubase_ncmp(sub_def, ".mp2.") &&
                  ubase_ncmp(sub_def, ".mp3.")) {
             upipe_warn_va(upipe, "unknown flow definition \"%s\"", raw_def);
@@ -882,6 +885,10 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
                 default:
                     break;
             }
+        } else if (!ubase_ncmp(sub_def, ".s302m.")) {
+            desc = descs_get_desc(descs, k++);
+            desc05_init(desc);
+            desc05_set_identifier(desc, (const uint8_t *)"BSSD");
         }
     } else if (strstr(raw_def, ".metadata.")) {
         if (!ubase_ncmp(sub_def, ".id3.")) {

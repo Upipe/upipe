@@ -119,6 +119,8 @@
 #define BS_ADTS_12 12804
 /** ADTS buffer size for <= 48 channels */
 #define BS_ADTS_48 51216
+/** s302m buffer size (SMPTE 302m) */
+#define BS_S302M 65024
 /** Teletext buffer size */
 #define BS_TELX 1504
 /** DVB subtitles buffer size (ETSI EN 300 743 5.) */
@@ -1175,7 +1177,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
         } else if (!ubase_ncmp(sub_def, ".ac3.") ||
                    !ubase_ncmp(sub_def, ".eac3.") ||
                    !ubase_ncmp(sub_def, ".dts.") ||
-                   !ubase_ncmp(sub_def, ".opus.")) {
+                   !ubase_ncmp(sub_def, ".opus.") ||
+                   !ubase_ncmp(sub_def, ".s302m.")) {
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_id(
                     flow_def_dup, PES_STREAM_ID_PRIVATE_1));
         }
@@ -1275,6 +1278,7 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
     } else if (strstr(def, ".sound.") != NULL) {
         uint64_t pes_min_duration = upipe_ts_mux->pes_min_duration;
+        uint64_t tb_rate = TB_RATE_AUDIO;
         buffer_size = BS_ADTS_2;
 
         if (!ubase_ncmp(def, "block.mp2.") || !ubase_ncmp(def, "block.mp3.") ||
@@ -1302,9 +1306,16 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
             pes_min_duration = 0;
         } else if (!ubase_ncmp(def, "block.dts.")) {
             pes_min_duration = 0;
+        } else if (!ubase_ncmp(def, "block.s302m.")) {
+            buffer_size = BS_S302M;
+            pes_min_duration = 0;
+            uint64_t max_octetrate = octetrate;
+            uref_block_flow_get_max_octetrate(flow_def, &max_octetrate);
+            /* SMPTE s302m-2007 7.6 */
+            tb_rate = max_octetrate * 6 / 5;
         }
 
-        UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_AUDIO));
+        UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, tb_rate));
         if (!ubase_check(uref_ts_flow_get_pes_min_duration(flow_def_dup,
                                                            &pes_min_duration)))
             UBASE_FATAL(upipe, uref_ts_flow_set_pes_min_duration(flow_def_dup,
