@@ -936,6 +936,69 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     return UBASE_ERR_NONE;
 }
 
+static int hack_control_internal(struct upipe *upipe, int command)
+{
+    if (!(command ==  HACK_CONTROL_SET_CLOCK_SD
+            || command == HACK_CONTROL_SET_CLOCK_HD_NTSC
+            || command == HACK_CONTROL_SET_CLOCK_HD_PAL
+            || command == HACK_CONTROL_SET_CLOCK_3G_NTSC
+            || command == HACK_CONTROL_SET_CLOCK_3G_PAL)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    bool sd = command == HACK_CONTROL_SET_CLOCK_SD;
+    bool sdi3g = command == HACK_CONTROL_SET_CLOCK_3G_NTSC || command == HACK_CONTROL_SET_CLOCK_3G_PAL;
+    bool ntsc = command == HACK_CONTROL_SET_CLOCK_HD_NTSC || command == HACK_CONTROL_SET_CLOCK_3G_NTSC;
+
+    int tx_mode;
+    if (sd)
+        tx_mode = SDI_TX_MODE_SD;
+    else if (sdi3g)
+        tx_mode = SDI_TX_MODE_3G;
+    else
+        tx_mode = SDI_TX_MODE_HD;
+
+    int clock_rate;
+    if (ntsc)
+        clock_rate = SDI_NTSC_RATE;
+    else
+        clock_rate = SDI_PAL_RATE;
+
+    struct urational freq;
+    if (sd) {
+        freq = (struct urational){ 1485, 270 };
+    } else if (sdi3g) {
+        if (ntsc)
+            freq = (struct urational){ 148500, 27027 };
+        else
+            freq = (struct urational){ 1485, 270 };
+    } else {
+        if (ntsc)
+            freq = (struct urational){ 74250, 27027 };
+        else
+            freq = (struct urational){ 7425, 2700 };
+    }
+
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+    uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
+
+    /* Lock to begin init. */
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
+
+    /* initialize clock */
+    init_hardware(upipe, clock_rate, tx_mode);
+    upipe_pciesdi_sink->freq = freq;
+    upipe_pciesdi_sink->offset = offset;
+    upipe_pciesdi_sink->clock_is_inited = 1;
+    upipe_pciesdi_sink->tx_mode = tx_mode;
+    upipe_pciesdi_sink->clock_rate = clock_rate;
+
+    /* Unlock */
+    pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -972,6 +1035,14 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
             *pp_uclock = &upipe_pciesdi_sink->uclock;
             return UBASE_ERR_NONE;
         }
+
+        case HACK_CONTROL_SET_CLOCK_SD:
+        case HACK_CONTROL_SET_CLOCK_HD_NTSC:
+        case HACK_CONTROL_SET_CLOCK_HD_PAL:
+        case HACK_CONTROL_SET_CLOCK_3G_NTSC:
+        case HACK_CONTROL_SET_CLOCK_3G_PAL:
+            UBASE_SIGNATURE_CHECK(args, UPIPE_PCIESDI_SINK_SIGNATURE)
+            return hack_control_internal(upipe, command);
 
         default:
             return UBASE_ERR_UNHANDLED;
