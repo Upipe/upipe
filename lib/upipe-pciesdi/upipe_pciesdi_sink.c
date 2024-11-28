@@ -991,6 +991,20 @@ static int hack_control_internal(struct upipe *upipe, int command)
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
     upipe_warn_va(upipe, "clock jumping by %"PRIu64, offset);
 
+    /* Do not stop DMA here.  For some reason it causes the TX to never resume.
+     * Instead let the fd_write_upump run out of data and stop itself.  */
+
+    /* reset state */
+    upipe_pciesdi_sink->first = 1;
+    upipe_pciesdi_sink->scratch_bytes = 0;
+    /* Clear next uref. */
+    uref_free(upipe_pciesdi_sink->uref_next);
+    upipe_pciesdi_sink->uref_next = NULL;
+    /* Free uref being written. */
+    uref_free(upipe_pciesdi_sink->uref);
+    upipe_pciesdi_sink->uref = NULL;
+    upipe_pciesdi_sink->written = 0;
+
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
