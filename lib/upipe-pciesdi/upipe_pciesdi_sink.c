@@ -980,6 +980,12 @@ static int hack_control_internal(struct upipe *upipe, int command)
     }
 
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+
+    /* If there is no change to the clock frequency or TX mode then there is no
+     * need to reconfigure the HW. */
+    if (clock_rate == upipe_pciesdi_sink->clock_rate && tx_mode == upipe_pciesdi_sink->tx_mode)
+        return UBASE_ERR_NONE;
+
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
 
     /* Lock to begin init. */
