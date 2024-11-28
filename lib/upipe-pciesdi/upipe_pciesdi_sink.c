@@ -858,6 +858,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
                 (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_NOT_CONFIGURED);
 
+    upipe_warn_va(upipe, "clock jumping by %"PRIu64, offset);
+
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
@@ -987,6 +989,7 @@ static int hack_control_internal(struct upipe *upipe, int command)
         return UBASE_ERR_NONE;
 
     uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
+    upipe_warn_va(upipe, "clock jumping by %"PRIu64, offset);
 
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
