@@ -600,3 +600,6 @@ upipe_auto_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupu
 if HAVE_BEARSSL
 upipe_auto_source_test_LDADD += $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
 endif
+if HAVE_OPENSSL
+upipe_auto_source_test_LDADD += $(top_builddir)/lib/upipe-openssl/libupipe_openssl.la
+endif
