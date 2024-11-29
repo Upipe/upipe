@@ -147,6 +147,7 @@ PKG_CHECK_UPIPE(SRT, srt, [srt/srt.h])
 AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
+PKG_CHECK_UPIPE(OPENSSL, openssl, [openssl/ssl.h])
 
 # if have gcrypt and tasn then
 AC_SUBST(LIBUPIPE_TS_PKGCONFIG_REQUIRES)
@@ -285,6 +286,7 @@ AC_CONFIG_FILES([Makefile
                  include/upipe-dvbcsa/Makefile
                  include/upipe-ebur128/Makefile
                  include/upipe-bearssl/Makefile
+                 include/upipe-openssl/Makefile
                  lib/Makefile
                  lib/upipe/Makefile
                  lib/upipe/libupipe.pc
@@ -352,6 +354,8 @@ AC_CONFIG_FILES([Makefile
                  lib/upipe-ebur128/libupipe_ebur128.pc
                  lib/upipe-bearssl/Makefile
                  lib/upipe-bearssl/libupipe_bearssl.pc
+                 lib/upipe-openssl/Makefile
+                 lib/upipe-openssl/libupipe_openssl.pc
                  x86/Makefile
                  x86/config.asm
                  tests/Makefile
