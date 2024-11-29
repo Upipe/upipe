@@ -24,6 +24,9 @@
 #ifdef UPIPE_HAVE_BEARSSL_H
 #include "upipe-bearssl/uprobe_https.h"
 #endif
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#include "upipe-openssl/uprobe_https_openssl.h"
+#endif
 
 #include <getopt.h>
 
@@ -245,6 +248,11 @@ int main(int argc, char *argv[])
     assert(main_probe);
 #endif
 
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    main_probe = uprobe_https_openssl_alloc(main_probe);
+    assert(main_probe);
+#endif
+
     struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
     assert(upipe_auto_src_mgr);
     {
@@ -255,7 +263,7 @@ int main(int argc, char *argv[])
                                                 upipe_fsrc_mgr));
         ubase_assert(upipe_auto_src_mgr_set_mgr(upipe_auto_src_mgr, "http",
                                                 upipe_http_src_mgr));
-#ifdef UPIPE_HAVE_BEARSSL_H
+#if defined(UPIPE_HAVE_BEARSSL_H) || defined(UPIPE_HAVE_OPENSSL_SSL_H)
         ubase_assert(upipe_auto_src_mgr_set_mgr(upipe_auto_src_mgr, "https",
                                                 upipe_http_src_mgr));
 #endif

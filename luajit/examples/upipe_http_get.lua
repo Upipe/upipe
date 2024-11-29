@@ -4,7 +4,7 @@ local upipe = require "upipe"
 
 require "upump-ev"
 require "upipe-modules"
-require "upipe-bearssl"
+require "upipe-openssl"
 
 local UPROBE_LOG_LEVEL = UPROBE_LOG_INFO
 
@@ -17,7 +17,7 @@ local url = arg[1]
 
 -- probes
 local probe, upump_mgr = upipe.default_probe(UPROBE_LOG_LEVEL)
-local probe_https = uprobe.https()
+local probe_https = uprobe.https_openssl()
 
 local function pfx(tag)
     return uprobe.pfx(UPROBE_LOG_LEVEL, tag)
