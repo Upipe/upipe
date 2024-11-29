@@ -940,6 +940,8 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
 
 static int hack_control_internal(struct upipe *upipe, int command)
 {
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+
     if (!(command ==  HACK_CONTROL_SET_CLOCK_SD
             || command == HACK_CONTROL_SET_CLOCK_HD_NTSC
             || command == HACK_CONTROL_SET_CLOCK_HD_PAL
@@ -966,6 +968,13 @@ static int hack_control_internal(struct upipe *upipe, int command)
     else
         clock_rate = SDI_PAL_RATE;
 
+    /* If the clock for this format is provided by genlock then we want to
+     * signal that genlock should be used to release and synchronize the TX. */
+    if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_NTSC && ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+    else if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_PAL && !ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+
     struct urational freq;
     if (sd) {
         freq = (struct urational){ 1485, 270 };
@@ -980,8 +989,6 @@ static int hack_control_internal(struct upipe *upipe, int command)
         else
             freq = (struct urational){ 7425, 2700 };
     }
-
-    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
     /* If there is no change to the clock frequency or TX mode then there is no
      * need to reconfigure the HW. */
