@@ -106,3 +106,7 @@ if !HAVE_OSX_DARWIN
 SUBDIRS += upump-srt
 endif
 endif
+
+if HAVE_OPENSSL
+SUBDIRS += upipe-openssl
+endif
