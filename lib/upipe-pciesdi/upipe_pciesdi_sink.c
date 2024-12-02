@@ -938,21 +938,21 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     return UBASE_ERR_NONE;
 }
 
-static int hack_control_internal(struct upipe *upipe, int command)
+static int control_set_clock_internal(struct upipe *upipe, int command)
 {
     struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
 
-    if (!(command ==  HACK_CONTROL_SET_CLOCK_SD
-            || command == HACK_CONTROL_SET_CLOCK_HD_NTSC
-            || command == HACK_CONTROL_SET_CLOCK_HD_PAL
-            || command == HACK_CONTROL_SET_CLOCK_3G_NTSC
-            || command == HACK_CONTROL_SET_CLOCK_3G_PAL)) {
+    if (!(command ==  UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_PAL
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL)) {
         return UBASE_ERR_INVALID;
     }
 
-    bool sd = command == HACK_CONTROL_SET_CLOCK_SD;
-    bool sdi3g = command == HACK_CONTROL_SET_CLOCK_3G_NTSC || command == HACK_CONTROL_SET_CLOCK_3G_PAL;
-    bool ntsc = command == HACK_CONTROL_SET_CLOCK_HD_NTSC || command == HACK_CONTROL_SET_CLOCK_3G_NTSC;
+    bool sd = command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD;
+    bool sdi3g = command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL;
+    bool ntsc = command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC;
 
     int tx_mode;
     if (sd)
@@ -1066,13 +1066,13 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
             return UBASE_ERR_NONE;
         }
 
-        case HACK_CONTROL_SET_CLOCK_SD:
-        case HACK_CONTROL_SET_CLOCK_HD_NTSC:
-        case HACK_CONTROL_SET_CLOCK_HD_PAL:
-        case HACK_CONTROL_SET_CLOCK_3G_NTSC:
-        case HACK_CONTROL_SET_CLOCK_3G_PAL:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_PAL:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL:
             UBASE_SIGNATURE_CHECK(args, UPIPE_PCIESDI_SINK_SIGNATURE)
-            return hack_control_internal(upipe, command);
+            return control_set_clock_internal(upipe, command);
 
         default:
             return UBASE_ERR_UNHANDLED;
