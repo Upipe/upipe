@@ -842,11 +842,6 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
             freq = (struct urational){ 7425, 2700 };
     }
 
-    /* If there is no change to the clock frequency or TX mode then there is no
-     * need to reconfigure the HW. */
-    if (clock_rate == upipe_pciesdi_sink->clock_rate && tx_mode == upipe_pciesdi_sink->tx_mode)
-        return UBASE_ERR_NONE;
-
     /* Throw a probe event to signal the genlock status. */
     if (clock_rate & SDI_GENLOCK_RATE)
         upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
@@ -857,6 +852,11 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
     else
         upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
                 (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_NOT_CONFIGURED);
+
+    /* If there is no change to the clock frequency or TX mode then there is no
+     * need to reconfigure the HW. */
+    if (clock_rate == upipe_pciesdi_sink->clock_rate && tx_mode == upipe_pciesdi_sink->tx_mode)
+        return UBASE_ERR_NONE;
 
     upipe_warn_va(upipe, "clock jumping by %"PRIu64, offset);
 
