@@ -81,6 +81,9 @@
 #include "upipe-pthread/uprobe_pthread_upump_mgr.h"
 #include "upipe-pthread/upipe_pthread_transfer.h"
 #include "upipe-pthread/umutex_pthread.h"
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#include "upipe-openssl/uprobe_https_openssl.h"
+#endif
 #ifdef UPIPE_HAVE_BEARSSL_H
 #include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
@@ -1284,6 +1287,12 @@ enum opt {
     OPT_DELAY,
     OPT_QUIT_TIMEOUT,
     OPT_USER_AGENT,
+#ifdef UPIPE_HAVE_BEARSSL_H
+    OPT_USE_BEARSSL,
+#endif
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    OPT_USE_OPENSSL,
+#endif
 };
 
 static struct option options[] = {
@@ -1314,6 +1323,12 @@ static struct option options[] = {
     { "delay", required_argument, NULL, OPT_DELAY },
     { "quit-timeout", required_argument, NULL, OPT_QUIT_TIMEOUT },
     { "user-agent", required_argument, NULL, OPT_USER_AGENT },
+#ifdef UPIPE_HAVE_BEARSSL_H
+    { "use-bearssl", no_argument, NULL, OPT_USE_BEARSSL },
+#endif
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    { "use-openssl", no_argument, NULL, OPT_USE_OPENSSL },
+#endif
     { 0, 0, 0, 0 },
 };
 
@@ -1353,6 +1368,14 @@ int main(int argc, char **argv)
     int mtu = TS_PAYLOAD_SIZE;
     enum upipe_ts_conformance conformance = UPIPE_TS_CONFORMANCE_AUTO;
     bool no_stdin = false;
+
+#ifdef UPIPE_HAVE_BEARSSL_H
+    bool use_bearssl = true;
+#endif
+
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    bool use_openssl = true;
+#endif
 
     /*
      * parse options
@@ -1458,6 +1481,24 @@ int main(int argc, char **argv)
 
         case OPT_MISSING_ARG:
             return usage(argv[0], "missing argument");
+
+#ifdef UPIPE_HAVE_BEARSSL_H
+        case OPT_USE_BEARSSL:
+            use_bearssl = true;
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+            use_openssl = false;
+#endif
+            break;
+#endif
+
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+        case OPT_USE_OPENSSL:
+            use_openssl = true;
+#ifdef UPIPE_HAVE_BEARSSL_H
+            use_bearssl = false;
+#endif
+            break;
+#endif
         }
     }
 
@@ -1751,9 +1792,17 @@ int main(int argc, char **argv)
     uprobe_init(&probe_src, catch_src, uprobe_use(main_probe));
     uprobe_release(main_probe);
     main_probe = &probe_src;
-#ifdef UPIPE_HAVE_BEARSSL_H
-    main_probe = uprobe_https_bearssl_alloc(main_probe);
+
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    if (use_openssl)
+        main_probe = uprobe_https_openssl_alloc(main_probe);
 #endif
+
+#ifdef UPIPE_HAVE_BEARSSL_H
+    if (use_bearssl)
+        main_probe = uprobe_https_bearssl_alloc(main_probe);
+#endif
+
     {
         struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
         assert(upipe_auto_src_mgr);
