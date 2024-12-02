@@ -858,6 +858,8 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
         upipe_throw(upipe, UPROBE_PCIESDI_SINK_GENLOCK_TYPE, UPIPE_PCIESDI_SINK_SIGNATURE,
                 (uint32_t)UPROBE_PCIESDI_SINK_GENLOCK_NOT_CONFIGURED);
 
+    upipe_warn_va(upipe, "clock jumping by %"PRIu64, offset);
+
     /* Lock to begin init. */
     pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
 
@@ -936,6 +938,97 @@ static int upipe_pciesdi_set_uri(struct upipe *upipe, const char *path)
     return UBASE_ERR_NONE;
 }
 
+static int control_set_clock_internal(struct upipe *upipe, int command)
+{
+    struct upipe_pciesdi_sink *upipe_pciesdi_sink = upipe_pciesdi_sink_from_upipe(upipe);
+
+    if (!(command ==  UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_PAL
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC
+            || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL)) {
+        return UBASE_ERR_INVALID;
+    }
+
+    bool sd = command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD;
+    bool sdi3g = command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL;
+    bool ntsc = command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC || command == UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC;
+
+    int tx_mode;
+    if (sd)
+        tx_mode = SDI_TX_MODE_SD;
+    else if (sdi3g)
+        tx_mode = SDI_TX_MODE_3G;
+    else
+        tx_mode = SDI_TX_MODE_HD;
+
+    int clock_rate;
+    if (ntsc)
+        clock_rate = SDI_NTSC_RATE;
+    else
+        clock_rate = SDI_PAL_RATE;
+
+    /* If the clock for this format is provided by genlock then we want to
+     * signal that genlock should be used to release and synchronize the TX. */
+    if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_NTSC && ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+    else if (upipe_pciesdi_sink->genlock & SDI_GENLOCK_IS_PAL && !ntsc)
+        clock_rate |= SDI_GENLOCK_RATE;
+
+    struct urational freq;
+    if (sd) {
+        freq = (struct urational){ 1485, 270 };
+    } else if (sdi3g) {
+        if (ntsc)
+            freq = (struct urational){ 148500, 27027 };
+        else
+            freq = (struct urational){ 1485, 270 };
+    } else {
+        if (ntsc)
+            freq = (struct urational){ 74250, 27027 };
+        else
+            freq = (struct urational){ 7425, 2700 };
+    }
+
+    /* If there is no change to the clock frequency or TX mode then there is no
+     * need to reconfigure the HW. */
+    if (clock_rate == upipe_pciesdi_sink->clock_rate && tx_mode == upipe_pciesdi_sink->tx_mode)
+        return UBASE_ERR_NONE;
+
+    uint64_t offset = upipe_pciesdi_sink_now(&upipe_pciesdi_sink->uclock);
+    upipe_warn_va(upipe, "clock jumping by %"PRIu64, offset);
+
+    /* Do not stop DMA here.  For some reason it causes the TX to never resume.
+     * Instead let the fd_write_upump run out of data and stop itself.  */
+
+    /* reset state */
+    upipe_pciesdi_sink->first = 1;
+    upipe_pciesdi_sink->scratch_bytes = 0;
+    /* Clear next uref. */
+    uref_free(upipe_pciesdi_sink->uref_next);
+    upipe_pciesdi_sink->uref_next = NULL;
+    /* Free uref being written. */
+    uref_free(upipe_pciesdi_sink->uref);
+    upipe_pciesdi_sink->uref = NULL;
+    upipe_pciesdi_sink->written = 0;
+
+    /* Lock to begin init. */
+    pthread_mutex_lock(&upipe_pciesdi_sink->clock_mutex);
+
+    /* initialize clock */
+    init_hardware(upipe, clock_rate, tx_mode);
+    upipe_pciesdi_sink->freq = freq;
+    upipe_pciesdi_sink->offset = offset;
+    upipe_pciesdi_sink->clock_is_inited = 1;
+    upipe_pciesdi_sink->tx_mode = tx_mode;
+    upipe_pciesdi_sink->clock_rate = clock_rate;
+
+    /* Unlock */
+    pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -972,6 +1065,14 @@ static int upipe_pciesdi_sink_control(struct upipe *upipe, int command, va_list 
             *pp_uclock = &upipe_pciesdi_sink->uclock;
             return UBASE_ERR_NONE;
         }
+
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_PAL:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC:
+        case UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL:
+            UBASE_SIGNATURE_CHECK(args, UPIPE_PCIESDI_SINK_SIGNATURE)
+            return control_set_clock_internal(upipe, command);
 
         default:
             return UBASE_ERR_UNHANDLED;

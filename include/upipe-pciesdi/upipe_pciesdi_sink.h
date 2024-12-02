@@ -44,6 +44,12 @@ enum upipe_pciesdi_sink_command {
 
     /** returns the uclock (struct uclock *) **/
     UPIPE_PCIESDI_SINK_GET_UCLOCK,
+
+    UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_SD,
+    UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_NTSC,
+    UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_HD_PAL,
+    UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_NTSC,
+    UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_3G_PAL,
 };
 
 /** @This returns the pciesdi uclock.
@@ -58,6 +64,25 @@ static inline int upipe_pciesdi_sink_get_uclock(struct upipe *upipe,
     return upipe_control(upipe, UPIPE_PCIESDI_SINK_GET_UCLOCK,
             UPIPE_PCIESDI_SINK_SIGNATURE, uclock_p);
 }
+
+#define UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE(name, NAME, desc)       \
+/** @This instructs the pipe to configure for transmission of desc.           \
+ *                                                                            \
+ * @param upipe description structure of the pipe                             \
+ * @return an error code                                                      \
+ */                                                                           \
+static inline int upipe_pciesdi_sink_control_set_clock_##name(struct upipe *upipe) \
+{                                                                             \
+    return upipe_control(upipe, UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_##NAME,  \
+            UPIPE_PCIESDI_SINK_SIGNATURE);                                    \
+}
+
+UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE(sd, SD, Standard Definition)
+UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE(hd_ntsc, HD_NTSC, High Definition at NTSC frame rates)
+UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE(hd_pal,   HD_PAL, High Definition at PAL frame rates)
+UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE(3g_ntsc, 3G_NTSC, High Definition at NTSC frame rates greater than 30 fps)
+UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE(3g_pal,   3G_PAL, High Definition at PAL frame rates greater than 30 fps)
+#undef UPIPE_PCIESDI_SINK_CONTROL_SET_CLOCK_TEMPLATE
 
 /** @This enumarates the private events for upipe_pciesdi_sink pipes. */
 enum uprobe_pciesdi_sink_event {
