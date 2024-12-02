@@ -19,6 +19,7 @@ UPIPEOSX_LIBS = $(top_builddir)/lib/upipe-osx/libupipe_osx.la
 UPIPEDVBCSA_LIBS = $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
 UPIPEDVB_LIBS = $(top_builddir)/lib/upipe-dvb/libupipe_dvb.la
 UPIPEBEARSSL_LIBS = $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
+UPIPEOPENSSL_LIBS = $(top_builddir)/lib/upipe-openssl/libupipe_openssl.la
 
 noinst_PROGRAMS = 
 
@@ -29,6 +30,9 @@ rist_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIB
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
 multicatudp_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
 hls2rtp_LDADD= $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFRAMERS_LIBS) $(UPIPETS_LIBS) $(UPIPEHLS_LIBS) $(UPIPEPTHREAD_LIBS) -lpthread
+if HAVE_OPENSSL
+hls2rtp_LDADD += $(UPIPEOPENSSL_LIBS)
+endif
 if HAVE_BEARSSL
 hls2rtp_LDADD += $(UPIPEBEARSSL_LIBS)
 endif
