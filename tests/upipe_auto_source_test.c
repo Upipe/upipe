@@ -22,7 +22,7 @@
 #include "upipe-modules/upipe_dump.h"
 #include "upipe-modules/upipe_null.h"
 #ifdef UPIPE_HAVE_BEARSSL_H
-#include "upipe-bearssl/uprobe_https.h"
+#include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
 #ifdef UPIPE_HAVE_OPENSSL_SSL_H
 #include "upipe-openssl/uprobe_https_openssl.h"
@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
     }
 
 #ifdef UPIPE_HAVE_BEARSSL_H
-    main_probe = uprobe_https_alloc(main_probe);
+    main_probe = uprobe_https_bearssl_alloc(main_probe);
     assert(main_probe);
 #endif
 

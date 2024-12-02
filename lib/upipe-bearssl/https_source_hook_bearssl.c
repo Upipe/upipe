@@ -24,7 +24,7 @@
  */
 
 /** @file
- * @short HTTPS hooks for SSL data read/write.
+ * @short BearSSL HTTPS hooks for SSL data read/write.
  */
 
 #include <errno.h>
@@ -34,7 +34,7 @@
 #include "upipe/uref_uri.h"
 #include "upipe/urefcount_helper.h"
 
-#include "https_source_hook.h"
+#include "https_source_hook_bearssl.h"
 
 /** This describes a x509 no anchor context to allow not trusted certificate. */
 struct x509_noanchor_context {
@@ -43,7 +43,7 @@ struct x509_noanchor_context {
 };
 
 /** @This describes a SSL context for HTTPS. */
-struct https_src_hook {
+struct https_src_hook_bearssl {
     /** public hook structure */
     struct upipe_http_src_hook hook;
     /** refcount */
@@ -59,9 +59,10 @@ struct https_src_hook {
 };
 
 /** @hidden */
-UREFCOUNT_HELPER(https_src_hook, urefcount, https_src_hook_free);
+UREFCOUNT_HELPER(https_src_hook_bearssl, urefcount,
+                 https_src_hook_bearssl_free);
 /** @hidden */
-UBASE_FROM_TO(https_src_hook, upipe_http_src_hook, hook, hook);
+UBASE_FROM_TO(https_src_hook_bearssl, upipe_http_src_hook, hook, hook);
 
 /*
  * allow not trusted certificate
@@ -174,7 +175,8 @@ static int https_src_hook_state_to_code(unsigned state)
 static int
 https_src_hook_transport_read(struct upipe_http_src_hook *hook, int fd)
 {
-    struct https_src_hook *https = https_src_hook_from_hook(hook);
+    struct https_src_hook_bearssl *https =
+        https_src_hook_bearssl_from_hook(hook);
     br_ssl_engine_context *eng = &https->client.eng;
 
     unsigned state = br_ssl_engine_current_state(eng);
@@ -201,7 +203,8 @@ https_src_hook_transport_read(struct upipe_http_src_hook *hook, int fd)
 static int
 https_src_hook_transport_write(struct upipe_http_src_hook *hook, int fd)
 {
-    struct https_src_hook *https = https_src_hook_from_hook(hook);
+    struct https_src_hook_bearssl *https =
+        https_src_hook_bearssl_from_hook(hook);
     br_ssl_engine_context *eng = &https->client.eng;
 
     unsigned state = br_ssl_engine_current_state(eng);
@@ -229,7 +232,8 @@ https_src_hook_transport_write(struct upipe_http_src_hook *hook, int fd)
 static ssize_t https_src_hook_data_read(struct upipe_http_src_hook *hook,
                                         uint8_t *buffer, size_t count)
 {
-    struct https_src_hook *https = https_src_hook_from_hook(hook);
+    struct https_src_hook_bearssl *https =
+        https_src_hook_bearssl_from_hook(hook);
     br_ssl_engine_context *eng = &https->client.eng;
     ssize_t rsize = -1;
 
@@ -259,7 +263,8 @@ static ssize_t https_src_hook_data_read(struct upipe_http_src_hook *hook,
 static ssize_t https_src_hook_data_write(struct upipe_http_src_hook *hook,
                                          const uint8_t *buffer, size_t count)
 {
-    struct https_src_hook *https = https_src_hook_from_hook(hook);
+    struct https_src_hook_bearssl *https =
+        https_src_hook_bearssl_from_hook(hook);
     br_ssl_engine_context *eng = &https->client.eng;
     ssize_t wsize = -1;
 
@@ -285,9 +290,9 @@ static ssize_t https_src_hook_data_write(struct upipe_http_src_hook *hook,
  *
  * @param https https source hook
  */
-static void https_src_hook_free(struct https_src_hook *https)
+static void https_src_hook_bearssl_free(struct https_src_hook_bearssl *https)
 {
-    https_src_hook_clean_urefcount(https);
+    https_src_hook_bearssl_clean_urefcount(https);
     free(https);
 }
 
@@ -297,9 +302,9 @@ static void https_src_hook_free(struct https_src_hook *https)
  * @param flow_def connection attributes
  * @return the public hook description
  */
-struct upipe_http_src_hook *https_src_hook_alloc(struct uref *flow_def)
+struct upipe_http_src_hook *https_src_hook_bearssl_alloc(struct uref *flow_def)
 {
-    struct https_src_hook *https = malloc(sizeof (*https));
+    struct https_src_hook_bearssl *https = malloc(sizeof (*https));
     if (unlikely(!https))
         return NULL;
 
@@ -316,7 +321,7 @@ struct upipe_http_src_hook *https_src_hook_alloc(struct uref *flow_def)
     br_ssl_engine_set_buffer(&https->client.eng, https->iobuf,
                              sizeof (https->iobuf), 1);
     br_ssl_client_reset(&https->client, host, 0);
-    https_src_hook_init_urefcount(https);
+    https_src_hook_bearssl_init_urefcount(https);
     https->hook.urefcount = &https->urefcount;
     https->hook.transport.read = https_src_hook_transport_read;
     https->hook.transport.write = https_src_hook_transport_write;

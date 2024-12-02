@@ -82,7 +82,7 @@
 #include "upipe-pthread/upipe_pthread_transfer.h"
 #include "upipe-pthread/umutex_pthread.h"
 #ifdef UPIPE_HAVE_BEARSSL_H
-#include "upipe-bearssl/uprobe_https.h"
+#include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
 
 #include <pthread.h>
@@ -1752,7 +1752,7 @@ int main(int argc, char **argv)
     uprobe_release(main_probe);
     main_probe = &probe_src;
 #ifdef UPIPE_HAVE_BEARSSL_H
-    main_probe = uprobe_https_alloc(main_probe);
+    main_probe = uprobe_https_bearssl_alloc(main_probe);
 #endif
     {
         struct upipe_mgr *upipe_auto_src_mgr = upipe_auto_src_mgr_alloc();
