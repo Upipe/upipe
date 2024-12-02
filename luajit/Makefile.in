@@ -226,7 +226,7 @@ prefix_modules = upipe_ uprobe_ uref_ upump_
 enum_upipe-ts = uprobe_ts_
 enum_upipe-hls = uprobe_hls_
 enum_upipe-filters = uprobe_filters_
-enum_upipe-bearssl = uprobe_https_
+enum_upipe-bearssl = uprobe_https_bearssl_
 enum_upipe-openssl = uprobe_https_openssl_
 enum_upipe-framers = uref_h26x_ uref_mpga_
 
