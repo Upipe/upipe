@@ -58,8 +58,8 @@
 #define DEFAULT_INITIAL_DEVIATION (UCLOCK_FREQ / 150)
 /** max allowed jitter */
 #define MAX_JITTER (UCLOCK_FREQ / 10)
-/** additional drift to avoid bouncing from one rate to another (5 ms) */
-#define DRIFT_SLIDE (UCLOCK_FREQ / 200)
+/** additional drift to avoid bouncing from one rate to another (0.5 ms) */
+#define DRIFT_SLIDE (UCLOCK_FREQ / 2000)
 /** threshold below which the PLL is set to desperate low (20 ms) */
 #define DRIFT_DESPERATE_LOW (-(int64_t)UCLOCK_FREQ / 50)
 /** threshold below which the PLL is set to standard low (0 ms) */
