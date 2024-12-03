@@ -29,6 +29,7 @@
 
 #undef NDEBUG
 
+#include "upipe/config.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_stdio.h"
 #include "upipe/uprobe_prefix.h"
@@ -49,9 +50,17 @@
 #include "upipe-modules/upipe_http_source.h"
 #include "upipe-modules/upipe_null.h"
 #include "upipe-modules/uprobe_http_redirect.h"
+#ifdef UPIPE_HAVE_BEARSSL_H
+#include "upipe-bearssl/uprobe_https_bearssl.h"
+#endif
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#include "upipe-openssl/uprobe_https_openssl.h"
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <getopt.h>
 
 #define UDICT_POOL_DEPTH 10
 #define UREF_POOL_DEPTH 10
@@ -59,7 +68,8 @@
 #define UPUMP_POOL 1
 #define UPUMP_BLOCKER_POOL 1
 #define READ_SIZE 4096
-#define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
+
+static int log_level = UPROBE_LOG_NOTICE;
 
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
@@ -79,15 +89,103 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+enum opt {
+    OPT_HELP        = 'h',
+    OPT_VERBOSE     = 'v',
+    OPT_QUIET       = 'q',
+    OPT_USE_BEARSSL = 0x100,
+    OPT_USE_OPENSSL,
+};
+
+static struct option options[] = {
+    { "help", no_argument, NULL, OPT_HELP },
+    { "verbose", no_argument, NULL, OPT_VERBOSE },
+    { "quiet", no_argument, NULL, OPT_QUIET },
+    { "use-bearssl", no_argument, NULL, OPT_USE_BEARSSL },
+    { "use-openssl", no_argument, NULL, OPT_USE_OPENSSL },
+    { 0, 0, 0, 0 },
+};
+
+static int usage(const char *name)
+{
+    fprintf(stdout, "Usage: %s [options] <url>\n", name);
+    for (int i = 0; options[i].name; i++) {
+        if (options[i].val < 0x100) {
+            fprintf(stdout, "   -%c, --%s\n", options[i].val, options[i].name);
+        } else {
+            fprintf(stdout, "   --%s\n", options[i].name);
+        }
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     const char *url;
+    int opt;
+    int index;
+#ifdef UPIPE_HAVE_BEARSSL_H
+    bool use_bearssl = true;
+#endif
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    bool use_openssl = true;
+#endif
 
-    if (argc < 2) {
-        fprintf(stdout, "Usage: %s <url>\n", argv[0]);
-        exit(EXIT_FAILURE);
+    /*
+     * parse options
+     */
+    while ((opt = getopt_long(argc, argv, "hvq", options, &index)) != -1) {
+        switch (opt) {
+        case OPT_HELP:
+            usage(argv[0]);
+            exit(EXIT_SUCCESS);
+            return 0;
+
+        case OPT_VERBOSE:
+            if (log_level > UPROBE_LOG_VERBOSE)
+                log_level--;
+            break;
+
+        case OPT_QUIET:
+            if (log_level < UPROBE_LOG_ERROR)
+                log_level++;
+            break;
+
+#ifdef UPIPE_HAVE_BEARSSL_H
+        case OPT_USE_BEARSSL:
+            use_bearssl = true;
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+            use_openssl = false;
+#endif
+            break;
+#endif
+
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+        case OPT_USE_OPENSSL:
+            use_openssl = true;
+#ifdef UPIPE_HAVE_BEARSSL_H
+            use_bearssl = false;
+#endif
+            break;
+#endif
+
+        case -1:
+            break;
+
+        default:
+            abort();
+        }
     }
-    url = argv[1];
+
+    /*
+     * parse arguments
+     */
+    if (optind >= argc) {
+        usage(argv[0]);
+        exit(EXIT_FAILURE);
+        return -1;
+    }
+    url = argv[optind];
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -104,8 +202,7 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout,
-                                               UPROBE_LOG_LEVEL);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout, log_level);
     assert(logger != NULL);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);
@@ -113,24 +210,36 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_http_redir_alloc(logger);
     assert(logger);
+#ifdef UPIPE_HAVE_BEARSSL_H
+    if (use_bearssl) {
+        logger = uprobe_https_bearssl_alloc(logger);
+        assert(logger);
+    }
+#endif
+
+#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+    if (use_openssl) {
+        logger = uprobe_https_openssl_alloc(logger);
+        assert(logger);
+    }
+#endif
+
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
     struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
     struct upipe *upipe_null = upipe_void_alloc(upipe_null_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                             "null"));
+            uprobe_pfx_alloc(uprobe_use(logger), log_level, "null"));
 
     struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
     assert(upipe_http_src_mgr != NULL);
     struct upipe *upipe_http_src = upipe_void_alloc(upipe_http_src_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL,
-                             "http"));
+            uprobe_pfx_alloc(uprobe_use(logger), log_level, "http"));
     assert(upipe_http_src != NULL);
-    assert(upipe_set_output_size(upipe_http_src, READ_SIZE));
-    assert(upipe_set_uri(upipe_http_src, url));
-    assert(upipe_set_output(upipe_http_src, upipe_null));
+    ubase_assert(upipe_set_output_size(upipe_http_src, READ_SIZE));
+    ubase_assert(upipe_set_uri(upipe_http_src, url));
+    ubase_assert(upipe_set_output(upipe_http_src, upipe_null));
     upipe_release(upipe_null);
 
     upump_mgr_run(upump_mgr, NULL);

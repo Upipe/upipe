@@ -598,8 +598,10 @@ upipe_auto_inner_test_LDADD = $(LDADD) $(top_builddir)/lib/upipe-modules/libupip
 upipe_dtsdi_test_LDADD = $(LDADD) $(EV_LIBS) $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 upipe_auto_source_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la
 if HAVE_BEARSSL
+upipe_http_src_test_LDADD += $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
 upipe_auto_source_test_LDADD += $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
 endif
 if HAVE_OPENSSL
+upipe_http_src_test_LDADD += $(top_builddir)/lib/upipe-openssl/libupipe_openssl.la
 upipe_auto_source_test_LDADD += $(top_builddir)/lib/upipe-openssl/libupipe_openssl.la
 endif
