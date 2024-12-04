@@ -88,10 +88,48 @@ static enum uprobe_log_level uprobe_log_level = UPROBE_LOG_DEBUG;
 static struct uref_mgr *uref_mgr = NULL;
 static struct uclock *uclock = NULL;
 static struct uprobe *main_probe = NULL;
-static bool second_framer = false;
+static unsigned additional_framer = 0;
 static bool decode = false;
 static bool dump_date = false;
 static bool dump_size = false;
+static bool dump_random = false;
+static bool dump_hex = false;
+static int dump_hex_size = -1;
+
+enum {
+    OPT_VERBOSE,
+    OPT_QUIET,
+    OPT_HELP,
+    OPT_TS,
+    OPT_FRAMER,
+    OPT_REFRAME,
+    OPT_DECODE,
+    OPT_PID_FILTER_OUT,
+    OPT_PID,
+    OPT_DATE,
+    OPT_SIZE,
+    OPT_RANDOM,
+    OPT_HEX,
+    OPT_HEX_SIZE,
+};
+
+static struct option options[] = {
+    { "verbose", no_argument, NULL, OPT_VERBOSE },
+    { "quiet", no_argument, NULL, OPT_QUIET },
+    { "help", no_argument, NULL, OPT_HELP },
+    { "ts", no_argument, NULL, OPT_TS },
+    { "framer", required_argument, NULL, OPT_FRAMER },
+    { "reframe", no_argument, NULL, OPT_REFRAME },
+    { "decode", no_argument, NULL, OPT_DECODE },
+    { "pid-filter-out", no_argument, NULL, OPT_PID_FILTER_OUT },
+    { "pid", required_argument, NULL, OPT_PID },
+    { "date", no_argument, NULL, OPT_DATE },
+    { "size", no_argument, NULL, OPT_SIZE },
+    { "random", no_argument, NULL, OPT_RANDOM },
+    { "hex", no_argument, NULL, OPT_HEX},
+    { "hex-size", required_argument, NULL, OPT_HEX_SIZE },
+    { NULL, 0, NULL, 0 },
+};
 
 struct pid {
     struct uchain uchain;
@@ -160,6 +198,11 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
     UBASE_SIGNATURE_CHECK(args, UPIPE_PROBE_UREF_SIGNATURE);
     struct uref *uref = va_arg(args, struct uref *);
 
+    if (dump_random) {
+        if (ubase_check(uref_flow_get_random(uref)))
+            upipe_notice_va(upipe, "random");
+    }
+
     if (dump_date)
         uref_dump_clock_dbg(uref, upipe->uprobe);
 
@@ -173,6 +216,45 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
         else if (ubase_check(uref_pic_size(uref, &size, &vsize, &sample_size)))
             upipe_dbg_va(upipe, "pic size %zux%zu (sample %u)",
                          size, vsize, sample_size);
+    }
+
+    if (dump_hex) {
+        size_t block_size = 0;
+        if (ubase_check(uref_block_size(uref, &block_size))) {
+            const uint8_t *buffer = NULL;
+            int offset = 0;
+
+            printf("hexdump uref %p (block_size %zu)\n", uref, block_size);
+
+            if (dump_hex_size > 0 && dump_hex_size < block_size)
+                block_size = dump_hex_size;
+
+            while (block_size) {
+                int size = block_size;
+                if (!ubase_check(uref_block_read(uref, offset, &size, &buffer)) || !size) {
+                    upipe_err(upipe, "fail to read buffer");
+                    break;
+                }
+
+                for (int i = offset; i < offset + size; i++)
+                {
+                    if (!(i % 16)) {
+                        if (i)
+                            printf("\n");
+                        printf("%08x:", i);
+                    }
+                    if (!(i % 2 ))
+                        printf(" ");
+                    printf("%02x", buffer[i - offset]);
+                }
+                block_size -= size;
+                offset += size;
+            }
+            if (offset)
+                printf("\n");
+        } else {
+            upipe_err(upipe, "block size failed");
+        }
     }
 
     return UBASE_ERR_NONE;
@@ -200,23 +282,23 @@ static int catch_es(struct uprobe *uprobe, struct upipe *upipe,
                     UPROBE_LOG_VERBOSE, "probe"));
             assert(upipe);
 
-            if (second_framer) {
-                struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+            struct upipe_mgr *upipe_autof_mgr = upipe_autof_mgr_alloc();
+            for (unsigned i = 0; i < additional_framer; i++) {
                 upipe = upipe_void_chain_output(
                     upipe, upipe_autof_mgr,
-                    uprobe_pfx_alloc(
+                    uprobe_pfx_alloc_va(
                         uprobe_use(uprobe),
-                        UPROBE_LOG_VERBOSE, "framer 2"));
+                        UPROBE_LOG_VERBOSE, "framer %u", i));
                 assert(upipe);
-                upipe_mgr_release(upipe_autof_mgr);
 
                 upipe = upipe_void_chain_output(
                     upipe, upipe_probe_uref_mgr,
-                    uprobe_pfx_alloc(
+                    uprobe_pfx_alloc_va(
                         uprobe_alloc(catch_uref, uprobe_use(uprobe)),
-                        UPROBE_LOG_VERBOSE, "probe 2"));
+                        UPROBE_LOG_VERBOSE, "probe %u", i));
                 assert(upipe);
             }
+            upipe_mgr_release(upipe_autof_mgr);
 
             if (decode) {
                 struct upipe_mgr *upipe_fdec_mgr = upipe_fdec_mgr_alloc();
@@ -443,33 +525,6 @@ static struct upipe *upipe_source_alloc(const char *uri, struct uprobe *uprobe)
     return upipe_src;
 }
 
-enum {
-    OPT_VERBOSE,
-    OPT_QUIET,
-    OPT_TS,
-    OPT_FRAMER,
-    OPT_REFRAME,
-    OPT_DECODE,
-    OPT_PID_FILTER_OUT,
-    OPT_PID,
-    OPT_DATE,
-    OPT_SIZE,
-};
-
-static struct option options[] = {
-    { "verbose", no_argument, NULL, OPT_VERBOSE },
-    { "quiet", no_argument, NULL, OPT_QUIET },
-    { "ts", no_argument, NULL, OPT_TS },
-    { "framer", required_argument, NULL, OPT_FRAMER },
-    { "reframe", no_argument, NULL, OPT_REFRAME },
-    { "decode", no_argument, NULL, OPT_DECODE },
-    { "pid-filter-out", no_argument, NULL, OPT_PID_FILTER_OUT },
-    { "pid", required_argument, NULL, OPT_PID },
-    { "date", no_argument, NULL, OPT_DATE },
-    { "size", no_argument, NULL, OPT_SIZE },
-    { NULL, 0, NULL, 0 },
-};
-
 static void usage(const char *name)
 {
     fprintf(stderr, "usage: %s [options] <source>\n", name);
@@ -505,6 +560,11 @@ int main(int argc, char *argv[])
                     uprobe_log_level--;
                 break;
 
+            case OPT_HELP:
+                usage(argv[0]);
+                exit(0);
+                break;
+
             case OPT_TS:
                 ts = true;
                 break;
@@ -514,7 +574,7 @@ int main(int argc, char *argv[])
                 break;
 
             case OPT_REFRAME:
-                second_framer = true;
+                additional_framer++;
                 break;
 
             case OPT_DECODE:
@@ -535,6 +595,18 @@ int main(int argc, char *argv[])
 
             case OPT_SIZE:
                 dump_size = true;
+                break;
+
+            case OPT_RANDOM:
+                dump_random = true;
+                break;
+
+            case OPT_HEX:
+                dump_hex = true;
+                break;
+
+            case OPT_HEX_SIZE:
+                dump_hex_size = atoi(optarg);
                 break;
 
             default:
