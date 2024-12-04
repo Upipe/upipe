@@ -461,19 +461,10 @@ static int upipe_http_src_status_cb(http_parser *parser)
 
     upipe_dbg_va(upipe, "reply http code %i", parser->status_code);
 
-    switch (parser->status_code) {
-    /* success */
-    case 200:
-    /* partial content */
-    case 206:
-    /* found */
-    case 302:
-        break;
-    default:
-        upipe_http_src_throw_error(upipe, parser->status_code);
-        return -1;
-    }
-    return 0;
+    if (parser->status_code < 400)
+        return 0;
+    upipe_http_src_throw_error(upipe, parser->status_code);
+    return -1;
 }
 
 static int upipe_http_src_output_data(struct upipe *upipe,
@@ -545,12 +536,9 @@ static int upipe_http_src_message_complete(http_parser *parser)
     upipe_http_src_close(upipe);
     upipe_throw_source_end(upipe);
 
-    switch (status_code) {
-    /* redirect */
-    case 302:
+    if (status_code >= 300 && status_code < 400 && location != NULL)
+        /* redirect */
         upipe_http_src_throw_redirect(upipe, location);
-        break;
-    }
 
     free(location);
 

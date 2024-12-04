@@ -48,7 +48,7 @@
 #include "upipe/upipe.h"
 #include "upipe-modules/upipe_http_source.h"
 #include "upipe-modules/upipe_null.h"
-
+#include "upipe-modules/uprobe_http_redirect.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -72,6 +72,8 @@ static int catch(struct uprobe *uprobe, struct upipe *upipe,
         case UPROBE_READY:
         case UPROBE_DEAD:
         case UPROBE_SOURCE_END:
+        case UPROBE_NEW_FLOW_DEF:
+        case UPROBE_HTTP_SRC_REDIRECT:
             break;
     }
     return UBASE_ERR_NONE;
@@ -109,6 +111,8 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
+    logger = uprobe_http_redir_alloc(logger);
+    assert(logger);
     logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
