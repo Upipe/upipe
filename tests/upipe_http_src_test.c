@@ -48,8 +48,8 @@
 #include "upump-ev/upump_ev.h"
 #include "upipe/upipe.h"
 #include "upipe-modules/upipe_http_source.h"
-#include "upipe-modules/upipe_null.h"
 #include "upipe-modules/uprobe_http_redirect.h"
+#include "upipe-modules/upipe_file_sink.h"
 #ifdef UPIPE_HAVE_BEARSSL_H
 #include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
@@ -228,25 +228,27 @@ int main(int argc, char *argv[])
                                    UBUF_POOL_DEPTH);
     assert(logger != NULL);
 
-    struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
-    struct upipe *upipe_null = upipe_void_alloc(upipe_null_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), log_level, "null"));
+    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
+    struct upipe *upipe_fsink = upipe_void_alloc(
+        upipe_fsink_mgr,
+        uprobe_pfx_alloc(uprobe_use(logger), log_level, "fsink"));
+    upipe_mgr_release(upipe_fsink_mgr);
+    ubase_assert(upipe_fsink_set_path(
+        upipe_fsink, "/dev/stdout", UPIPE_FSINK_OVERWRITE));
 
     struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
-    assert(upipe_http_src_mgr != NULL);
     struct upipe *upipe_http_src = upipe_void_alloc(upipe_http_src_mgr,
             uprobe_pfx_alloc(uprobe_use(logger), log_level, "http"));
+    upipe_mgr_release(upipe_http_src_mgr); // nop
     assert(upipe_http_src != NULL);
     ubase_assert(upipe_set_output_size(upipe_http_src, READ_SIZE));
     ubase_assert(upipe_set_uri(upipe_http_src, url));
-    ubase_assert(upipe_set_output(upipe_http_src, upipe_null));
-    upipe_release(upipe_null);
+    ubase_assert(upipe_set_output(upipe_http_src, upipe_fsink));
+    upipe_release(upipe_fsink);
 
     upump_mgr_run(upump_mgr, NULL);
 
     upipe_release(upipe_http_src);
-    upipe_mgr_release(upipe_http_src_mgr); // nop
-    upipe_mgr_release(upipe_null_mgr); // nop
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
