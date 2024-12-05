@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
     assert(uclock != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stdout, log_level);
+    struct uprobe *logger = uprobe_stdio_alloc(&uprobe, stderr, log_level);
     assert(logger != NULL);
     logger = uprobe_uref_mgr_alloc(logger, uref_mgr);
     assert(logger != NULL);
