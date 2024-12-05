@@ -1,8 +1,10 @@
 /*
  * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Sebastien Gougelet
  *          Christophe Massiot
+ *          Arnaud de Turckheim
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -609,6 +611,9 @@ static int _upipe_blit_sub_set_rect(struct upipe *upipe,
         uint64_t loffset, uint64_t roffset, uint64_t toffset, uint64_t boffset)
 {
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    if (sub->loffset == loffset && sub->roffset == roffset &&
+        sub->toffset == toffset && sub->boffset == boffset)
+        return UBASE_ERR_NONE;
     sub->loffset = loffset;
     sub->roffset = roffset;
     sub->toffset = toffset;
@@ -635,6 +640,11 @@ static int _upipe_blit_sub_set_margin(struct upipe *upipe,
                                       struct urational bmargin)
 {
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
+    if (!urational_cmp(&sub->lmargin, &lmargin) &&
+        !urational_cmp(&sub->rmargin, &rmargin) &&
+        !urational_cmp(&sub->tmargin, &tmargin) &&
+        !urational_cmp(&sub->bmargin, &bmargin))
+        return UBASE_ERR_NONE;
     sub->lmargin = lmargin;
     sub->rmargin = rmargin;
     sub->tmargin = tmargin;
