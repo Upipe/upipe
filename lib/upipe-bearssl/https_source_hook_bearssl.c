@@ -161,7 +161,7 @@ static int https_src_hook_state_to_code(unsigned state)
         flags |= UPIPE_HTTP_SRC_HOOK_TRANSPORT_READ;
     if (state & BR_SSL_SENDAPP)
         flags |= UPIPE_HTTP_SRC_HOOK_DATA_WRITE;
-    if (state & BR_SSL_RECVAPP)
+    if (state & BR_SSL_RECVAPP || state & BR_SSL_CLOSED)
         flags |= UPIPE_HTTP_SRC_HOOK_DATA_READ;
     return flags;
 }
@@ -245,8 +245,12 @@ static ssize_t https_src_hook_data_read(struct upipe_http_src_hook *hook,
         memcpy(buffer, buf, rsize);
         br_ssl_engine_recvapp_ack(eng, rsize);
     }
-    else if (state & BR_SSL_CLOSED)
-        rsize = 0;
+    else if (state & BR_SSL_CLOSED) {
+        int err = br_ssl_engine_last_error(eng);
+        if (err)
+            errno = EIO;
+        rsize = err ? -1 : 0;
+    }
     else
         errno = EAGAIN;
 
