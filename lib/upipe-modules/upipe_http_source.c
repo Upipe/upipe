@@ -917,7 +917,7 @@ static void upipe_http_src_data_out(struct upump *upump)
     else if (len == 0) {
         upipe_dbg(upipe, "connection closed");
     }
-    else if (len == upipe_http_src->output_size)
+    else if (len > 0)
         ueventfd_write(&upipe_http_src->data_out);
 
     upipe_http_src_process(upipe, buffer, len > 0 ? len : 0);
