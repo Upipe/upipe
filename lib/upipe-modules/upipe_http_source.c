@@ -771,9 +771,6 @@ static void upipe_http_src_worker_update_state(struct upipe *upipe, int ret)
     if (ret & UPIPE_HTTP_SRC_HOOK_TRANSPORT_WRITE)
         if (upipe_http_src->upump_write)
             upump_start(upipe_http_src->upump_write);
-    if (ret & UPIPE_HTTP_SRC_HOOK_TRANSPORT_READ)
-        if (upipe_http_src->upump_read)
-            upump_start(upipe_http_src->upump_read);
     if (ret & UPIPE_HTTP_SRC_HOOK_DATA_WRITE)
         ueventfd_write(&upipe_http_src->data_in);
     if (ret & UPIPE_HTTP_SRC_HOOK_DATA_READ)
