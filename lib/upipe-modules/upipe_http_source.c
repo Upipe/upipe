@@ -794,8 +794,8 @@ static void upipe_http_src_worker_read(struct upump *upump)
     if (likely(upipe_http_src->upump_timeout))
         upump_restart(upipe_http_src->upump_timeout);
 
-    int ret = upipe_http_src->hook->transport.read(upipe_http_src->hook,
-                                                   upipe_http_src->fd);
+    int ret = upipe_http_src->hook->transport.read(
+        upipe, upipe_http_src->hook, upipe_http_src->fd);
     upipe_http_src_worker_update_state(upipe, ret);
 }
 
@@ -807,8 +807,8 @@ static void upipe_http_src_worker_write(struct upump *upump)
     if (likely(upipe_http_src->upump_timeout))
         upump_restart(upipe_http_src->upump_timeout);
 
-    int ret = upipe_http_src->hook->transport.write(upipe_http_src->hook,
-                                                    upipe_http_src->fd);
+    int ret = upipe_http_src->hook->transport.write(
+        upipe, upipe_http_src->hook, upipe_http_src->fd);
     upipe_http_src_worker_update_state(upipe, ret);
 }
 
@@ -841,7 +841,8 @@ static void upipe_http_src_data_in(struct upump *upump)
         return;
 
     int ret = upipe_http_src->hook->data.write(
-        upipe_http_src->hook, (unsigned char *)request->buf, request->len);
+        upipe, upipe_http_src->hook, (unsigned char *)request->buf,
+        request->len);
 
     if (ret < 0) {
         switch(errno) {
@@ -897,7 +898,7 @@ static void upipe_http_src_data_out(struct upump *upump)
     uint8_t buffer[upipe_http_src->output_size];
     ssize_t len =
         upipe_http_src->hook->data.read(
-            upipe_http_src->hook, buffer, upipe_http_src->output_size);
+            upipe, upipe_http_src->hook, buffer, upipe_http_src->output_size);
     if (unlikely(len < 0)) {
         switch (errno) {
             case EINTR:
