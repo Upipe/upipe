@@ -93,6 +93,7 @@ enum opt {
     OPT_HELP        = 'h',
     OPT_VERBOSE     = 'v',
     OPT_QUIET       = 'q',
+    OPT_PARALLEL    = 'p',
     OPT_USE_BEARSSL = 0x100,
     OPT_USE_OPENSSL,
 };
@@ -101,6 +102,7 @@ static struct option options[] = {
     { "help", no_argument, NULL, OPT_HELP },
     { "verbose", no_argument, NULL, OPT_VERBOSE },
     { "quiet", no_argument, NULL, OPT_QUIET },
+    { "parallel", required_argument, NULL, OPT_PARALLEL },
     { "use-bearssl", no_argument, NULL, OPT_USE_BEARSSL },
     { "use-openssl", no_argument, NULL, OPT_USE_OPENSSL },
     { 0, 0, 0, 0 },
@@ -121,9 +123,9 @@ static int usage(const char *name)
 
 int main(int argc, char *argv[])
 {
-    const char *url;
     int opt;
     int index;
+    int parallel = 1;
 #ifdef UPIPE_HAVE_BEARSSL_H
     bool use_bearssl = true;
 #endif
@@ -134,7 +136,7 @@ int main(int argc, char *argv[])
     /*
      * parse options
      */
-    while ((opt = getopt_long(argc, argv, "hvq", options, &index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "hvqp:", options, &index)) != -1) {
         switch (opt) {
         case OPT_HELP:
             usage(argv[0]);
@@ -149,6 +151,10 @@ int main(int argc, char *argv[])
         case OPT_QUIET:
             if (log_level < UPROBE_LOG_ERROR)
                 log_level++;
+            break;
+
+        case OPT_PARALLEL:
+            parallel = atoi(optarg);
             break;
 
 #ifdef UPIPE_HAVE_BEARSSL_H
@@ -185,7 +191,6 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
         return -1;
     }
-    url = argv[optind];
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
     assert(umem_mgr != NULL);
@@ -208,6 +213,9 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_upump_mgr_alloc(logger, upump_mgr);
     assert(logger != NULL);
+    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
+                                   UBUF_POOL_DEPTH);
+    assert(logger != NULL);
     logger = uprobe_http_redir_alloc(logger);
     assert(logger);
 #ifdef UPIPE_HAVE_BEARSSL_H
@@ -224,31 +232,34 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    logger = uprobe_ubuf_mem_alloc(logger, umem_mgr, UBUF_POOL_DEPTH,
-                                   UBUF_POOL_DEPTH);
-    assert(logger != NULL);
+    struct upipe *sources[parallel];
+    for (int i = 0; i < parallel; i++) {
+        for (int j = optind; j < argc; j++) {
+            struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
+            struct upipe *upipe_fsink = upipe_void_alloc(
+                upipe_fsink_mgr,
+                uprobe_pfx_alloc(uprobe_use(logger), log_level, "fsink"));
+            upipe_mgr_release(upipe_fsink_mgr);
+            ubase_assert(upipe_fsink_set_path(
+                upipe_fsink, "/dev/stdout", UPIPE_FSINK_OVERWRITE));
 
-    struct upipe_mgr *upipe_fsink_mgr = upipe_fsink_mgr_alloc();
-    struct upipe *upipe_fsink = upipe_void_alloc(
-        upipe_fsink_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), log_level, "fsink"));
-    upipe_mgr_release(upipe_fsink_mgr);
-    ubase_assert(upipe_fsink_set_path(
-        upipe_fsink, "/dev/stdout", UPIPE_FSINK_OVERWRITE));
-
-    struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
-    struct upipe *upipe_http_src = upipe_void_alloc(upipe_http_src_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), log_level, "http"));
-    upipe_mgr_release(upipe_http_src_mgr); // nop
-    assert(upipe_http_src != NULL);
-    ubase_assert(upipe_set_output_size(upipe_http_src, READ_SIZE));
-    ubase_assert(upipe_set_uri(upipe_http_src, url));
-    ubase_assert(upipe_set_output(upipe_http_src, upipe_fsink));
-    upipe_release(upipe_fsink);
+            struct upipe_mgr *upipe_http_src_mgr = upipe_http_src_mgr_alloc();
+            sources[i] = upipe_void_alloc(
+                upipe_http_src_mgr,
+                uprobe_pfx_alloc(uprobe_use(logger), log_level, "http"));
+            upipe_mgr_release(upipe_http_src_mgr); // nop
+            assert(sources[i] != NULL);
+            ubase_assert(upipe_set_output_size(sources[i], READ_SIZE));
+            ubase_assert(upipe_set_uri(sources[i], argv[j]));
+            ubase_assert(upipe_set_output(sources[i], upipe_fsink));
+            upipe_release(upipe_fsink);
+        }
+    }
 
     upump_mgr_run(upump_mgr, NULL);
 
-    upipe_release(upipe_http_src);
+    for (int i = 0; i < parallel; i++)
+        upipe_release(sources[i]);
 
     upump_mgr_release(upump_mgr);
     uref_mgr_release(uref_mgr);
