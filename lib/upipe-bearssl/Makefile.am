@@ -2,9 +2,9 @@ NULL =
 lib_LTLIBRARIES = libupipe_bearssl.la
 
 libupipe_bearssl_la_SOURCES = \
-	https_source_hook.h \
-	https_source_hook.c \
-	uprobe_https.c \
+	https_source_hook_bearssl.h \
+	https_source_hook_bearssl.c \
+	uprobe_https_bearssl.c \
 	$(NULL)
 
 libupipe_bearssl_la_CPPFLAGS = -I$(top_builddir)/include -I$(top_srcdir)/include

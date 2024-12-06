@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2024 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -33,17 +33,17 @@
 
 #include "upipe-modules/upipe_http_source.h"
 
-#include "upipe-bearssl/uprobe_https.h"
+#include "upipe-bearssl/uprobe_https_bearssl.h"
 
-#include "https_source_hook.h"
+#include "https_source_hook_bearssl.h"
 
 /** @This stores the private context of the probe. */
-struct uprobe_https {
+struct uprobe_https_bearssl {
     /** public probe structure */
     struct uprobe uprobe;
 };
 
-UPROBE_HELPER_UPROBE(uprobe_https, uprobe);
+UPROBE_HELPER_UPROBE(uprobe_https_bearssl, uprobe);
 
 /** @internal @This catches events.
  *
@@ -52,7 +52,7 @@ UPROBE_HELPER_UPROBE(uprobe_https, uprobe);
  * @param event event thrown
  * @param args optional arguments
  */
-static int uprobe_https_catch(struct uprobe *uprobe,
+static int uprobe_https_bearssl_catch(struct uprobe *uprobe,
                               struct upipe *upipe,
                               int event, va_list args)
 {
@@ -70,7 +70,8 @@ static int uprobe_https_catch(struct uprobe *uprobe,
     const char *scheme = NULL;
     uref_uri_get_scheme(flow_def, &scheme);
     if (scheme && !strcasecmp(scheme, "https")) {
-        struct upipe_http_src_hook *https_hook = https_src_hook_alloc(flow_def);
+        struct upipe_http_src_hook *https_hook =
+            https_src_hook_bearssl_alloc(flow_def);
         if (unlikely(!https_hook))
             return UBASE_ERR_ALLOC;
 
@@ -78,6 +79,7 @@ static int uprobe_https_catch(struct uprobe *uprobe,
             *hook = https_hook;
         else
             upipe_http_src_hook_release(https_hook);
+        upipe_dbg(upipe, "provide BearSSL HTTPS hook");
         return UBASE_ERR_NONE;
     }
     return UBASE_ERR_UNHANDLED;
@@ -89,28 +91,30 @@ static int uprobe_https_catch(struct uprobe *uprobe,
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-static struct uprobe *uprobe_https_init(struct uprobe_https *uprobe_https,
-                                        struct uprobe *next)
+static struct uprobe *
+uprobe_https_bearssl_init(struct uprobe_https_bearssl *uprobe_https,
+                          struct uprobe *next)
 {
     assert(uprobe_https);
-    struct uprobe *uprobe = uprobe_https_to_uprobe(uprobe_https);
-    uprobe_init(uprobe, uprobe_https_catch, next);
+    struct uprobe *uprobe = uprobe_https_bearssl_to_uprobe(uprobe_https);
+    uprobe_init(uprobe, uprobe_https_bearssl_catch, next);
     return uprobe;
 }
 
-/** @internal @This cleans a uprobe_https structure.
+/** @internal @This cleans a uprobe_https_bearssl structure.
  *
  * @param uprobe_https pointer to the private context
  */
-static void uprobe_https_clean(struct uprobe_https *uprobe_https)
+static void
+uprobe_https_bearssl_clean(struct uprobe_https_bearssl *uprobe_https)
 {
     assert(uprobe_https);
-    struct uprobe *uprobe = uprobe_https_to_uprobe(uprobe_https);
+    struct uprobe *uprobe = uprobe_https_bearssl_to_uprobe(uprobe_https);
     uprobe_clean(uprobe);
 }
 
 #define ARGS_DECL struct uprobe *next
 #define ARGS next
-UPROBE_HELPER_ALLOC(uprobe_https)
+UPROBE_HELPER_ALLOC(uprobe_https_bearssl)
 #undef ARGS
 #undef ARGS_DECL
