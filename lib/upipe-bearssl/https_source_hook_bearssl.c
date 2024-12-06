@@ -36,6 +36,137 @@
 
 #include "https_source_hook_bearssl.h"
 
+static const char *error_string(int error_code)
+{
+    switch (error_code) {
+        case BR_ERR_OK:
+            return "OK";
+        case BR_ERR_BAD_PARAM:
+            return "BAD_PARAM";
+        case BR_ERR_BAD_STATE:
+            return "BAD_STATE";
+        case BR_ERR_UNSUPPORTED_VERSION:
+            return "UNSUPPORTED_VERSION";
+        case BR_ERR_BAD_VERSION:
+            return "BAD_VERSION";
+        case BR_ERR_BAD_LENGTH:
+            return "BAD_LENGTH";
+        case BR_ERR_TOO_LARGE:
+            return "TOO_LARGE";
+        case BR_ERR_BAD_MAC:
+            return "BAD_MAC";
+        case BR_ERR_NO_RANDOM:
+            return "NO_RANDOM";
+        case BR_ERR_UNKNOWN_TYPE:
+            return "UNKNOWN_TYPE";
+        case BR_ERR_UNEXPECTED:
+            return "UNEXPECTED";
+        case BR_ERR_BAD_CCS:
+            return "BAD_CCS";
+        case BR_ERR_BAD_ALERT:
+            return "BAD_ALERT";
+        case BR_ERR_BAD_HANDSHAKE:
+            return "BAD_HANDSHAKE";
+        case BR_ERR_OVERSIZED_ID:
+            return "OVERSIZED_ID";
+        case BR_ERR_BAD_CIPHER_SUITE:
+            return "BAD_CIPHER_SUITE";
+        case BR_ERR_BAD_COMPRESSION:
+            return "BAD_COMPRESSION";
+        case BR_ERR_BAD_FRAGLEN:
+            return "BAD_FRAGLEN";
+        case BR_ERR_BAD_SECRENEG:
+            return "BAD_SECRENEG";
+        case BR_ERR_EXTRA_EXTENSION:
+            return "EXTRA_EXTENSION";
+        case BR_ERR_BAD_SNI:
+            return "BAD_SNI";
+        case BR_ERR_BAD_HELLO_DONE:
+            return "BAD_HELLO_DONE";
+        case BR_ERR_LIMIT_EXCEEDED:
+            return "LIMIT_EXCEEDED";
+        case BR_ERR_BAD_FINISHED:
+            return "BAD_FINISHED";
+        case BR_ERR_RESUME_MISMATCH:
+            return "RESUME_MISMATCH";
+        case BR_ERR_INVALID_ALGORITHM:
+            return "INVALID_ALGORITHM";
+        case BR_ERR_BAD_SIGNATURE:
+            return "BAD_SIGNATURE";
+        case BR_ERR_WRONG_KEY_USAGE:
+            return "WRONG_KEY_USAGE";
+        case BR_ERR_NO_CLIENT_AUTH:
+            return "NO_CLIENT_AUTH";
+        case BR_ERR_IO:
+            return "IO";
+        case BR_ERR_RECV_FATAL_ALERT:
+            return "RECV_FATAL_ALERT";
+        case BR_ERR_SEND_FATAL_ALERT:
+            return "SEND_FATAL_ALERT";
+        case BR_ERR_X509_OK:
+            return "X509_OK";
+        case BR_ERR_X509_INVALID_VALUE:
+            return "X509_INVALID_VALUE";
+        case BR_ERR_X509_TRUNCATED:
+            return "X509_TRUNCATED";
+        case BR_ERR_X509_EMPTY_CHAIN:
+            return "X509_EMPTY_CHAIN";
+        case BR_ERR_X509_INNER_TRUNC:
+            return "X509_INNER_TRUNC";
+        case BR_ERR_X509_BAD_TAG_CLASS:
+            return "X509_BAD_TAG_CLASS";
+        case BR_ERR_X509_BAD_TAG_VALUE:
+            return "X509_BAD_TAG_VALUE";
+        case BR_ERR_X509_INDEFINITE_LENGTH:
+            return "X509_INDEFINITE_LENGTH";
+        case BR_ERR_X509_EXTRA_ELEMENT:
+            return "X509_EXTRA_ELEMENT";
+        case BR_ERR_X509_UNEXPECTED:
+            return "X509_UNEXPECTED";
+        case BR_ERR_X509_NOT_CONSTRUCTED:
+            return "X509_NOT_CONSTRUCTED";
+        case BR_ERR_X509_NOT_PRIMITIVE:
+            return "X509_NOT_PRIMITIVE";
+        case BR_ERR_X509_PARTIAL_BYTE:
+            return "X509_PARTIAL_BYTE";
+        case BR_ERR_X509_BAD_BOOLEAN:
+            return "X509_BAD_BOOLEAN";
+        case BR_ERR_X509_OVERFLOW:
+            return "X509_OVERFLOW";
+        case BR_ERR_X509_BAD_DN:
+            return "X509_BAD_DN";
+        case BR_ERR_X509_BAD_TIME:
+            return "X509_BAD_TIME";
+        case BR_ERR_X509_UNSUPPORTED:
+            return "X509_UNSUPPORTED";
+        case BR_ERR_X509_LIMIT_EXCEEDED:
+            return "X509_LIMIT_EXCEEDED";
+        case BR_ERR_X509_WRONG_KEY_TYPE:
+            return "X509_WRONG_KEY_TYPE";
+        case BR_ERR_X509_BAD_SIGNATURE:
+            return "X509_BAD_SIGNATURE";
+        case BR_ERR_X509_TIME_UNKNOWN:
+            return "X509_TIME_UNKNOWN";
+        case BR_ERR_X509_EXPIRED:
+            return "X509_EXPIRED";
+        case BR_ERR_X509_DN_MISMATCH:
+            return "X509_DN_MISMATCH";
+        case BR_ERR_X509_BAD_SERVER_NAME:
+            return "X509_BAD_SERVER_NAME";
+        case BR_ERR_X509_CRITICAL_EXTENSION:
+            return "X509_CRITICAL_EXTENSION";
+        case BR_ERR_X509_NOT_CA:
+            return "X509_NOT_CA";
+        case BR_ERR_X509_FORBIDDEN_KEY_USAGE:
+            return "X509_FORBIDDEN_KEY_USAGE";
+        case BR_ERR_X509_WEAK_PUBLIC_KEY:
+            return "X509_WEAK_PUBLIC_KEY";
+        case BR_ERR_X509_NOT_TRUSTED:
+            return "X509_NOT_TRUSTED";
+    }
+    return "Unknown error";
+}
+
 /** This describes a x509 no anchor context to allow not trusted certificate. */
 struct x509_noanchor_context {
     const br_x509_class *vtable;
@@ -168,12 +299,14 @@ static int https_src_hook_state_to_code(unsigned state)
 
 /** @internal @This reads from the socket to the SSL engine.
  *
+ * @param upipe description structure of the pipe
  * @param hook SSL hook structure
  * @param fd socket file descriptor
  * @return 0 or negative value on error, 1 if more data is needed, 2 otherwise
  */
 static int
-https_src_hook_transport_read(struct upipe_http_src_hook *hook, int fd)
+https_src_hook_transport_read(struct upipe *upipe,
+                              struct upipe_http_src_hook *hook, int fd)
 {
     struct https_src_hook_bearssl *https =
         https_src_hook_bearssl_from_hook(hook);
@@ -196,12 +329,14 @@ https_src_hook_transport_read(struct upipe_http_src_hook *hook, int fd)
 
 /** @internal @This writes from the SSL engine to the socket.
  *
+ * @param upipe description structure of the pipe
  * @param hook SSL hook structure
  * @param fd socket file descriptor
  * @return 0 or negative value on error, 1 if more data is needed, 2 otherwise
  */
 static int
-https_src_hook_transport_write(struct upipe_http_src_hook *hook, int fd)
+https_src_hook_transport_write(struct upipe *upipe,
+                               struct upipe_http_src_hook *hook, int fd)
 {
     struct https_src_hook_bearssl *https =
         https_src_hook_bearssl_from_hook(hook);
@@ -223,13 +358,15 @@ https_src_hook_transport_write(struct upipe_http_src_hook *hook, int fd)
 
 /** @internal @This reads data from the SSL engine to a buffer.
  *
+ * @param upipe description structure of the pipe
  * @param hook SSL hook structure
  * @param buffer filled with data
  * @param count buffer size
  * @return a negative value on error, 0 if the connection is closed, the number
  * of bytes written to the buffer
  */
-static ssize_t https_src_hook_data_read(struct upipe_http_src_hook *hook,
+static ssize_t https_src_hook_data_read(struct upipe *upipe,
+                                        struct upipe_http_src_hook *hook,
                                         uint8_t *buffer, size_t count)
 {
     struct https_src_hook_bearssl *https =
@@ -247,8 +384,10 @@ static ssize_t https_src_hook_data_read(struct upipe_http_src_hook *hook,
     }
     else if (state & BR_SSL_CLOSED) {
         int err = br_ssl_engine_last_error(eng);
-        if (err)
+        if (err) {
+            upipe_err_va(upipe, "connection failed (%s)", error_string(err));
             errno = EIO;
+        }
         rsize = err ? -1 : 0;
     }
     else
@@ -259,12 +398,14 @@ static ssize_t https_src_hook_data_read(struct upipe_http_src_hook *hook,
 
 /** @internal @This writes data from a buffer to the SSL engine.
  *
+ * @param upipe description structure of the pipe
  * @param hook SSL hook structure
  * @param buffer data to write
  * @param count buffer number of bytes in the buffer
  * @return a negative value on error or the number of bytes read from the buffer
  */
-static ssize_t https_src_hook_data_write(struct upipe_http_src_hook *hook,
+static ssize_t https_src_hook_data_write(struct upipe *upipe,
+                                         struct upipe_http_src_hook *hook,
                                          const uint8_t *buffer, size_t count)
 {
     struct https_src_hook_bearssl *https =

@@ -52,15 +52,17 @@ struct upipe_http_src_hook {
 
     struct {
         /** called when the transport socket is ready for read */
-        int (*read)(struct upipe_http_src_hook *, int);
+        int (*read)(struct upipe *upipe, struct upipe_http_src_hook *, int);
         /** called when the transport socket is ready for write */
-        int (*write)(struct upipe_http_src_hook *, int);
+        int (*write)(struct upipe *upipe, struct upipe_http_src_hook *, int);
     } transport;
     struct {
         /** called when there is data for read */
-        ssize_t (*read)(struct upipe_http_src_hook *, uint8_t *, size_t);
+        ssize_t (*read)(struct upipe *upipe, struct upipe_http_src_hook *,
+                        uint8_t *, size_t);
         /** called when there is space for data to write */
-        ssize_t (*write)(struct upipe_http_src_hook *, const uint8_t *, size_t);
+        ssize_t (*write)(struct upipe *upipe, struct upipe_http_src_hook *,
+                         const uint8_t *, size_t);
     } data;
 };
 
