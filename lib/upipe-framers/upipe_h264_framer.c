@@ -142,6 +142,11 @@ struct upipe_h264f {
     /** active picture parameter set, or -1 */
     int active_pps;
 
+    /** warn on inactive sps */
+    bool warn_inactive_sps;
+    /** warn on inactive pps */
+    bool warn_inactive_pps;
+
     /* parsing results - headers */
     /** profile */
     uint8_t profile;
@@ -359,6 +364,9 @@ static struct upipe *upipe_h264f_alloc(struct upipe_mgr *mgr,
     for (i = 0; i < H264PPS_ID_MAX; i++)
         upipe_h264f->pps[i] = NULL;
     upipe_h264f->active_pps = -1;
+
+    upipe_h264f->warn_inactive_sps = false;
+    upipe_h264f->warn_inactive_pps = false;
 
     upipe_h264f->acquired = false;
     upipe_throw_ready(upipe);
@@ -1002,6 +1010,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_throw_fatal(upipe, err);
 
     upipe_h264f->active_sps = sps_id;
+    upipe_h264f->warn_inactive_sps = true;
     ubuf_block_stream_clean(s);
 
     upipe_h264f_store_flow_def(upipe, NULL);
@@ -1054,6 +1063,7 @@ static bool upipe_h264f_activate_pps(struct upipe *upipe, uint32_t pps_id)
     ubuf_block_stream_skip_bits(s, 1);
 
     upipe_h264f->active_pps = pps_id;
+    upipe_h264f->warn_inactive_pps = true;
     ubuf_block_stream_clean(s);
     return true;
 }
@@ -1223,7 +1233,10 @@ static int upipe_h264f_handle_sei_pic_timing(struct upipe *upipe,
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
     if (unlikely(upipe_h264f->active_sps == -1)) {
-        upipe_warn(upipe, "discarding early picture timing SEI");
+        if (upipe_h264f->warn_inactive_sps)
+            upipe_warn(upipe, "discarding picture timing SEI");
+        else
+            upipe_dbg(upipe, "discarding early picture timing SEI");
         return UBASE_ERR_NONE;
     }
 
@@ -2020,7 +2033,11 @@ static struct uref *upipe_h264f_prepare_annexb(struct upipe *upipe)
     }
     if (upipe_h264f->au_slice_nal == UINT8_MAX ||
         upipe_h264f->active_sps == -1 || upipe_h264f->active_pps == -1) {
-        upipe_warn(upipe, "discarding data without SPS/PPS");
+        if ((upipe_h264f->active_sps == -1 && upipe_h264f->warn_inactive_sps) ||
+            (upipe_h264f->active_pps == -1 && upipe_h264f->warn_inactive_pps))
+            upipe_warn(upipe, "discarding data without SPS/PPS");
+        else
+            upipe_dbg(upipe, "discarding early data without SPS/PPS");
         upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
         upipe_h264f->au_size = 0;
         upipe_h264f->au_nal_units = 0;
@@ -2189,7 +2206,10 @@ static void upipe_h264f_end_annexb(struct upipe *upipe, struct upump **upump_p)
         }
 
         if (!ubase_check(err)) {
-            upipe_warn(upipe, "discarding invalid slice data");
+            if (upipe_h264f->warn_inactive_pps)
+                upipe_warn(upipe, "discarding invalid slice data");
+            else
+                upipe_dbg(upipe, "discarding early slice data");
             upipe_h264f_consume_uref_stream(upipe, upipe_h264f->au_size);
             upipe_h264f->au_size = 0;
             return;
