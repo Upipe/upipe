@@ -37,6 +37,8 @@ extern "C" {
 #include "upipe/uref.h"
 #include "upipe/udict.h"
 
+#include <sys/socket.h>
+
 /** @This imports all attributes from a uref into another uref (see also
  * @ref udict_import).
  *
@@ -2149,6 +2151,198 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
                                    format, args);                           \
 }
 
+
+/*
+ * sockaddr attributes
+ */
+
+/* @This allows to define accessors for a sockaddr attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param name string defining the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_SOCKADDR(group, attr, name, desc)                         \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @param s pointer to the sockaddr size (modified during execution)        \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, struct sockaddr **p, socklen_t *s) \
+{                                                                           \
+    struct udict_opaque opaque;                                             \
+    int err = uref_attr_get_opaque(uref, &opaque, UDICT_TYPE_SOCKADDR, name); \
+    if (ubase_check(err)) {                                                 \
+        *p = (struct sockaddr*)opaque.v;                                    \
+        *s = opaque.size;                                                   \
+    }                                                                       \
+    return err;                                                             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p value to set                                                    \
+ * @param s sockaddr size                                                   \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, struct sockaddr *p, socklen_t s) \
+{                                                                           \
+    struct udict_opaque opaque = {                                          \
+        .v = (uint8_t *)p,                                                  \
+        .size = s,                                                          \
+    };                                                                      \
+    return uref_attr_set_opaque(uref, opaque, UDICT_TYPE_SOCKADDR, name);   \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+{                                                                           \
+    return uref_attr_delete(uref, UDICT_TYPE_SOCKADDR, name);               \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_opaque(uref, uref_src, UDICT_TYPE_SOCKADDR, name); \
+}                                                                           \
+
+/* @This allows to define accessors for a shorthand sockaddr attribute.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param type shorthand type
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_SOCKADDR_SH(group, attr, type, desc)                      \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @param s pointer to the sockaddr size (modified during execution)        \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, struct sockaddr **p, socklen_t *s) \
+{                                                                           \
+    struct udict_opaque opaque;                                             \
+    int err = uref_attr_get_opaque(uref, &opaque, type, name);              \
+    if (ubase_check(err)) {                                                 \
+        *p = (struct sockaddr*)opaque.v;                                    \
+        *s = opaque.size;                                                   \
+    }                                                                       \
+    return err;                                                             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p value to set                                                    \
+ * @param s sockaddr size                                                   \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, struct sockaddr *p, socklen_t s) \
+{                                                                           \
+    struct udict_opaque opaque = {                                          \
+        .v = (uint8_t *)p,                                                  \
+        .size = s,                                                          \
+    };                                                                      \
+    return uref_attr_set_opaque(uref, opaque, type, NULL);                  \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref)           \
+{                                                                           \
+    return uref_attr_delete(uref, type, NULL);                              \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src)         \
+{                                                                           \
+    return uref_attr_copy_opaque(uref, uref_src, type, NULL);             \
+}
+
+/* @This allows to define accessors for a sockaddr attribute, with a name
+ * depending on printf arguments.
+ *
+ * @param group group of attributes
+ * @param attr readable name of the attribute, for the function names
+ * @param format printf-style format of the attribute
+ * @param desc description of the attribute
+ */
+#define UREF_ATTR_SOCKADDR_VA(group, attr, format, desc, args_decl, args)   \
+/** @This returns the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p pointer to the retrieved value (modified during execution)      \
+ * @param s pointer to the sockaddr size (modified during execution)        \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_get_##attr(struct uref *uref, struct sockaddr **p, socklen_t *s, \
+                                            args_decl)                      \
+{                                                                           \
+    struct udict_opaque opaque;                                             \
+    int err = uref_attr_get_opaque_va(uref, &opaque, UDICT_TYPE_SOCKADDR, format, args); \
+    if (ubase_check(err)) {                                                 \
+        *p = (struct sockaddr*)opaque.v;                                    \
+        *s = opaque.size;                                                   \
+    }                                                                       \
+    return err;                                                             \
+}                                                                           \
+/** @This sets the desc attribute of a uref.                                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param p value to set                                                    \
+ * @param s sockaddr size                                                   \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_set_##attr(struct uref *uref, struct sockaddr *p, socklen_t s, \
+                                            args_decl)                      \
+{                                                                           \
+    struct udict_opaque opaque = {                                          \
+        .v = (uint8_t *)p,                                                  \
+        .size = s,                                                          \
+    };                                                                      \
+    return uref_attr_set_opaque_va(uref, opaque, UDICT_TYPE_SOCKADDR, format, args); \
+}                                                                           \
+/** @This deletes the desc attribute of a uref.                             \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_delete_##attr(struct uref *uref, args_decl)\
+{                                                                           \
+    return uref_attr_delete_va(uref, UDICT_TYPE_SOCKADDR, format, args);    \
+}                                                                           \
+/** @This copies the desc attribute from an uref to another.                \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @param uref_src pointer to the source uref                               \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_copy_##attr(struct uref *uref,             \
+                                             struct uref *uref_src,         \
+                                             args_decl)                     \
+{                                                                           \
+    return uref_attr_copy_opaque_va(uref, uref_src, UDICT_TYPE_SOCKADDR,  \
+                                   format, args);                           \
+}
 
 /*
  * Rational attributes
