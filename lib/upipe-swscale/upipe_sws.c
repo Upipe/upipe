@@ -141,22 +141,15 @@ UPIPE_HELPER_INPUT(upipe_sws, urefs, nb_urefs, max_urefs, blockers, upipe_sws_ha
 static int upipe_sws_convert_color(struct upipe *upipe, struct uref *flow_def)
 {
     int colorspace = -1;
-    const char *matrix_coefficients;
-    if (ubase_check(uref_pic_flow_get_matrix_coefficients(flow_def,
-                    &matrix_coefficients))) {
-        if (!strcmp(matrix_coefficients, "bt709"))
-            colorspace = SWS_CS_ITU709;
-        else if (!strcmp(matrix_coefficients, "fcc"))
-            colorspace = SWS_CS_FCC;
-        else if (!strcmp(matrix_coefficients, "smpte170m"))
-            colorspace = SWS_CS_SMPTE170M;
-        else if (!strcmp(matrix_coefficients, "smpte240m"))
-            colorspace = SWS_CS_SMPTE240M;
-        else if (!strcmp(matrix_coefficients, "bt2020nc"))
-            colorspace = SWS_CS_BT2020;
-        else
-            upipe_warn_va(upipe, "unknown color space %s", matrix_coefficients);
-    }
+    if (!ubase_check(uref_pic_flow_get_matrix_coefficients_val(
+                flow_def, &colorspace))) {
+        const char *matrix_coefficients;
+        if (ubase_check(uref_pic_flow_get_matrix_coefficients(
+                    flow_def, &matrix_coefficients)))
+            upipe_warn_va(upipe, "unknown matrix coefficients %s",
+                          matrix_coefficients);
+    } else if (colorspace > 10 || colorspace == 8)
+        upipe_warn_va(upipe, "unknown color space %d", colorspace);
     return colorspace;
 }
 
