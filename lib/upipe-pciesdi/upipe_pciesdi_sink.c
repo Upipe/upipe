@@ -61,6 +61,11 @@
 #include "config.h"
 #include "x86/cpu_feature_check.h"
 
+#define MHZ_148p5   148500000
+#define MHZ__74p25   74250000
+#define MHZ__27      UCLOCK_FREQ
+#define MHZ__27p027  (UCLOCK_FREQ + UCLOCK_FREQ/1000)
+
 /** upipe_pciesdi_sink structure */
 struct upipe_pciesdi_sink {
     /** refcount management structure */
@@ -137,17 +142,15 @@ static uint64_t upipe_pciesdi_sink_now(struct uclock *uclock)
         return UINT64_MAX;
     }
 
-    /* 128 bits needed to prevent overflow after ~2.5 hours */
-    __uint128_t fullscale = tick;
-    /* Use exact frequency.  This multiply was UCLOCK_FREQ so the comment above
-     * is outdated.  The overflow will take longer to occur. */
-    fullscale *= upipe_pciesdi_sink->freq.den;
-    fullscale /= upipe_pciesdi_sink->freq.num;
-    fullscale += upipe_pciesdi_sink->offset;
+    /* Use exact frequency.  This multiply is only, at most, 91 so this should
+     * not overflow for 43 years. */
+    tick *= upipe_pciesdi_sink->freq.den;
+    tick /= upipe_pciesdi_sink->freq.num;
+    tick += upipe_pciesdi_sink->offset;
 
     pthread_mutex_unlock(&upipe_pciesdi_sink->clock_mutex);
 
-    return fullscale;
+    return tick;
 }
 
 /** @internal @This allocates a null pipe.
@@ -827,20 +830,23 @@ static int upipe_pciesdi_sink_set_flow_def(struct upipe *upipe, struct uref *flo
      * - NTSC HD =  74.25 / 1.001 MHz
      * - NTSC SD = 148.5  / 1.001 MHz ?
      */
+
     struct urational freq;
     if (sd) {
-        freq = (struct urational){ 1485, 270 };
+        freq = (struct urational){ MHZ_148p5, MHZ__27 };
     } else if (sdi3g) {
         if (ntsc)
-            freq = (struct urational){ 148500, 27027 };
+            freq = (struct urational){ MHZ_148p5, MHZ__27p027 };
         else
-            freq = (struct urational){ 1485, 270 };
+            freq = (struct urational){ MHZ_148p5, MHZ__27 };
     } else {
         if (ntsc)
-            freq = (struct urational){ 74250, 27027 };
+            freq = (struct urational){ MHZ__74p25, MHZ__27p027 };
         else
-            freq = (struct urational){ 7425, 2700 };
+            freq = (struct urational){ MHZ__74p25, MHZ__27 };
     }
+    /* This should simplify to one of: 11/2 500/91 11/4 250/91 */
+    urational_simplify(&freq);
 
     /* Throw a probe event to signal the genlock status. */
     if (clock_rate & SDI_GENLOCK_RATE)
@@ -977,18 +983,19 @@ static int control_set_clock_internal(struct upipe *upipe, int command)
 
     struct urational freq;
     if (sd) {
-        freq = (struct urational){ 1485, 270 };
+        freq = (struct urational){ MHZ_148p5, MHZ__27 };
     } else if (sdi3g) {
         if (ntsc)
-            freq = (struct urational){ 148500, 27027 };
+            freq = (struct urational){ MHZ_148p5, MHZ__27p027 };
         else
-            freq = (struct urational){ 1485, 270 };
+            freq = (struct urational){ MHZ_148p5, MHZ__27 };
     } else {
         if (ntsc)
-            freq = (struct urational){ 74250, 27027 };
+            freq = (struct urational){ MHZ__74p25, MHZ__27p027 };
         else
-            freq = (struct urational){ 7425, 2700 };
+            freq = (struct urational){ MHZ__74p25, MHZ__27 };
     }
+    urational_simplify(&freq);
 
     /* If there is no change to the clock frequency or TX mode then there is no
      * need to reconfigure the HW. */
