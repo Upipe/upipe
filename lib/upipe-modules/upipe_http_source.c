@@ -461,19 +461,10 @@ static int upipe_http_src_status_cb(http_parser *parser)
 
     upipe_dbg_va(upipe, "reply http code %i", parser->status_code);
 
-    switch (parser->status_code) {
-    /* success */
-    case 200:
-    /* partial content */
-    case 206:
-    /* found */
-    case 302:
-        break;
-    default:
-        upipe_http_src_throw_error(upipe, parser->status_code);
-        return -1;
-    }
-    return 0;
+    if (parser->status_code < 400)
+        return 0;
+    upipe_http_src_throw_error(upipe, parser->status_code);
+    return -1;
 }
 
 static int upipe_http_src_output_data(struct upipe *upipe,
@@ -545,12 +536,9 @@ static int upipe_http_src_message_complete(http_parser *parser)
     upipe_http_src_close(upipe);
     upipe_throw_source_end(upipe);
 
-    switch (status_code) {
-    /* redirect */
-    case 302:
+    if (status_code >= 300 && status_code < 400 && location != NULL)
+        /* redirect */
         upipe_http_src_throw_redirect(upipe, location);
-        break;
-    }
 
     free(location);
 
@@ -783,9 +771,6 @@ static void upipe_http_src_worker_update_state(struct upipe *upipe, int ret)
     if (ret & UPIPE_HTTP_SRC_HOOK_TRANSPORT_WRITE)
         if (upipe_http_src->upump_write)
             upump_start(upipe_http_src->upump_write);
-    if (ret & UPIPE_HTTP_SRC_HOOK_TRANSPORT_READ)
-        if (upipe_http_src->upump_read)
-            upump_start(upipe_http_src->upump_read);
     if (ret & UPIPE_HTTP_SRC_HOOK_DATA_WRITE)
         ueventfd_write(&upipe_http_src->data_in);
     if (ret & UPIPE_HTTP_SRC_HOOK_DATA_READ)
@@ -806,8 +791,8 @@ static void upipe_http_src_worker_read(struct upump *upump)
     if (likely(upipe_http_src->upump_timeout))
         upump_restart(upipe_http_src->upump_timeout);
 
-    int ret = upipe_http_src->hook->transport.read(upipe_http_src->hook,
-                                                   upipe_http_src->fd);
+    int ret = upipe_http_src->hook->transport.read(
+        upipe, upipe_http_src->hook, upipe_http_src->fd);
     upipe_http_src_worker_update_state(upipe, ret);
 }
 
@@ -819,8 +804,8 @@ static void upipe_http_src_worker_write(struct upump *upump)
     if (likely(upipe_http_src->upump_timeout))
         upump_restart(upipe_http_src->upump_timeout);
 
-    int ret = upipe_http_src->hook->transport.write(upipe_http_src->hook,
-                                                    upipe_http_src->fd);
+    int ret = upipe_http_src->hook->transport.write(
+        upipe, upipe_http_src->hook, upipe_http_src->fd);
     upipe_http_src_worker_update_state(upipe, ret);
 }
 
@@ -853,7 +838,8 @@ static void upipe_http_src_data_in(struct upump *upump)
         return;
 
     int ret = upipe_http_src->hook->data.write(
-        upipe_http_src->hook, (unsigned char *)request->buf, request->len);
+        upipe, upipe_http_src->hook, (unsigned char *)request->buf,
+        request->len);
 
     if (ret < 0) {
         switch(errno) {
@@ -909,7 +895,7 @@ static void upipe_http_src_data_out(struct upump *upump)
     uint8_t buffer[upipe_http_src->output_size];
     ssize_t len =
         upipe_http_src->hook->data.read(
-            upipe_http_src->hook, buffer, upipe_http_src->output_size);
+            upipe, upipe_http_src->hook, buffer, upipe_http_src->output_size);
     if (unlikely(len < 0)) {
         switch (errno) {
             case EINTR:
@@ -929,7 +915,7 @@ static void upipe_http_src_data_out(struct upump *upump)
     else if (len == 0) {
         upipe_dbg(upipe, "connection closed");
     }
-    else if (len == upipe_http_src->output_size)
+    else if (len > 0)
         ueventfd_write(&upipe_http_src->data_out);
 
     upipe_http_src_process(upipe, buffer, len > 0 ? len : 0);

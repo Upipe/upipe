@@ -27,6 +27,7 @@
  * @short HTTP hooks for plain data read/write.
  */
 
+#include <string.h>
 #include <errno.h>
 
 #include "upipe/ubase.h"
@@ -52,21 +53,25 @@ static int http_src_hook_state(struct http_src_hook *http)
 
 /** @internal @This reads from the socket to the plain engine.
  *
+ * @param upipe description structure of the pipe
  * @param hook plain hook structure
  * @param fd socket file descriptor
  * @return 0 or negative value on error, 1 if more data is needed, 2 otherwise
  */
 static int
-http_src_hook_transport_read(struct upipe_http_src_hook *hook, int fd)
+http_src_hook_transport_read(struct upipe *upipe,
+                             struct upipe_http_src_hook *hook, int fd)
 {
     struct http_src_hook *http = http_src_hook_from_hook(hook);
     size_t size = UPIPE_HTTP_SRC_HOOK_BUFFER - http->out.len;
     if (size) {
         ssize_t rsize = read(fd, http->out.buf + http->out.len, size);
-        if (rsize <= 0) {
-            if (rsize == 0)
-                http->closed = true;
-            return rsize;
+        if (rsize < 0) {
+            upipe_err_va(upipe, "read error (%s)", strerror(errno));
+            return -1;
+        } else if (rsize == 0) {
+            http->closed = true;
+            return 0;
         }
         http->out.len += rsize;
     }
@@ -75,20 +80,27 @@ http_src_hook_transport_read(struct upipe_http_src_hook *hook, int fd)
 
 /** @internal @This writes from the plain engine to the socket.
  *
+ * @param upipe description structure of the pipe
  * @param hook plain hook structure
  * @param fd socket file descriptor
  * @return 0 or negative value on error, 1 if more data is needed, 2 otherwise
  */
 static int
-http_src_hook_transport_write(struct upipe_http_src_hook *hook, int fd)
+http_src_hook_transport_write(struct upipe *upipe,
+                              struct upipe_http_src_hook *hook, int fd)
 {
     struct http_src_hook *http = http_src_hook_from_hook(hook);
     size_t size = http->in.len;
     ssize_t wsize = -1;
     if (size) {
         wsize = write(fd, http->in.buf, size);
-        if (wsize <= 0)
-            return wsize;
+        if (wsize < 0) {
+            upipe_err_va(upipe, "write error (%s)", strerror(errno));
+            return -1;
+        } else if (wsize == 0) {
+            http->closed = true;
+            return 0;
+        }
         memmove(http->in.buf, http->in.buf + wsize, size - wsize);
         http->in.len -= wsize;
     }
@@ -98,15 +110,16 @@ http_src_hook_transport_write(struct upipe_http_src_hook *hook, int fd)
 
 /** @internal @This reads data from the plain engine to a buffer.
  *
+ * @param upipe description structure of the pipe
  * @param hook plain hook structure
  * @param buffer filled with data
  * @param count buffer size
  * @return a negative value on error, 0 if the connection is closed, the number
  * of bytes written to the buffer
  */
-static ssize_t
-http_src_hook_data_read(struct upipe_http_src_hook *hook,
-                               uint8_t *buffer, size_t count)
+static ssize_t http_src_hook_data_read(struct upipe *upipe,
+                                       struct upipe_http_src_hook *hook,
+                                       uint8_t *buffer, size_t count)
 {
     struct http_src_hook *http = http_src_hook_from_hook(hook);
     size_t size = count > http->out.len ? http->out.len : count;
@@ -124,14 +137,15 @@ http_src_hook_data_read(struct upipe_http_src_hook *hook,
 
 /** @internal @This writes data from a buffer to the plain engine.
  *
+ * @param upipe description structure of the pipe
  * @param hook plain hook structure
  * @param buffer data to write
  * @param count buffer number of bytes in the buffer
  * @return a negative value on error or the number of bytes read from the buffer
  */
-static ssize_t
-http_src_hook_data_write(struct upipe_http_src_hook *hook,
-                                const uint8_t *buffer, size_t count)
+static ssize_t http_src_hook_data_write(struct upipe *upipe,
+                                        struct upipe_http_src_hook *hook,
+                                        const uint8_t *buffer, size_t count)
 {
     struct http_src_hook *http = http_src_hook_from_hook(hook);
     size_t size = UPIPE_HTTP_SRC_HOOK_BUFFER - http->in.len;

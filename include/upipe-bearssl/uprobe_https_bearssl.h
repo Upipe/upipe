@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2024 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -27,8 +27,8 @@
  * @short probe catching http scheme hook for SSL connection
  */
 
-#ifndef _UPIPE_BEARSSL_UPROBE_HTTPS_H_
-#define _UPIPE_BEARSSL_UPROBE_HTTPS_H_
+#ifndef _UPIPE_BEARSSL_UPROBE_HTTPS_BEARSSL_H_
+#define _UPIPE_BEARSSL_UPROBE_HTTPS_BEARSSL_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,7 +41,7 @@ extern "C" {
  * @param next next probe to test if this one doesn't catch the event
  * @return pointer to uprobe, or NULL in case of error
  */
-struct uprobe *uprobe_https_alloc(struct uprobe *next);
+struct uprobe *uprobe_https_bearssl_alloc(struct uprobe *next);
 
 #ifdef __cplusplus
 }
