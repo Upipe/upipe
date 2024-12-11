@@ -2796,6 +2796,14 @@ static void upipe_ts_demux_update_tdttot(struct upipe *upipe)
                                     UPROBE_LOG_VERBOSE, "totd"));
     if (unlikely(upipe_ts_demux->totd == NULL))
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+
+    int ret = upipe_void_spawn_output(
+        upipe_ts_demux->totd, ts_demux_mgr->null_mgr,
+        uprobe_pfx_alloc(
+            uprobe_use(&upipe_ts_demux->proxy_probe), UPROBE_LOG_VERBOSE,
+            "totd null"));
+    if (unlikely(!ubase_check(ret)))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 }
 
 /** @internal @This builds the output flow def.
