@@ -55,6 +55,14 @@ enum upipe_srt_handshake_command {
     UPIPE_SRT_HANDSHAKE_GET_LATENCY,
 };
 
+/** @This extends uprobe_throw with specific events. */
+enum uprobe_srt_handshake_event {
+    UPROBE_SRT_HANDSHAKE_SENTINEL = UPROBE_LOCAL,
+
+    /** connection status changed (bool, bool) */
+    UPROBE_SRT_HANDSHAKE_CONNECTED,
+};
+
 /** @This sets the peer address
  *
  * @param upipe description structure of the pipe
