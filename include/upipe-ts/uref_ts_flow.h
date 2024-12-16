@@ -91,6 +91,11 @@ UREF_ATTR_UNSIGNED(ts_flow, sdt_descriptors, "t.sdt.descs",
 UREF_ATTR_OPAQUE_VA(ts_flow, sdt_descriptor, "t.sdt.desc[%" PRIu64"]",
         SDT descriptor, uint64_t nb, nb)
 UREF_TS_ATTR_DESCRIPTOR(ts_flow, sdt_descriptor)
+UREF_ATTR_UNSIGNED(ts_flow, ait_descriptors, "t.ait.descs",
+        number of AIT descriptors)
+UREF_ATTR_OPAQUE_VA(ts_flow, ait_descriptor, "t.ait.desc[%" PRIu64"]",
+        AIT descriptor, uint64_t nb, nb)
+UREF_TS_ATTR_DESCRIPTOR(ts_flow, ait_descriptor)
 
 /* EIT */
 UREF_ATTR_SMALL_UNSIGNED(ts_flow, last_table_id, "t.lasttid",

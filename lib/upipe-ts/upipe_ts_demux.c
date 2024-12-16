@@ -40,6 +40,7 @@
  */
 
 #include "upipe/config.h"
+#include "upipe/ubase.h"
 #include "upipe/ulist.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_prefix.h"
@@ -73,6 +74,7 @@
 #include "upipe-ts/upipe_ts_sync.h"
 #include "upipe-ts/upipe_ts_check.h"
 #include "upipe-ts/upipe_ts_decaps.h"
+#include "upipe-ts/upipe_ts_ait_decoder.h"
 #include "upipe-ts/upipe_ts_eit_decoder.h"
 #include "upipe-ts/upipe_ts_nit_decoder.h"
 #include "upipe-ts/upipe_ts_psi_merge.h"
@@ -177,6 +179,8 @@ struct upipe_ts_demux_mgr {
     struct upipe_mgr *ts_eitd_mgr;
     /** pointer to ts_scte35d manager */
     struct upipe_mgr *ts_scte35d_mgr;
+    /** pointer to ts_aitd manager */
+    struct upipe_mgr *ts_aitd_mgr;
 
     /* ES */
     /** pointer to ts_pesd manager */
@@ -854,6 +858,28 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
         upipe_release(output);
         if (unlikely(!ubase_check(err)))
             return UBASE_ERR_ALLOC;
+        return UBASE_ERR_NONE;
+    }
+
+    if (!ubase_ncmp(def, "block.mpegtspsi.mpegtsait.")) {
+        /* allocate ts_psim inner */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->ts_psim_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->probe),
+                    UPROBE_LOG_VERBOSE, "psim"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+
+        /** allocate AIT decoder */
+        output = upipe_void_chain_output(output, ts_demux_mgr->ts_aitd_mgr,
+                   uprobe_pfx_alloc(
+                       uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                       UPROBE_LOG_VERBOSE, "aitd"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+
+        upipe_ts_demux_output_store_bin_output(upipe, output);
         return UBASE_ERR_NONE;
     }
 
@@ -3894,6 +3920,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->ts_eitd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_scte35d_mgr);
+    upipe_mgr_release(ts_demux_mgr->ts_aitd_mgr);
     upipe_mgr_release(ts_demux_mgr->autof_mgr);
 
     urefcount_clean(urefcount);
@@ -3996,6 +4023,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_eitd_mgr = upipe_ts_eitd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
     ts_demux_mgr->ts_scte35d_mgr = upipe_ts_scte35d_mgr_alloc();
+    ts_demux_mgr->ts_aitd_mgr = upipe_ts_aitd_mgr_alloc();
 
     ts_demux_mgr->autof_mgr = NULL;
 

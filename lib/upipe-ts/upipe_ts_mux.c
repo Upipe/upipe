@@ -37,6 +37,7 @@
  *  - ETSI TS 103 197 V1.3.1 (2003-01) (DVB SimulCrypt)
  */
 
+#include "upipe/ubase.h"
 #include "upipe/ulist.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_prefix.h"
@@ -73,6 +74,7 @@
 #include "upipe-ts/upipe_ts_psi_generator.h"
 #include "upipe-ts/upipe_ts_si_generator.h"
 #include "upipe-ts/upipe_ts_scte35_generator.h"
+#include "upipe-ts/upipe_ts_ait_generator.h"
 #include "upipe-ts/upipe_ts_tstd.h"
 
 #include <stdlib.h>
@@ -202,6 +204,8 @@ struct upipe_ts_mux_mgr {
     struct upipe_mgr *ts_sig_mgr;
     /** pointer to ts_scte35g manager */
     struct upipe_mgr *ts_scte35g_mgr;
+    /** pointer to ts_aitg manager */
+    struct upipe_mgr *ts_aitg_mgr;
 
     /* ES */
     /** pointer to ts_tstd manager */
@@ -518,6 +522,8 @@ enum upipe_ts_mux_input_type {
     UPIPE_TS_MUX_INPUT_SCTE35,
     /** metadata */
     UPIPE_TS_MUX_INPUT_METADATA,
+    /** PSI */
+    UPIPE_TS_MUX_INPUT_PSI,
 
 };
 
@@ -1121,8 +1127,9 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
     const char *sub_def = def;
     if (!ubase_ncmp(sub_def, "void.")) {
         sub_def += strlen("void");
-    }
-    else if (!ubase_ncmp(sub_def, "block.")) {
+    } else if (!ubase_ncmp(sub_def, "block.mpegtspsi.")) {
+        sub_def += strlen("block");
+    } else if (!ubase_ncmp(sub_def, "block.")) {
         sub_def += strlen("block");
 
         uref_block_flow_get_octetrate(flow_def, &octetrate);
@@ -1189,6 +1196,8 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
                     flow_def_dup, PES_STREAM_ID_PRIVATE_1));
     } else if (!ubase_ncmp(def, "void.scte35.")) {
         input_type = UPIPE_TS_MUX_INPUT_SCTE35;
+    } else if (!ubase_ncmp(def, "mpegtspsi.")) {
+        input_type = UPIPE_TS_MUX_INPUT_PSI;
     }
 
     uint64_t pes_overhead = 0;
@@ -1430,6 +1439,45 @@ static int upipe_ts_mux_input_set_flow_def(struct upipe *upipe,
 
     } else if (!ubase_ncmp(def, "void.")) { /* virtual PES */
         upipe_ts_mux_input_store_bin_input(upipe, upipe_use(input->psig_flow));
+    } else if (!ubase_ncmp(def, "block.mpegtspsi.")) { /* PSI */
+        struct upipe_ts_mux_mgr *ts_mux_mgr =
+            upipe_ts_mux_mgr_from_upipe_mgr(upipe_ts_mux_to_upipe(upipe_ts_mux)->mgr);
+        struct upipe *aitg;
+        if (unlikely((aitg = upipe_void_alloc(
+                        ts_mux_mgr->ts_aitg_mgr,
+                        uprobe_pfx_alloc_va(
+                            uprobe_use(&input->probe),
+                            UPROBE_LOG_VERBOSE, "aitg"))) == NULL) ||
+            !ubase_check(upipe_set_flow_def(aitg, flow_def))) {
+            upipe_release(aitg);
+            return UBASE_ERR_ALLOC;
+        }
+        //upipe_ts_aitg_set_interval(aitg, input->aitg_interval);
+        upipe_ts_mux_input_store_bin_input(upipe, aitg);
+
+        if (input->psi_pid != NULL && input->psi_pid->pid != pid) {
+            upipe_ts_mux_psi_pid_release(input->psi_pid);
+            input->psi_pid = NULL;
+        }
+        if (input->psi_pid == NULL)
+            input->psi_pid =
+                upipe_ts_mux_psi_pid_use(upipe_ts_mux_to_upipe(upipe_ts_mux),
+                                         pid);
+
+        if (unlikely(!ubase_check(upipe_void_spawn_output_sub(aitg,
+                             input->psi_pid->psi_join,
+                             uprobe_pfx_alloc(
+                                 uprobe_use(&input->probe),
+                                 UPROBE_LOG_VERBOSE, "aitg psi_join")))))
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+
+        UBASE_FATAL(upipe, uref_ts_flow_set_tb_rate(flow_def_dup, TB_RATE_PSI));
+
+        if (!ubase_check(upipe_set_flow_def(input->psig_flow, flow_def_dup))) {
+            uref_free(flow_def_dup);
+            return UBASE_ERR_ALLOC;
+        }
+
     } else { /* standard PES */
         upipe_ts_mux_input_store_bin_input(upipe, upipe_use(input->tstd));
         upipe_ts_mux_set_max_delay(input->tstd, input->max_delay);
@@ -5061,6 +5109,7 @@ static void upipe_ts_mux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_mux_mgr->ts_psig_mgr);
     upipe_mgr_release(ts_mux_mgr->ts_sig_mgr);
     upipe_mgr_release(ts_mux_mgr->ts_scte35g_mgr);
+    upipe_mgr_release(ts_mux_mgr->ts_aitg_mgr);
 
     urefcount_clean(urefcount);
     free(ts_mux_mgr);
@@ -5194,6 +5243,7 @@ struct upipe_mgr *upipe_ts_mux_mgr_alloc(void)
     ts_mux_mgr->ts_psig_mgr = upipe_ts_psig_mgr_alloc();
     ts_mux_mgr->ts_sig_mgr = upipe_ts_sig_mgr_alloc();
     ts_mux_mgr->ts_scte35g_mgr = upipe_ts_scte35g_mgr_alloc();
+    ts_mux_mgr->ts_aitg_mgr = upipe_ts_aitg_mgr_alloc();
 
     urefcount_init(upipe_ts_mux_mgr_to_urefcount(ts_mux_mgr),
                    upipe_ts_mux_mgr_free);

@@ -391,6 +391,7 @@ static int upipe_ts_psig_flow_check_inner(struct upipe *upipe,
         }
 
     } else if (ubase_ncmp(raw_def, "void.scte35.") &&
+               ubase_ncmp(sub_def, ".mpegtspsi.mpegtsait.") &&
                ubase_ncmp(sub_def, ".mpeg1video.") &&
                ubase_ncmp(sub_def, ".mpeg2video.") &&
                ubase_ncmp(sub_def, ".mpeg4.") &&
@@ -526,6 +527,8 @@ static int upipe_ts_psig_flow_build_inner(struct upipe *upipe, uint8_t *es,
             stream_type = PMT_STREAMTYPE_ATSC_A52E;
     } else if (!ubase_ncmp(sub_def, ".id3.")) {
         stream_type = PMT_STREAMTYPE_META_PES;
+    } else if (!ubase_ncmp(sub_def, ".mpegtspsi.")) {
+        stream_type = PMT_STREAMTYPE_PRIVATE_PSI;
     }
 
     upipe_notice_va(upipe,
@@ -949,7 +952,9 @@ static int upipe_ts_psig_flow_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     uint64_t pid;
     const char *raw_def;
-    UBASE_RETURN(uref_flow_match_def(flow_def, "void."))
+    if (unlikely(!ubase_check(uref_flow_match_def(flow_def, "void.")) &&
+                 !ubase_check(uref_flow_match_def(flow_def, "block."))))
+        return UBASE_ERR_INVALID;
     UBASE_RETURN(uref_ts_flow_get_pid(flow_def, &pid))
     UBASE_RETURN(uref_flow_get_raw_def(flow_def, &raw_def))
 
