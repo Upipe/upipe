@@ -19,11 +19,16 @@ UPIPEOSX_LIBS = $(top_builddir)/lib/upipe-osx/libupipe_osx.la
 UPIPEDVBCSA_LIBS = $(top_builddir)/lib/upipe-dvbcsa/libupipe_dvbcsa.la
 UPIPEDVB_LIBS = $(top_builddir)/lib/upipe-dvb/libupipe_dvb.la
 UPIPEBEARSSL_LIBS = $(top_builddir)/lib/upipe-bearssl/libupipe_bearssl.la
+UPIPESRT_LIBS = $(top_builddir)/lib/upipe-srt/libupipe_srt.la
 
 noinst_PROGRAMS = 
 
 fec_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPETS_LIBS)
 rist_rx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
+srt_rx_CFLAGS = $(AM_CFLAGS)
+srt_rx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPESRT_LIBS)
+srt_tx_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
+srt_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPESRT_LIBS)
 rist_tx_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 rist_tx_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS) $(UPIPEFILTERS_LIBS)
 udpmulticat_LDADD = $(LDADD) $(UPUMPEV_LIBS) $(UPIPEMODULES_LIBS)
@@ -63,6 +68,10 @@ frame_LDADD = $(LDADD) $(UPIPEMODULES_LIBS) $(UPUMPEV_LIBS) $(UPIPEFRAMERS_LIBS)
 if HAVE_GCRYPT
 ts_encrypt_CFLAGS += $(GCRYPT_CFLAGS)
 ts_encrypt_LDADD += $(GCRYPT_LIBS)
+srt_tx_CFLAGS += $(GCRYPT_CFLAGS)
+srt_tx_LDADD += $(GCRYPT_LIBS)
+srt_rx_CFLAGS += $(GCRYPT_CFLAGS)
+srt_rx_LDADD += $(GCRYPT_LIBS)
 endif
 
 if HAVE_EV
@@ -70,7 +79,7 @@ if HAVE_WRITEV
 noinst_PROGRAMS += udpmulticat multicatudp
 noinst_PROGRAMS += decrypt
 if HAVE_BITSTREAM
-noinst_PROGRAMS += hls2rtp fec rist_rx rist_tx
+noinst_PROGRAMS += hls2rtp fec rist_rx rist_tx srt_rx srt_tx
 endif
 endif
 

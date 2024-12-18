@@ -2,7 +2,8 @@ SUBDIRS = \
 	upipe \
 	upipe-modules \
 	upipe-filters \
-	upipe-dveo
+	upipe-dveo \
+	upipe-srt
 
 if HAVE_QTWEBKIT
 SUBDIRS += upipe-qt
