@@ -131,6 +131,8 @@ struct upipe_srt_handshake {
 
     uint64_t last_hs_sent;
 
+    bool end;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -303,28 +305,66 @@ static void upipe_srt_handshake_kmreq(struct upump *upump)
     upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref_dup(kmreq), NULL);
 }
 
+static int upipe_srt_handshake_set_flow_def(struct upipe *upipe, struct uref *flow_def);
+static void upipe_srt_handshake_timeout(struct upump *upump);
+
+static void upipe_srt_handshake_disconnect(struct upipe *upipe, bool end, bool blacklist)
+{
+    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
+
+    /* Connection has just been aborted already */
+
+    /* No need to keep waiting for keepalives */
+    upipe_srt_handshake_set_upump_keepalive_timeout(upipe, NULL);
+    /* No need to keep sending KMREQ packets */
+    upipe_srt_handshake_set_upump_kmreq(upipe, NULL);
+    /* No need to keep sending handshake packets */
+    upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
+
+    if (upipe_srt_handshake->upump_handshake_timeout) /* if timeout was running we die */
+        end = true;
+
+    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false, blacklist, end);
+    upipe_srt_handshake->expect_conclusion = false;
+
+    if (end) {
+        upipe_throw_source_end(upipe);
+        upipe_srt_handshake->end = true;
+        /* No need to wait for a timeout */
+        upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
+    } else {
+        /* (new) connection has to succeed within 3 seconds */
+        struct upump *upump =
+            upump_alloc_timer(upipe_srt_handshake->upump_mgr,
+                    upipe_srt_handshake_timeout,
+                    upipe, upipe->refcount,
+                    3 * UCLOCK_FREQ, 0);
+        upump_start(upump);
+        upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
+    }
+
+    struct uref *flow_def = uref_block_flow_alloc_def(upipe_srt_handshake->uref_mgr, "");
+    if (flow_def) {
+        upipe_srt_handshake_set_flow_def(upipe, flow_def);
+        /* force sending flow definition immediately */
+        upipe_srt_handshake_output(upipe, NULL, NULL);
+    }
+}
+
 static void upipe_srt_handshake_keepalive_timeout(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
     upipe_err(upipe, "No data in 10s");
-    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-    upipe_throw_source_end(upipe);
-
-    upipe_srt_handshake->expect_conclusion = false;
+    upipe_srt_handshake_disconnect(upipe, true, false);
 }
 
 static void upipe_srt_handshake_timeout(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
 
     upipe_err(upipe, "Connection timed out");
-    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-    upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
-    upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
-    upipe_srt_handshake->expect_conclusion = false;
+    upipe_srt_handshake_disconnect(upipe, false, false);
 }
 
 static void upipe_srt_handshake_send_timer(struct upump *upump)
@@ -460,6 +500,7 @@ static struct upipe *upipe_srt_handshake_alloc(struct upipe_mgr *mgr,
     upipe_srt_handshake->password = NULL;
 
     upipe_srt_handshake->establish_time = 0;
+    upipe_srt_handshake->end = false;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1161,7 +1202,7 @@ static struct uref *upipe_srt_handshake_handle_hs_caller_conclusion(struct upipe
         size -= ext_len;
     }
 
-    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, true);
+    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, true, false, false);
 
     upipe_srt_handshake_finalize(upipe);
     return NULL;
@@ -1254,8 +1295,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 
     if (hs_packet->syn_cookie != upipe_srt_handshake->syn_cookie) {
         upipe_err(upipe, "Malformed conclusion handshake (invalid syn cookie)");
-        upipe_srt_handshake->expect_conclusion = false;
-        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+        upipe_srt_handshake_disconnect(upipe, false, false);
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                 hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
@@ -1263,8 +1303,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
     /* At least HSREQ is expected */
     if (hs_packet->version == SRT_HANDSHAKE_VERSION && size < SRT_HANDSHAKE_CIF_EXTENSION_MIN_SIZE + SRT_HANDSHAKE_HSREQ_SIZE) {
         upipe_err(upipe, "Malformed conclusion handshake (size)");
-        upipe_srt_handshake->expect_conclusion = false;
-        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+        upipe_srt_handshake_disconnect(upipe, false, false);
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                 hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
     }
@@ -1297,6 +1336,13 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
                 upipe_err_va(upipe, "Malformed HSREQ: %u < %u\n", ext_len,
                         SRT_HANDSHAKE_HSREQ_SIZE);
         } else if (ext_type == SRT_HANDSHAKE_EXT_TYPE_KMREQ) {
+            if (!upipe_srt_handshake->password) {
+                upipe_err(upipe, "Password not specified but remote requested encryption.");
+                upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false, true, false);
+                upipe_srt_handshake->expect_conclusion = false;
+                return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                        hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
+            }
             got_key = upipe_srt_handshake_parse_kmreq(upipe, ext, ext_len, &wrap, &wrap_len);
         }
 
@@ -1306,8 +1352,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 
     if (upipe_srt_handshake->password && !got_key) {
         upipe_err(upipe, "Password specified but could not get streaming key");
-        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-        upipe_srt_handshake->expect_conclusion = false;
+        upipe_srt_handshake_disconnect(upipe, false, true);
         return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                 hs_packet->remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
     }
@@ -1374,7 +1419,7 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
 #endif
     }
 
-    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, true);
+    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, true, false);
     upipe_srt_handshake_finalize(upipe);
 
     uref_block_unmap(uref, 0);
@@ -1426,9 +1471,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
         upipe_err_va(upipe, "Remote rejected handshake (%s)", get_hs_error(hs_type));
         if (!upipe_srt_handshake->listener)
             upipe_srt_handshake->syn_cookie = 0;
-        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-        upipe_throw_source_end(upipe);
-        upipe_srt_handshake->expect_conclusion = false;
+        upipe_srt_handshake_disconnect(upipe, true, false);
         return NULL;
     }
 
@@ -1456,8 +1499,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
 
         if (hs_type != SRT_HANDSHAKE_TYPE_INDUCTION) {
             upipe_err_va(upipe, "Expected induction, ignore hs type %s", get_hs_type(hs_type));
-            upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-            upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
+            upipe_srt_handshake_disconnect(upipe, false, false);
             return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                     hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
         }
@@ -1480,8 +1522,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
             if (hs_packet.version != SRT_HANDSHAKE_VERSION || hs_packet.dst_socket_id != upipe_srt_handshake->socket_id) {
                 upipe_err_va(upipe, "Malformed handshake (%08x != %08x)",
                         hs_packet.dst_socket_id, upipe_srt_handshake->socket_id);
-                upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-                upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
+                upipe_srt_handshake_disconnect(upipe, false, false);
                 return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                         hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
             }
@@ -1498,7 +1539,7 @@ static struct uref *upipe_srt_handshake_handle_hs(struct upipe *upipe, const uin
                     hs_packet.extension != SRT_HANDSHAKE_EXT_KMREQ ||
                     hs_packet.syn_cookie != 0 || hs_packet.dst_socket_id != 0) {
                 upipe_err_va(upipe, "Malformed first handshake syn %u dst_id %u", hs_packet.syn_cookie, hs_packet.dst_socket_id);
-                upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
+                upipe_srt_handshake_disconnect(upipe, false, false);
                 return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
                         hs_packet.remote_socket_id, SRT_HANDSHAKE_TYPE_REJ_UNKNOWN);
             }
@@ -1543,6 +1584,14 @@ static struct uref *upipe_srt_handshake_handle_user(struct upipe *upipe, const u
 
     const uint8_t *cif = srt_get_control_packet_cif(buf);
     size -= SRT_HEADER_SIZE;
+
+    if (!upipe_srt_handshake->password) {
+        upipe_err(upipe, "Password not specified but remote requested encryption in user packet.");
+        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false, true, false);
+        upipe_srt_handshake->expect_conclusion = false;
+        return upipe_srt_handshake_alloc_hs_reject(upipe, timestamp,
+                srt_get_packet_dst_socket_id(buf), SRT_HANDSHAKE_TYPE_REJ_BADSECRET);
+    }
 
     if (!upipe_srt_handshake_parse_kmreq(upipe, cif, size, &wrap, &wrap_len)) {
         return NULL;
@@ -1653,8 +1702,7 @@ static struct uref *upipe_srt_handshake_input_control(struct upipe *upipe, const
 
         case SRT_CONTROL_TYPE_SHUTDOWN:
             upipe_err_va(upipe, "shutdown requested");
-            upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-            upipe_throw_source_end(upipe);
+            upipe_srt_handshake_disconnect(upipe, true, false);
             break;
 
         case SRT_CONTROL_TYPE_DROPREQ:
@@ -1686,14 +1734,21 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
         upipe_warn(upipe, "No upump mgr");
         upipe_srt_handshake_check(upipe, NULL);
         uref_free(uref);
+        return;
     }
 
     if (!upipe_srt_handshake->uclock) {
         upipe_warn(upipe, "No uclock");
         upipe_srt_handshake_check(upipe, NULL);
         uref_free(uref);
+        return;
     }
 
+    /* Pipe is gonna die soon */
+    if (upipe_srt_handshake->end) {
+        uref_free(uref);
+        return;
+    }
     size_t total_size;
     ubase_assert(uref_block_size(uref, &total_size));
 
@@ -1716,11 +1771,14 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
     if (dst_socket_id == 0) {
         uint16_t type = srt_get_control_packet_type(buf);
         if (!control || type != SRT_CONTROL_TYPE_HANDSHAKE) {
-            upipe_dbg(upipe, "dst socket id unset");
+            upipe_dbg_va(upipe, "dst socket id unset (%s)",
+                control ? get_ctrl_type(type) : "data");
             ubase_assert(uref_block_unmap(uref, 0));
             uref_free(uref);
-            upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-            upipe_throw_source_end(upipe);
+            // blacklist?
+            // XXX: find out who is sending shutdown without dst socket set
+            // XXX: sometimes the legitimate caller does it too
+            upipe_srt_handshake_disconnect(upipe, true, false);
             return;
         }
     }
@@ -1730,8 +1788,7 @@ static void upipe_srt_handshake_input(struct upipe *upipe, struct uref *uref,
             upipe_srt_handshake->socket_id);
         ubase_assert(uref_block_unmap(uref, 0));
         uref_free(uref);
-        upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false);
-        upipe_throw_source_end(upipe);
+        upipe_srt_handshake_disconnect(upipe, true, false);
         return;
     }
 

@@ -59,7 +59,7 @@ enum upipe_srt_handshake_command {
 enum uprobe_srt_handshake_event {
     UPROBE_SRT_HANDSHAKE_SENTINEL = UPROBE_LOCAL,
 
-    /** connection status changed (bool) */
+    /** connection status changed (bool, bool, bool) */
     UPROBE_SRT_HANDSHAKE_CONNECTED,
 };
 
