@@ -168,6 +168,7 @@ static struct upipe *upipe_srtr_sub;
 static struct uprobe uprobe_udp;
 static struct uprobe uprobe_srt;
 static struct uprobe *logger;
+static struct uprobe *uprobe_dejitter;
 
 static char *dirpath;
 static char *srcpath;
@@ -344,6 +345,13 @@ static int catch_srt(struct uprobe *uprobe, struct upipe *upipe,
             if (!ubase_check(upipe_set_option(upipe_srtr, "latency", latency_ms_str)))
                 upipe_err(upipe, "Couldn't set receiver latency");
         }
+        if (uprobe_dejitter) {
+            const uint64_t deviation = latency_ms * UCLOCK_FREQ / 1000 / 3; // actual delay is 3 * this
+            uprobe_dejitter_set(uprobe_dejitter, true, 1);
+            uprobe_dejitter_set_minimum_deviation(uprobe_dejitter, deviation);
+            uprobe_dejitter_set_maximum_deviation(uprobe_dejitter, deviation);
+            uprobe_dejitter_set_maximum_jitter(uprobe_dejitter, (uint64_t)latency_ms * UCLOCK_FREQ / 1000 / 2);
+        }
     }
 
     return uprobe_throw_next(uprobe, upipe, event, args);
@@ -441,7 +449,7 @@ int main(int argc, char *argv[])
     logger = uprobe_stdio_alloc(NULL, stdout, loglevel);
     assert(logger != NULL);
     const uint64_t deviation = UCLOCK_FREQ / 30; // actual delay is 3 * this
-    struct uprobe *uprobe_dejitter = uprobe_dejitter_alloc(logger, true /* enabled */, deviation);
+    uprobe_dejitter = uprobe_dejitter_alloc(logger, true /* enabled */, deviation);
     uprobe_dejitter_set_minimum_deviation(uprobe_dejitter, deviation);
     uprobe_dejitter_set_maximum_deviation(uprobe_dejitter, deviation);
     assert(uprobe_dejitter != NULL);
