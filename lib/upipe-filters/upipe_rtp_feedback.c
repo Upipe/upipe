@@ -118,6 +118,8 @@ struct upipe_rtpfb {
 
     uint8_t last_ssrc[4];
 
+    uint64_t previous_ts;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -496,7 +498,7 @@ static void upipe_rtpfb_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        if (now - cr_sys <= upipe_rtpfb->latency)
+        if (now <= cr_sys)
             break;
 
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
@@ -512,6 +514,10 @@ static void upipe_rtpfb_timer(struct upump *upump)
         upipe_rtpfb->last_output_seqnum = seqnum;
 
         ulist_delete(uchain);
+
+        uref_clock_delete_date_prog(uref);
+        uref_clock_delete_rate(uref);
+
         upipe_rtpfb_output(upipe, uref, NULL); // XXX: use timer upump ?
         if (--upipe_rtpfb->buffered == 0) {
             upipe_warn_va(upipe, "Exhausted buffer");
@@ -792,6 +798,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     memset(upipe_rtpfb->last_ssrc, 0, sizeof(upipe_rtpfb->last_ssrc));
 
     upipe_rtpfb->latency = UCLOCK_FREQ;
+    upipe_rtpfb->previous_ts = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -1004,6 +1011,7 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     /* parse RTP header */
     bool valid = rtp_check_hdr(rtp_header);
     uint16_t seqnum = rtp_get_seqnum(rtp_header);
+    uint32_t ts = rtp_get_timestamp(rtp_header);
 
     rtp_get_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
 
@@ -1026,6 +1034,32 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(upipe_rtpfb->expected_seqnum == UINT_MAX))
         upipe_rtpfb->expected_seqnum = seqnum;
 
+    static const uint64_t wrap = UINT64_C(4294967296);
+    uint64_t delta = (wrap + ts - (upipe_rtpfb->previous_ts % wrap)) % wrap;
+    int32_t d32 = delta;
+    bool discontinuity = upipe_rtpfb->previous_ts == 0;
+
+    uint64_t latency_us = (upipe_rtpfb->latency * 1000000) / UCLOCK_FREQ;
+    /* Note: d32 is converted to unsigned implictly */
+    if (!discontinuity && (d32 <= latency_us || -d32 <= latency_us)) {
+        if (d32 <= latency_us) {
+            upipe_rtpfb->previous_ts += delta;
+            assert(d32 >= 0);
+        } else {
+             /* out of order but not too old or new */
+        }
+    } else {
+        upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
+        upipe_rtpfb->previous_ts = ts;
+        discontinuity = true;
+    }
+
+    upipe_verbose_va(upipe, "Data seq %u", seqnum);
+    if (d32 < 0 && !discontinuity)
+        uref_clock_set_cr_prog(uref, (upipe_rtpfb->previous_ts + d32) * UCLOCK_FREQ / 90000);
+    else
+        uref_clock_set_cr_prog(uref, (upipe_rtpfb->previous_ts) * UCLOCK_FREQ / 90000);
+
     uint16_t diff = seqnum - upipe_rtpfb->expected_seqnum;
 
     if (diff < 0x8000) { // seqnum > last seq, insert at the end
@@ -1043,13 +1077,28 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                     upipe_rtpfb->last_nack[seq] = fake_last_nack;
         }
 
+        bool retransmit = upipe_rtpfb->last_ssrc[3] & 1;
+        if (!retransmit && diff == 0) {
+            uint64_t cr_prog;
+            if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr_prog)))) {
+                upipe_warn(upipe, "no cr_prog in packet");
+                return;
+            }
+
+            upipe_throw_clock_ref(upipe, uref, cr_prog, discontinuity);
+        }
+
         upipe_rtpfb->expected_seqnum = seqnum + 1;
+
+        upipe_throw_clock_ts(upipe, uref);
         return;
     }
 
     /* packet is from the past, reordered or retransmitted */
-    if (upipe_rtpfb_insert(upipe, uref, seqnum))
+    if (upipe_rtpfb_insert(upipe, uref, seqnum)) {
+        upipe_throw_clock_ts(upipe, uref);
         return;
+    }
 
     uint64_t first_seq = 0, last_seq = 0;
     uref_attr_get_priv(uref_from_uchain(upipe_rtpfb->queue.next), &first_seq);
