@@ -1039,10 +1039,10 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     int32_t d32 = delta;
     bool discontinuity = upipe_rtpfb->previous_ts == 0;
 
-    uint64_t latency_us = (upipe_rtpfb->latency * 1000000) / UCLOCK_FREQ;
+    uint64_t latency_90khz = (upipe_rtpfb->latency * 90000) / UCLOCK_FREQ;
     /* Note: d32 is converted to unsigned implictly */
-    if (!discontinuity && (d32 <= latency_us || -d32 <= latency_us)) {
-        if (d32 <= latency_us) {
+    if (!discontinuity && (d32 <= latency_90khz || -d32 <= latency_90khz)) {
+        if (d32 <= latency_90khz) {
             upipe_rtpfb->previous_ts += delta;
             assert(d32 >= 0);
         } else {
