@@ -999,11 +999,10 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    uint8_t rtp_buffer[RTP_HEADER_SIZE];
-    const uint8_t *rtp_header = uref_block_peek(uref, 0, RTP_HEADER_SIZE,
-                                                rtp_buffer);
-    if (unlikely(rtp_header == NULL)) {
-        upipe_warn(upipe, "invalid buffer received");
+    uint8_t *rtp_header = NULL;
+    int s = RTP_HEADER_SIZE;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &s, &rtp_header)))) {
+        upipe_warn(upipe, "Couldn't modify RTP header");
         uref_free(uref);
         return;
     }
@@ -1014,8 +1013,12 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     uint32_t ts = rtp_get_timestamp(rtp_header);
 
     rtp_get_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
+    bool retransmit = upipe_rtpfb->last_ssrc[3] & 1;
+    upipe_rtpfb->last_ssrc[3] &= 0xfe;
+    rtp_set_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
 
-    uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
+    uref_block_unmap(uref, 0);
+
     if (unlikely(!valid)) {
         upipe_warn(upipe, "invalid RTP header");
         uref_free(uref);
@@ -1077,7 +1080,6 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                     upipe_rtpfb->last_nack[seq] = fake_last_nack;
         }
 
-        bool retransmit = upipe_rtpfb->last_ssrc[3] & 1;
         if (!retransmit && diff == 0) {
             uint64_t cr_prog;
             if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr_prog)))) {
