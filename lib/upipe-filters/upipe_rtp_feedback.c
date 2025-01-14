@@ -979,7 +979,7 @@ static void upipe_rtpfb_output_input(struct upipe *upipe, struct uref *uref,
             if (rtt < upipe_rtpfb->rtt * 8 / 10)
                 rtt = upipe_rtpfb->rtt * 8 / 10;
         }
-        upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+        upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
         upipe_rtpfb->rtt = rtt;
         upipe_rtpfb_restart_timer(upipe_rtpfb_to_upipe(upipe_rtpfb));
     }
