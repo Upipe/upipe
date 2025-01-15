@@ -1050,7 +1050,7 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
      */
     uint64_t new_ts = upipe_rtpfb->previous_ts + d32;
 
-    if (abs(d32) > latency_90khz) {
+    if (discontinuity || abs(d32) > latency_90khz) {
         /* Timestamp is clearly outside of our buffer
          * Ignore previous timestamp and signal discontinuity */
         new_ts = ts;
