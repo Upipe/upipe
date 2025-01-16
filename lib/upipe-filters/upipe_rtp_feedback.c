@@ -1050,18 +1050,18 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
      */
     uint64_t new_ts = upipe_rtpfb->previous_ts + d32;
 
-    if (abs(d32) > latency_90khz) {
+    if (discontinuity || abs(d32) > latency_90khz) {
         /* Timestamp is clearly outside of our buffer
          * Ignore previous timestamp and signal discontinuity */
         new_ts = ts;
         discontinuity = true;
+        if (discontinuity)
+            upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
     }
 
     if (discontinuity || !past) {
         /* Update timestamp origin */
         upipe_rtpfb->previous_ts = new_ts;
-        if (discontinuity)
-            upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
     }
 
     upipe_verbose_va(upipe, "Data seq %u", seqnum);
