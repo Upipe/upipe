@@ -1199,6 +1199,7 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             size_t   *repaired           = va_arg(args, size_t*);
             size_t   *loss               = va_arg(args, size_t*);
             size_t   *dups               = va_arg(args, size_t*);
+            unsigned *rtt                = va_arg(args, unsigned*);
 
             struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
             *buffered = upipe_rtpfb->buffered;
@@ -1208,6 +1209,7 @@ static int _upipe_rtpfb_control(struct upipe *upipe, int command, va_list args)
             *repaired = upipe_rtpfb->repaired;
             *loss = upipe_rtpfb->loss;
             *dups = upipe_rtpfb->dups;
+            *rtt = upipe_rtpfb->rtt * 1000 / UCLOCK_FREQ;
 
             upipe_rtpfb->nacks = 0;
             upipe_rtpfb->repaired = 0;
