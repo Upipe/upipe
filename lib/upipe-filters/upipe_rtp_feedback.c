@@ -563,7 +563,7 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_rtpfb->upump_mgr && !upipe_rtpfb->upump_timer) {
         upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
                 upipe_rtpfb_timer, upipe, upipe->refcount,
-                UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+                UCLOCK_FREQ/1000, UCLOCK_FREQ/1000);
         upump_start(upipe_rtpfb->upump_timer);
 
         /* every 10ms, check for lost packets
