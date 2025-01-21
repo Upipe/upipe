@@ -112,17 +112,17 @@ static void gather_stats(struct upipe *upipe, struct uref *uref)
 
     last_print = cr_sys;
 
-    unsigned expected_seqnum, last_output_seqnum;
+    unsigned expected_seqnum, last_output_seqnum, rtt;
     size_t buffers, nacks, repairs, loss, dups;
     if (unlikely(!ubase_check(upipe_rtpfb_get_stats(upipe_rtpfb,
                 &expected_seqnum, &last_output_seqnum,
-                &buffers, &nacks, &repairs, &loss, &dups
+                &buffers, &nacks, &repairs, &loss, &dups, &rtt
                 ))))
         upipe_err_va(upipe, "Couldn't get stats from rtpfb");
 
     unsigned nack_overflow = (repairs && repairs < nacks) ? (nacks - repairs ) * 100 / repairs : 0;
-    upipe_notice_va(upipe, "%5u (%3zu) %5u\t%zu repairs %zu NACKS (%u%% too much)\tlost %zu\tduplicates %zu",
-            last_output_seqnum, buffers, expected_seqnum, repairs, nacks, nack_overflow, loss, dups);
+    upipe_notice_va(upipe, "%5u (%3zu) %5u\t%zu repairs %zu NACKS (%u%% too much)\tlost %zu\tduplicates %zu\tRTT %u ms",
+            last_output_seqnum, buffers, expected_seqnum, repairs, nacks, nack_overflow, loss, dups, rtt);
 }
 
 static void sink_timeout(struct upump *upump)
