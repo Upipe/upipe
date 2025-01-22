@@ -1012,7 +1012,10 @@ static int _upipe_srt_receiver_control(struct upipe *upipe,
             *repaired = upipe_srt_receiver->repaired;
             *loss = upipe_srt_receiver->loss;
             *dups = upipe_srt_receiver->dups;
-            *rtt = upipe_srt_receiver->rtt * 1000 / UCLOCK_FREQ;
+            if (upipe_srt_receiver->establish_time == 0)
+                *rtt = 0;
+            else
+                *rtt = upipe_srt_receiver->rtt * 1000 / UCLOCK_FREQ;
 
             upipe_srt_receiver->nacks = 0;
             upipe_srt_receiver->repaired = 0;
