@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
- * Copyright (C) 2020-2024 EasyTools S.A.S.
+ * Copyright (C) 2020-2025 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -3040,7 +3040,7 @@ static void upipe_ts_mux_increment(struct upipe *upipe)
     mux->cr_sys_remainder = q.rem;
 
     /* Tell PSI tables to prepare packets. */
-    upipe_ts_mux_prepare_psi(upipe, mux->cr_sys - mux->latency, mux->latency);
+    upipe_ts_mux_prepare_psi(upipe, mux->cr_sys, mux->latency);
 }
 
 /** @internal @This shows the next increment of cr_sys.
@@ -3176,10 +3176,9 @@ static void upipe_ts_mux_append(struct upipe *upipe, struct ubuf *ubuf,
             ubuf_free(ubuf);
             return;
         }
-        uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
+        uref_clock_set_cr_sys(mux->uref, mux->cr_sys);
         if (dts_sys != UINT64_MAX)
-            uref_clock_set_cr_dts_delay(mux->uref,
-                    dts_sys - (mux->cr_sys - mux->latency));
+            uref_clock_set_cr_dts_delay(mux->uref, dts_sys - mux->cr_sys);
         uref_attach_ubuf(mux->uref, ubuf);
     } else {
         uint64_t current_dts_sys;
@@ -3187,8 +3186,7 @@ static void upipe_ts_mux_append(struct upipe *upipe, struct ubuf *ubuf,
             (!ubase_check(uref_clock_get_dts_sys(mux->uref,
                                                  &current_dts_sys)) ||
              current_dts_sys > dts_sys))
-            uref_clock_set_cr_dts_delay(mux->uref,
-                    dts_sys - (mux->cr_sys - mux->latency));
+            uref_clock_set_cr_dts_delay(mux->uref, dts_sys - mux->cr_sys);
         uref_block_append(mux->uref, ubuf);
     }
     mux->uref_size += TS_SIZE;
@@ -3222,7 +3220,7 @@ static void _upipe_ts_mux_watcher(struct upipe *upipe)
     while (nb_packets < NB_PACKETS) {
         upipe_ts_mux_increment(upipe);
         if (mux->uref != NULL) /* capped VBR */
-            uref_clock_set_cr_sys(mux->uref, mux->cr_sys - mux->latency);
+            uref_clock_set_cr_sys(mux->uref, mux->cr_sys);
 
         while (mux->uref_size < mux->mtu) {
             nb_packets++;
@@ -3346,7 +3344,7 @@ static void upipe_ts_mux_work_file(struct upipe *upipe, struct upump **upump_p)
 #endif
         if (mux->cr_sys == UINT64_MAX) {
             upipe_verbose_va(upipe, "work file min=%"PRIu64, min_cr_sys);
-            mux->cr_sys = min_cr_sys + mux->latency;
+            mux->cr_sys = min_cr_sys;
             if (mux->initial_cr_prog != UINT64_MAX) {
                 upipe_ts_mux_init_cr_prog(upipe, mux->initial_cr_prog);
                 mux->initial_cr_prog = UINT64_MAX;
@@ -3708,7 +3706,7 @@ static void upipe_ts_mux_build_flow_def(struct upipe *upipe)
     }
 
     if (unlikely(!ubase_check(uref_clock_set_latency(flow_def,
-                                mux->latency + mux->mux_delay)) ||
+                                mux->mux_delay)) ||
                  !ubase_check(uref_block_flow_set_octetrate(flow_def,
                                 mux->total_octetrate)) ||
                  !ubase_check(uref_block_flow_set_size(flow_def,
