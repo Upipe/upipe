@@ -691,15 +691,10 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     uint64_t now = upipe_avfilt_sub_now(upipe);
 
     /* set pts orig */
-    AVRational av_time_base = av_buffersink_get_time_base(
+    AVRational time_base = av_buffersink_get_time_base(
         upipe_avfilt_sub->buffer_ctx);
-    struct urational to = { .num = UCLOCK_FREQ, .den = 1 };
-    struct urational from = {
-        .num = av_time_base.num,
-        .den = av_time_base.den
-    };
-    struct urational mult = urational_multiply(&to, &from);
-    uint64_t pts_orig = frame->pts * mult.num / mult.den;
+    uint64_t pts_orig = av_rescale_q(frame->pts, time_base,
+                                     av_make_q(1, UCLOCK_FREQ));
     uint64_t pts_prog = pts_orig + upipe_avfilt_sub->pts_prog_offset;
     if (upipe_avfilt_sub->last_pts_prog != UINT64_MAX) {
         if (pts_prog <= upipe_avfilt_sub->last_pts_prog) {
@@ -739,7 +734,8 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     uint64_t duration = 0;
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO:
-            duration = frame->pkt_duration;
+            duration = av_rescale_q(frame->pkt_duration, time_base,
+                                    av_make_q(1, UCLOCK_FREQ));
 
             if (!frame->interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
@@ -2212,6 +2208,9 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
+    AVRational time_base = av_buffersink_get_time_base(
+        upipe_avfilt->buffersink_ctx);
+
     if (unlikely(!upipe_avfilt->flow_def)) {
         struct uref *flow_def_attr = upipe_avfilt_alloc_flow_def_attr(upipe);
         if (flow_def_attr == NULL) {
@@ -2233,8 +2232,6 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
 
         uint64_t latency = 0;
         if (frame->pts != AV_NOPTS_VALUE) {
-            AVRational time_base = av_buffersink_get_time_base(
-                upipe_avfilt->buffersink_ctx);
             uint64_t pts = av_rescale_q(frame->pts, time_base,
                                         av_make_q(1, UCLOCK_FREQ));
             uint64_t input_pts;
@@ -2293,12 +2290,8 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     uint64_t pts_prog = UINT64_MAX;
     uint64_t pts_sys = UINT64_MAX;
     if (frame->pts != AV_NOPTS_VALUE) {
-        AVRational time_base = av_buffersink_get_time_base(
-            upipe_avfilt->buffersink_ctx);
-        struct urational to = { .num = UCLOCK_FREQ, .den = 1 };
-        struct urational from = { .num = time_base.num, .den = time_base.den };
-        struct urational mult = urational_multiply(&to, &from);
-        uint64_t pts = frame->pts * mult.num / mult.den;
+        uint64_t pts = av_rescale_q(frame->pts, time_base,
+                                    av_make_q(1, UCLOCK_FREQ));
 
         if (ubase_check(uref_clock_get_pts_prog(uref, &pts_prog)) &&
             ubase_check(uref_clock_get_pts_sys(uref, &pts_sys))) {
@@ -2312,7 +2305,8 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     uint64_t duration = 0;
     switch (media_type) {
         case AVMEDIA_TYPE_VIDEO:
-            duration = frame->pkt_duration;
+            duration = av_rescale_q(frame->pkt_duration, time_base,
+                                    av_make_q(1, UCLOCK_FREQ));
 
             if (!frame->interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
