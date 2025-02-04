@@ -105,6 +105,9 @@ struct upipe_rtcpfb {
     /** buffer latency */
     uint64_t latency;
 
+    /** retransmit only **/
+    bool retransmit_only;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -569,6 +572,7 @@ static struct upipe *upipe_rtcpfb_alloc(struct upipe_mgr *mgr,
     upipe_rtcpfb->last_seq = UINT_MAX;
     upipe_rtcpfb_require_uclock(upipe);
     upipe_rtcpfb->latency = 1000; /* 1 sec */
+    upipe_rtcpfb->retransmit_only = false;
 
     /* This timer does not need to run frequently */
     upipe_rtcpfb->upump_timer = upump_alloc_timer(upipe_rtcpfb->upump_mgr,
@@ -608,10 +612,14 @@ static inline void upipe_rtcpfb_input(struct upipe *upipe, struct uref *uref,
 
     uref_attr_set_priv(uref, seqnum);
 
-    /* Output packet immediately */
-    upipe_rtcpfb_output(upipe, uref_dup(uref), NULL); // FIXME : upump?
+    if (!upipe_rtcpfb->retransmit_only) {
+        /* Output packet immediately */
+        upipe_rtcpfb_output(upipe, uref_dup(uref), NULL); // FIXME : upump?
 
-    upipe_verbose_va(upipe, "Output & buffer %hu", seqnum);
+        upipe_verbose_va(upipe, "Output & Buffer %hu", seqnum);
+    }
+    else
+        upipe_verbose_va(upipe, "Buffer %hu", seqnum);
 
     /* Buffer packet in case retransmission is needed */
     ulist_add(&upipe_rtcpfb->queue, uref_to_uchain(uref));
@@ -660,15 +668,22 @@ static int _upipe_rtcpfb_control(struct upipe *upipe, int command, va_list args)
             return upipe_rtcpfb_set_flow_def(upipe, flow_def);
         }
         case UPIPE_SET_OPTION: {
+            struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
             const char *k = va_arg(args, const char *);
             const char *v = va_arg(args, const char *);
-            if (strcmp(k, "latency"))
+
+            if (!k || !v) {
+                return UBASE_ERR_INVALID;
+            } else if (!strcmp(k, "latency")) {
+                upipe_rtcpfb->latency = atoi(v);
+                upipe_dbg_va(upipe, "Set latency to %"PRIu64" msecs",
+                        upipe_rtcpfb->latency);
+            }
+            else if (!strcmp(k, "retransmit-only"))
+                upipe_rtcpfb->retransmit_only = atoi(v);
+            else
                 return UBASE_ERR_INVALID;
 
-            struct upipe_rtcpfb *upipe_rtcpfb = upipe_rtcpfb_from_upipe(upipe);
-            upipe_rtcpfb->latency = atoi(v);
-            upipe_dbg_va(upipe, "Set latency to %"PRIu64" msecs",
-                    upipe_rtcpfb->latency);
             return UBASE_ERR_NONE;
         }
         default:
