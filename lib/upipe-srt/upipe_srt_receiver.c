@@ -1100,6 +1100,7 @@ static bool upipe_srt_receiver_insert_inner(struct upipe *upipe, struct uref *ur
     upipe_verbose_va(upipe, "Repaired %"PRIu64" > %u > %"PRIu64" -diff %d",
             prev_seqnum, seqnum, next_seqnum, -diff);
 
+    upipe_throw_clock_ts(upipe, uref);
     return true;
 }
 
@@ -1380,7 +1381,6 @@ error:
 
     /* packet is from the past, reordered or retransmitted */
     if (upipe_srt_receiver_insert(upipe, uref, seqnum)) {
-        upipe_throw_clock_ts(upipe, uref);
         return;
     }
 
