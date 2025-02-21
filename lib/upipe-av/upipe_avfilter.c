@@ -67,81 +67,6 @@
 # define pkt_duration duration
 #endif
 
-/** @internal @This enumerates the avfilter sub pipe private events. */
-enum uprobe_avfilt_sub_event  {
-    /** sentinel */
-    UPROBE_AVFILT_SUB_SENTINEL = UPROBE_LOCAL,
-    /** the filter was updated (void) */
-    UPROBE_AVFILT_SUB_UPDATE,
-};
-
-/** @internal @This describes a media. */
-struct upipe_avfilt_media {
-    /** media type */
-    enum AVMediaType type;
-    union {
-        /** video */
-        struct upipe_avfilt_media_video {
-            /** format */
-            enum AVPixelFormat pix_fmt;
-            /** input width */
-            uint64_t width;
-            /** input height */
-            uint64_t height;
-            /** chroma map */
-            const char *chroma_map[UPIPE_AV_MAX_PLANES];
-            /** framerate */
-            struct urational fps;
-            /** sample aspect ratio */
-            struct urational sar;
-            /** matrix coefficients */
-            int matrix_coefficients;
-            /** interlaced? */
-            bool interlaced;
-            /** color range */
-            bool full_range;
-        } video;
-
-        /** audio */
-        struct upipe_avfilt_media_audio{
-            /** sample format */
-            enum AVSampleFormat sample_fmt;
-            /** channel layout */
-            AVChannelLayout ch_layout;
-            /** sample rate */
-            uint64_t sample_rate;
-        } audio;
-    };
-};
-
-/** @internal @This initializes a media structure.
- *
- * @param media structure to initialize
- */
-static void upipe_avfilt_media_init(struct upipe_avfilt_media *media)
-{
-    if (media)
-        media->type = AVMEDIA_TYPE_UNKNOWN;
-}
-
-/** @internal @This cleans a media structure.
- *
- * @param media structure to clean
- */
-static void upipe_avfilt_media_clean(struct upipe_avfilt_media *media)
-{
-    if (media) {
-        switch (media->type) {
-            case AVMEDIA_TYPE_AUDIO:
-                av_channel_layout_uninit(&media->audio.ch_layout);
-                break;
-            default:
-                break;
-        }
-        media->type = AVMEDIA_TYPE_UNKNOWN;
-    }
-}
-
 /** @This is the sub pipe private structure of the avfilter pipe. */
 struct upipe_avfilt_sub {
     /** refcount management structure */
@@ -152,10 +77,14 @@ struct upipe_avfilt_sub {
     struct uchain uchain;
     /** allocation flow definition */
     struct uref *flow_def_alloc;
-    /** output pipe */
-    struct upipe *output;
     /** output flow def */
     struct uref *flow_def;
+    /** input flow definition */
+    struct uref *flow_def_input;
+    /** flow definition attributes */
+    struct uref *flow_def_attr;
+    /** output pipe */
+    struct upipe *output;
     /** output internal state */
     enum upipe_helper_output_state output_state;
     /** registered requests on output */
@@ -172,8 +101,6 @@ struct upipe_avfilt_sub {
     struct upump *upump;
     /** sub pipe name */
     const char *name;
-    /** sub pipe is an input pipe */
-    bool input;
     /** avfilter buffer source */
     AVFilterContext *buffer_ctx;
     /** system clock offset */
@@ -192,9 +119,6 @@ struct upipe_avfilt_sub {
     bool warn_not_configured;
     /** latency */
     uint64_t latency;
-
-    /** media configured at allocation */
-    struct upipe_avfilt_media media;
 };
 
 /** @hidden */
@@ -204,6 +128,7 @@ static inline void upipe_avfilt_sub_flush_cb(struct upump *upump);
 
 UPIPE_HELPER_UPIPE(upipe_avfilt_sub, upipe, UPIPE_AVFILT_SUB_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_avfilt_sub, NULL)
+UPIPE_HELPER_FLOW_DEF(upipe_avfilt_sub, flow_def_input, flow_def_attr);
 UPIPE_HELPER_UREFCOUNT(upipe_avfilt_sub, urefcount, upipe_avfilt_sub_free)
 UPIPE_HELPER_OUTPUT(upipe_avfilt_sub, output, flow_def, output_state, requests)
 UPIPE_HELPER_UCLOCK(upipe_avfilt_sub, uclock, uclock_request,
@@ -259,9 +184,6 @@ struct upipe_avfilt {
     AVFilterContext *buffersink_ctx;
     /** uref from input */
     struct uref *uref;
-
-    /** media private fields */
-    struct upipe_avfilt_media media;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -341,105 +263,6 @@ static void buffer_free_sound_cb(void *opaque, uint8_t *data)
 static inline struct urational urational(AVRational v)
 {
     return (struct urational){ .num = v.num, .den = v.den };
-}
-
-/** @internal @This throws an update event for avfilter sub pipe.
- *
- * @param upipe description structure of the pipe
- * @return an error code
- */
-static inline int upipe_avfilt_sub_throw_update(struct upipe *upipe)
-{
-    return upipe_throw(upipe, UPROBE_AVFILT_SUB_UPDATE,
-                       UPIPE_AVFILT_SUB_SIGNATURE);
-}
-
-/** @internal @This checks if the flow definition match the avfilter buffer.
- *
- * @param upipe description structure of the sub pipe
- * @return true if the flow def match the buffer
- */
-static bool upipe_avfilt_sub_check_flow_def(struct upipe *upipe,
-                                            const AVFrame *frame)
-{
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
-
-    enum AVMediaType media_type =
-        av_buffersink_get_type(upipe_avfilt_sub->buffer_ctx);
-
-    if (unlikely(!upipe_avfilt_sub->flow_def))
-        return false;
-
-    if (media_type != upipe_avfilt_sub->media.type)
-        return false;
-
-    switch (media_type) {
-        case AVMEDIA_TYPE_VIDEO: {
-            enum AVPixelFormat pix_fmt =
-                av_buffersink_get_format(upipe_avfilt_sub->buffer_ctx);
-            int width = av_buffersink_get_w(upipe_avfilt_sub->buffer_ctx);
-            int height = av_buffersink_get_h(upipe_avfilt_sub->buffer_ctx);
-            AVRational av_fps =
-                av_buffersink_get_frame_rate(upipe_avfilt_sub->buffer_ctx);
-            if (!av_fps.den)
-                av_fps = av_inv_q(av_buffersink_get_time_base(
-                        upipe_avfilt_sub->buffer_ctx));
-            struct urational fps;
-            fps.num = av_fps.num;
-            fps.den = av_fps.den;
-            struct urational sar =
-                urational(
-                    av_buffersink_get_sample_aspect_ratio(
-                        upipe_avfilt_sub->buffer_ctx));
-            bool interlaced = frame->interlaced_frame;
-            enum AVColorRange color_range = frame->color_range;
-            int matrix_coefficients = frame->colorspace;
-#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-            color_range = av_buffersink_get_color_range(
-                upipe_avfilt_sub->buffer_ctx);
-            matrix_coefficients = av_buffersink_get_colorspace(
-                upipe_avfilt_sub->buffer_ctx);
-#endif
-            bool full_range = color_range == AVCOL_RANGE_JPEG;
-
-            struct upipe_avfilt_media_video *video =
-                &upipe_avfilt_sub->media.video;
-            return video->pix_fmt == pix_fmt &&
-                video->width == width &&
-                video->height == height &&
-                !urational_cmp(&video->fps, &fps) &&
-                !urational_cmp(&video->sar, &sar) &&
-                video->interlaced == interlaced &&
-                video->full_range == full_range &&
-                video->matrix_coefficients == matrix_coefficients;
-        }
-
-        case AVMEDIA_TYPE_AUDIO: {
-            enum AVSampleFormat sample_fmt =
-                av_buffersink_get_format(upipe_avfilt_sub->buffer_ctx);
-
-            AVChannelLayout ch_layout;
-            av_buffersink_get_ch_layout(upipe_avfilt_sub->buffer_ctx,
-                                        &ch_layout);
-            int sample_rate =
-                av_buffersink_get_sample_rate(upipe_avfilt_sub->buffer_ctx);
-
-            bool changed = true;
-            struct upipe_avfilt_media_audio *audio =
-                &upipe_avfilt_sub->media.audio;
-            if (audio->sample_fmt == sample_fmt &&
-                !av_channel_layout_compare(&audio->ch_layout, &ch_layout) &&
-                audio->sample_rate == sample_rate)
-                changed = false;
-            av_channel_layout_uninit(&ch_layout);
-            return !changed;
-        }
-
-        default:
-            break;
-    }
-    return false;
 }
 
 /** @internal @This builds the video flow definition packet.
@@ -549,60 +372,57 @@ static int build_audio_flow_def(struct uref *flow_def,
 
 /** @internal @This builds the flow definition packet.
  *
- * @param upipe description structure of the pipe
  * @param flow_def output flow def
+ * @param buffer_ctx buffersink context
  * @param frame first frame
  * @return an error code
  */
-static int upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
-                                           struct uref *flow_def,
-                                           const AVFrame *frame)
+static int build_flow_def(struct uref *flow_def, AVFilterContext *ctx,
+                          const AVFrame *frame)
 {
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
-
-    AVFilterContext *ctx = upipe_avfilt_sub->buffer_ctx;
-    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
+    if (!flow_def || !ctx || !frame)
+        return UBASE_ERR_INVALID;
 
     switch (av_buffersink_get_type(ctx)) {
-        case AVMEDIA_TYPE_VIDEO: {
-            UBASE_RETURN(build_video_flow_def(flow_def, ctx, frame))
-            upipe_avfilt_sub->media.type = AVMEDIA_TYPE_VIDEO;
-            struct upipe_avfilt_media_video *video =
-                &upipe_avfilt_sub->media.video;
-            video->pix_fmt = upipe_av_pixfmt_from_flow_def(
-                flow_def, NULL, video->chroma_map);
-            uref_pic_flow_get_hsize(flow_def, &video->width);
-            uref_pic_flow_get_vsize(flow_def, &video->height);
-            uref_pic_flow_get_fps(flow_def, &video->fps);
-            uref_pic_flow_get_sar(flow_def, &video->sar);
-            video->interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
-            video->full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
-            uref_pic_flow_get_matrix_coefficients_val(
-                flow_def, &video->matrix_coefficients);
-            return UBASE_ERR_NONE;
-        }
+        case AVMEDIA_TYPE_VIDEO:
+            return build_video_flow_def(flow_def, ctx, frame);
 
-        case AVMEDIA_TYPE_AUDIO: {
-            UBASE_RETURN(build_audio_flow_def(flow_def, ctx, frame))
-            upipe_avfilt_sub->media.type = AVMEDIA_TYPE_AUDIO;
-            struct upipe_avfilt_media_audio *audio =
-                &upipe_avfilt_sub->media.audio;
-            uint8_t channels;
-            audio->sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def,
-                                                                 &channels);
-            uref_sound_flow_get_rate(flow_def, &audio->sample_rate);
-            av_buffersink_get_ch_layout(upipe_avfilt_sub->buffer_ctx,
-                                        &audio->ch_layout);
-            return UBASE_ERR_NONE;
-        }
+        case AVMEDIA_TYPE_AUDIO:
+            return build_audio_flow_def(flow_def, ctx, frame);
 
         default:
-            upipe_err_va(upipe, "unknown buffersink type");
             break;
     }
 
     return UBASE_ERR_UNHANDLED;
+}
+
+/** @internal @This builds the output flow definition packet.
+ *
+ * @param upipe description structure of the pipe
+ * @param frame first output frame
+ * @return the output flow definition or NULL in case of error
+ */
+static struct uref *upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
+                                                    const AVFrame *frame)
+{
+    struct upipe_avfilt_sub *upipe_avfilt_sub =
+        upipe_avfilt_sub_from_upipe(upipe);
+    AVFilterContext *ctx = upipe_avfilt_sub->buffer_ctx;
+
+    struct uref *flow_def =
+        uref_sibling_alloc_control(upipe_avfilt_sub->flow_def_alloc);
+    if (unlikely(flow_def == NULL))
+        return NULL;
+
+    int ret = build_flow_def(flow_def, ctx, frame);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(flow_def);
+        upipe_err_va(upipe, "unknown buffersink type");
+        return NULL;
+    }
+    uref_clock_set_latency(flow_def, upipe_avfilt_sub->latency);
+    return flow_def;
 }
 
 /** @internal @This waits for the next uref to output.
@@ -632,23 +452,12 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
 
-    if (unlikely(!upipe_avfilt_sub_check_flow_def(upipe, frame)))
-        upipe_avfilt_sub_store_flow_def(upipe, NULL);
-
-    if (unlikely(!upipe_avfilt_sub->flow_def)) {
-        struct uref *flow_def = uref_dup(upipe_avfilt_sub->flow_def_alloc);
-        if (unlikely(!flow_def)) {
-            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-            return NULL;
-        }
-        int ret = upipe_avfilt_sub_build_flow_def(upipe, flow_def, frame);
-        if (unlikely(!ubase_check(ret))) {
-            uref_free(flow_def);
-            upipe_throw_error(upipe, ret);
-            return NULL;
-        }
-        upipe_avfilt_sub_store_flow_def(upipe, flow_def);
+    struct uref *flow_def = upipe_avfilt_sub_build_flow_def(upipe, frame);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        return NULL;
     }
+    upipe_avfilt_sub_store_flow_def(upipe, flow_def);
 
     if (unlikely(!upipe_avfilt_sub->ubuf_mgr)) {
         upipe_warn(upipe, "no ubuf manager for now");
@@ -778,36 +587,33 @@ static struct uref *upipe_avfilt_sub_pop(struct upipe *upipe)
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    if (upipe_avfilt_sub->input)
+    if (upipe_avfilt_sub->flow_def_input)
         return NULL;
 
     if (unlikely(!upipe_avfilt->configured))
         return NULL;
 
-    AVFrame *filt_frame = av_frame_alloc();
-    if (unlikely(!filt_frame)) {
+    AVFrame *frame = av_frame_alloc();
+    if (unlikely(!frame)) {
         upipe_err_va(upipe, "cannot allocate av frame");
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return NULL;
     }
 
     /* pull filtered frames from the filtergraph */
-    int err = av_buffersink_get_frame(upipe_avfilt_sub->buffer_ctx,
-                                      filt_frame);
-    if (err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
-        av_frame_free(&filt_frame);
-        return NULL;
-    }
+    struct uref *uref = NULL;
+    int err = av_buffersink_get_frame(upipe_avfilt_sub->buffer_ctx, frame);
     if (err < 0) {
-        upipe_err_va(upipe, "cannot get frame from filter graph: %s",
-                     av_err2str(err));
-        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
-        av_frame_free(&filt_frame);
-        return NULL;
+        if (err != AVERROR(EAGAIN) && err != AVERROR_EOF) {
+            upipe_err_va(upipe, "cannot get frame from filter graph: %s",
+                av_err2str(err));
+                upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+        }
+    } else {
+        uref = upipe_avfilt_sub_frame_to_uref(upipe, frame);
+        av_frame_unref(frame);
     }
-    struct uref *uref = upipe_avfilt_sub_frame_to_uref(upipe, filt_frame);
-    av_frame_unref(filt_frame);
-    av_frame_free(&filt_frame);
+    av_frame_free(&frame);
     return uref;
 }
 
@@ -839,17 +645,10 @@ static void upipe_avfilt_sub_flush(struct upipe *upipe)
         }
     }
 
-    while ((uref = upipe_avfilt_sub_pop(upipe))) {
-        uint64_t pts_sys = UINT64_MAX;
-        uref_clock_get_pts_sys(uref, &pts_sys);
-        if (now == UINT64_MAX || pts_sys == UINT64_MAX || pts_sys <= now) {
-            upipe_avfilt_sub_output(upipe, uref, &upipe_avfilt_sub->upump);
-        }
-        else {
-            ulist_add(&upipe_avfilt_sub->urefs, uref_to_uchain(uref));
-            upipe_avfilt_sub_wait(upipe, pts_sys - now);
-            return;
-        }
+    uref = upipe_avfilt_sub_pop(upipe);
+    if (uref) {
+        ulist_add(&upipe_avfilt_sub->urefs, uref_to_uchain(uref));
+        upipe_avfilt_sub_flush(upipe);
     }
 }
 
@@ -863,38 +662,147 @@ static void upipe_avfilt_sub_flush_cb(struct upump *upump)
     return upipe_avfilt_sub_flush(upipe);
 }
 
-/** @internal @This catches the internal events of the avfilter sub pipes.
+/** @internal @This create an AVFilter context from the input flow definition.
  *
- * @param upipe description structure of the sub pipe
- * @param uprobe structure used to raise events
- * @param event event thrown
- * @param args optional arguments of the event
+ * @param upipe description structure of the pipe or sub pipe
+ * @param flow_def input flow definition to build filter from
+ * @param buffer_ctx filled with the AVFilter context on success
  * @return an error code
  */
-static int upipe_avfilt_sub_catch(struct uprobe *uprobe,
-                                  struct upipe *upipe,
-                                  int event,
-                                  va_list args)
+static int build_input_filter(struct upipe *upipe, struct uref *flow_def,
+                              AVFilterContext **buffer_ctx)
 {
-    if (event == UPROBE_AVFILT_SUB_UPDATE &&
-        ubase_get_signature(args) == UPIPE_AVFILT_SUB_SIGNATURE) {
-        upipe_avfilt_sub_wait(upipe, 0);
-        return UBASE_ERR_NONE;
+    struct upipe_avfilt *upipe_avfilt = NULL;
+    struct upipe_avfilt_sub *upipe_avfilt_sub = NULL;
+    const char *name = "input";
+
+    if (!upipe || !upipe->mgr || !flow_def) {
+        return UBASE_ERR_INVALID;
+    } else if (upipe->mgr->signature == UPIPE_AVFILT_SIGNATURE) {
+        upipe_avfilt = upipe_avfilt_from_upipe(upipe);
+    } else if (upipe->mgr->signature == UPIPE_AVFILT_SUB_SIGNATURE) {
+        upipe_avfilt_sub = upipe_avfilt_sub_from_upipe(upipe);
+        upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
+        name = upipe_avfilt_sub->name;
+    } else {
+        return UBASE_ERR_INVALID;
     }
+
+    AVFilterGraph *filter_graph = upipe_avfilt->filter_graph;
+    if (!filter_graph || !name)
+        return UBASE_ERR_INVALID;
+
+    enum AVMediaType type;
+    if (ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF)))
+        type = AVMEDIA_TYPE_VIDEO;
+    else if (ubase_check(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF)))
+        type = AVMEDIA_TYPE_AUDIO;
+    else {
+        upipe_err(upipe, "unsupported media type");
+        return UBASE_ERR_UNHANDLED;
+    }
+
+    const char *filter_name = type == AVMEDIA_TYPE_VIDEO ? "buffer" : "abuffer";
+    const AVFilter *filter = avfilter_get_by_name(filter_name);
+    if (filter == NULL) {
+        upipe_err_va(upipe, "no filter found for %s", filter_name);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    AVFilterContext *ctx =
+        avfilter_graph_alloc_filter(filter_graph, filter, name);
+    if (ctx == NULL) {
+        upipe_err_va(upipe, "cannot create %s filter for %s", filter_name, name);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
+    if (p == NULL) {
+        upipe_err_va(upipe, "cannot alloc %s params for %s", filter_name, name);
+        avfilter_free(ctx);
+        return UBASE_ERR_EXTERNAL;
+    }
+    p->time_base.num = 1;
+    p->time_base.den = UCLOCK_FREQ;
+    switch (type) {
+        case AVMEDIA_TYPE_VIDEO: {
+            const char *chroma_map[UPIPE_AV_MAX_PLANES];
+            uint64_t width = 0;
+            uint64_t height = 0;
+            struct urational sar = { 0, 0 };
+            struct urational fps = { 0, 0 };
+
+            p->format =
+                upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
+            uref_pic_flow_get_hsize(flow_def, &width);
+            uref_pic_flow_get_vsize(flow_def, &height);
+            uref_pic_flow_get_sar(flow_def, &sar);
+            uref_pic_flow_get_fps(flow_def, &fps);
+            p->width = width;
+            p->height = height;
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
+            int matrix_coefficients;
+            bool full_range;
+
+            uref_pic_flow_get_matrix_coefficients_val(
+                flow_def, &matrix_coefficients);
+            full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
+            p->color_space = matrix_coefficients;
+            p->color_range = full_range ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
+#endif
+            if (sar.num) {
+                p->sample_aspect_ratio.num = sar.num;
+                p->sample_aspect_ratio.den = sar.den;
+            }
+            if (fps.num) {
+                p->frame_rate.num = fps.num;
+                p->frame_rate.den = fps.den;
+            }
+            break;
+        }
+        case AVMEDIA_TYPE_AUDIO: {
+            uint8_t channels;
+            uint64_t sample_rate = 0;
+
+            p->format = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
+            uref_sound_flow_get_rate(flow_def, &sample_rate);
+            p->sample_rate = sample_rate;
+            av_channel_layout_default(&p->ch_layout, channels);
+            break;
+        }
+        default:
+            break;
+    }
+
+    int err = av_buffersrc_parameters_set(ctx, p);
+    av_free(p);
+    if (err < 0) {
+        upipe_err_va(upipe, "cannot set %s params for %s: %s", filter_name,
+                     name, av_err2str(err));
+        avfilter_free(ctx);
+        return UBASE_ERR_EXTERNAL;
+    }
+    if (avfilter_init_dict(ctx, NULL)) {
+        avfilter_free(ctx);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    if (buffer_ctx)
+        *buffer_ctx = ctx;
     else
-        return uprobe_throw_next(uprobe, upipe, event, args);
+        avfilter_free(ctx);
+    return UBASE_ERR_NONE;
 }
 
-/** @internal @This creates the filter of the sub pipe.
- *
- * @param upipe description structure of the sub pipe
- * @return an error code
- */
 static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
+    struct uref *flow_def = upipe_avfilt_sub->flow_def_input;
+
+    if (unlikely(!flow_def))
+        return UBASE_ERR_INVALID;
 
     if (unlikely(upipe_avfilt_sub->buffer_ctx))
         return UBASE_ERR_BUSY;
@@ -902,91 +810,7 @@ static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
     if (unlikely(!upipe_avfilt->filter_graph))
         return UBASE_ERR_INVALID;
 
-    const char *name = NULL;
-    switch (upipe_avfilt_sub->media.type) {
-        case AVMEDIA_TYPE_VIDEO:
-            name = "buffer";
-            break;
-        case AVMEDIA_TYPE_AUDIO:
-            name = "abuffer";
-            break;
-        default:
-            upipe_err(upipe, "unsupported media type");
-            return UBASE_ERR_INVALID;
-    }
-
-    const AVFilter *filter = avfilter_get_by_name(name);
-    if (filter == NULL) {
-        upipe_err(upipe, "no buffer found for this media type");
-        return UBASE_ERR_INVALID;
-    }
-
-    AVFilterContext *ctx = avfilter_graph_alloc_filter(
-        upipe_avfilt->filter_graph, filter, upipe_avfilt_sub->name);
-    if (ctx == NULL) {
-        upipe_err_va(upipe, "cannot create %s filter", name);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    if (upipe_avfilt_sub->input) {
-        AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
-        if (p == NULL) {
-            upipe_err_va(upipe, "cannot alloc %s params", name);
-            avfilter_free(ctx);
-            return UBASE_ERR_EXTERNAL;
-        }
-        p->time_base.num = 1;
-        p->time_base.den = UCLOCK_FREQ;
-        switch (upipe_avfilt_sub->media.type) {
-            case AVMEDIA_TYPE_VIDEO: {
-                struct upipe_avfilt_media_video *video =
-                    &upipe_avfilt_sub->media.video;
-                p->format = video->pix_fmt;
-                p->width = video->width;
-                p->height = video->height;
-#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-                p->color_space = video->matrix_coefficients;
-                p->color_range = video->full_range ?
-                    AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
-#endif
-                if (video->sar.num) {
-                    p->sample_aspect_ratio.num = video->sar.num;
-                    p->sample_aspect_ratio.den = video->sar.den;
-                }
-                if (video->fps.num) {
-                    p->frame_rate.num = video->fps.num;
-                    p->frame_rate.den = video->fps.den;
-                }
-                break;
-            }
-            case AVMEDIA_TYPE_AUDIO: {
-                struct upipe_avfilt_media_audio *audio =
-                    &upipe_avfilt_sub->media.audio;
-                p->format = audio->sample_fmt;
-                p->sample_rate = audio->sample_rate;
-                av_channel_layout_copy(&p->ch_layout, &audio->ch_layout);
-                break;
-            }
-            default:
-                break;
-        }
-
-        int err = av_buffersrc_parameters_set(ctx, p);
-        av_free(p);
-        if (err < 0) {
-            upipe_err_va(upipe, "cannot set %s params: %s",
-                         name, av_err2str(err));
-            avfilter_free(ctx);
-            return UBASE_ERR_EXTERNAL;
-        }
-    }
-    if (avfilter_init_dict(ctx, NULL)) {
-        avfilter_free(ctx);
-        return UBASE_ERR_EXTERNAL;
-    }
-    upipe_avfilt_sub->buffer_ctx = ctx;
-
-    return UBASE_ERR_NONE;
+    return build_input_filter(upipe, flow_def, &upipe_avfilt_sub->buffer_ctx);
 }
 
 /** @internal @This allocates and initializes a avfilter sub pipe.
@@ -1004,15 +828,14 @@ static struct upipe *upipe_avfilt_sub_alloc(struct upipe_mgr *mgr,
 {
     struct uref *flow_def = NULL;
     struct upipe *upipe =
-        upipe_avfilt_sub_alloc_flow(
-            mgr, uprobe_alloc(upipe_avfilt_sub_catch, uprobe),
-            signature, args, &flow_def);
+        upipe_avfilt_sub_alloc_flow(mgr, uprobe, signature, args, &flow_def);
     if (unlikely(!upipe))
         return NULL;
 
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
     upipe_avfilt_sub_init_urefcount(upipe);
+    upipe_avfilt_sub_init_flow_def(upipe);
     upipe_avfilt_sub_init_sub(upipe);
     upipe_avfilt_sub_init_output(upipe);
     upipe_avfilt_sub_init_uclock(upipe);
@@ -1024,14 +847,12 @@ static struct upipe *upipe_avfilt_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_sub->flow_def_alloc = flow_def;
     upipe_avfilt_sub->ubuf_mgr = ubuf_mgr_use(upipe_avfilt->ubuf_mgr);
     upipe_avfilt_sub->name = NULL;
-    upipe_avfilt_sub->input = false;
     upipe_avfilt_sub->pts_prog_offset = 0;
     upipe_avfilt_sub->pts_sys_offset = UINT64_MAX;
     upipe_avfilt_sub->last_pts_prog = UINT64_MAX;
     upipe_avfilt_sub->last_duration = 0;
     upipe_avfilt_sub->buffer_ctx = NULL;
     upipe_avfilt_sub->warn_not_configured = true;
-    upipe_avfilt_media_init(&upipe_avfilt_sub->media);
     upipe_avfilt_sub->latency = 0;
     ulist_init(&upipe_avfilt_sub->urefs);
 
@@ -1067,7 +888,6 @@ static void upipe_avfilt_sub_free(struct upipe *upipe)
 
     uref_free(upipe_avfilt_sub->flow_def_alloc);
     ubuf_mgr_release(upipe_avfilt_sub->ubuf_mgr);
-    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
     upipe_avfilt_sub_clean_upump(upipe);
     upipe_avfilt_sub_clean_upump_mgr(upipe);
     upipe_avfilt_sub_clean_uclock(upipe);
@@ -1076,6 +896,7 @@ static void upipe_avfilt_sub_free(struct upipe *upipe)
     upipe_avfilt_sub_clean_urefcount(upipe);
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
     upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
+    upipe_avfilt_sub_clean_flow_def(upipe);
     upipe_avfilt_sub_free_flow(upipe);
 }
 
@@ -1091,30 +912,34 @@ static void upipe_avfilt_sub_free(struct upipe *upipe)
 static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
                                               struct uref *uref,
                                               struct uref *flow_def,
-                                              struct upipe_avfilt_media *media,
                                               AVFrame *frame)
 {
-    if (media->type != AVMEDIA_TYPE_VIDEO)
+    if (unlikely(
+            !ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF))))
         goto inval;
 
-    struct upipe_avfilt_media_video *video = &media->video;
+    uint64_t width = 0;
+    uint64_t height = 0;
+    uref_pic_flow_get_hsize(flow_def, &width);
+    uref_pic_flow_get_vsize(flow_def, &height);
 
     size_t hsize, vsize;
     if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize, NULL)) ||
-                 hsize != video->width || vsize != video->height))
+                 hsize != width || vsize != height))
         goto inval;
 
-    for (int i = 0; i < UPIPE_AV_MAX_PLANES && video->chroma_map[i]; i++) {
+    const char *chroma_map[UPIPE_AV_MAX_PLANES];
+    enum AVPixelFormat pix_fmt =
+        upipe_av_pixfmt_from_flow_def(flow_def, NULL, chroma_map);
+
+    for (int i = 0; i < UPIPE_AV_MAX_PLANES && chroma_map[i]; i++) {
         const uint8_t *data;
         size_t stride;
         uint8_t vsub;
-        if (unlikely(
-                !ubase_check(
-                    uref_pic_plane_read(uref, video->chroma_map[i],
-                                        0, 0, -1, -1, &data)) ||
-                !ubase_check(
-                    uref_pic_plane_size(uref, video->chroma_map[i],
-                                        &stride, NULL, &vsub, NULL))))
+        if (unlikely(!ubase_check(uref_pic_plane_read(uref, chroma_map[i], 0, 0,
+                                                      -1, -1, &data)) ||
+                     !ubase_check(uref_pic_plane_size(
+                         uref, chroma_map[i], &stride, NULL, &vsub, NULL))))
             goto inval;
         frame->data[i] = (uint8_t *)data;
         frame->linesize[i] = stride;
@@ -1123,7 +948,7 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
                                          buffer_free_pic_cb, uref,
                                          AV_BUFFER_FLAG_READONLY);
         if (frame->buf[i] == NULL) {
-            uref_pic_plane_unmap(uref, video->chroma_map[i], 0, 0, -1, -1);
+            uref_pic_plane_unmap(uref, chroma_map[i], 0, 0, -1, -1);
             goto inval;
         }
 
@@ -1134,11 +959,10 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
     frame->extended_data = frame->data;
     frame->width = hsize;
     frame->height = vsize;
-    frame->format = video->pix_fmt;
+    frame->format = pix_fmt;
 
     int err = upipe_av_set_frame_properties(upipe, frame, flow_def, uref);
     if (!ubase_check(err)) {
-        uref_free(uref);
         return err;
     }
 
@@ -1159,7 +983,6 @@ static int upipe_avfilt_avframe_from_uref_pic(struct upipe *upipe,
 
 inval:
     upipe_warn(upipe, "invalid buffer received");
-    uref_free(uref);
     return UBASE_ERR_INVALID;
 }
 
@@ -1173,13 +996,12 @@ inval:
  */
 static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
                                                 struct uref *uref,
-                                                struct upipe_avfilt_media *media,
+                                                struct uref *flow_def,
                                                 AVFrame *frame)
 {
-    if (media->type != AVMEDIA_TYPE_AUDIO)
+    if (unlikely(
+            !ubase_check(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF))))
         goto inval;
-
-    struct upipe_avfilt_media_audio *audio = &media->audio;
 
     size_t size;
     uint8_t sample_size;
@@ -1214,11 +1036,14 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
     if (ubase_check(uref_clock_get_duration(uref, &duration)))
         frame->pkt_duration = duration;
 
+    uint8_t channels = 0;
+    uint64_t sample_rate = 0;
+    uref_sound_flow_get_rate(flow_def, &sample_rate);
     frame->extended_data = frame->data;
     frame->nb_samples = size;
-    frame->format = audio->sample_fmt;
-    frame->sample_rate = audio->sample_rate;
-    av_channel_layout_copy(&frame->ch_layout, &audio->ch_layout);
+    frame->format = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
+    frame->sample_rate = sample_rate;
+    av_channel_layout_default(&frame->ch_layout, channels);
 
     upipe_verbose_va(upipe, " input frame pts=%f duration=%f",
                      (double) pts / UCLOCK_FREQ,
@@ -1228,7 +1053,6 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
 
 inval:
     upipe_warn(upipe, "invalid buffer received");
-    uref_free(uref);
     return UBASE_ERR_INVALID;
 }
 
@@ -1244,15 +1068,17 @@ inval:
 static int upipe_avfilt_avframe_from_uref(struct upipe *upipe,
                                           struct uref *uref,
                                           struct uref *flow_def,
-                                          struct upipe_avfilt_media *media,
                                           AVFrame *frame)
 {
-    if (ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF)))
+    if (unlikely(!flow_def)) {
+        upipe_warn(upipe, "no flow def set");
+        return UBASE_ERR_INVALID;
+    } else if (ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF)))
         return upipe_avfilt_avframe_from_uref_pic(
-            upipe, uref, flow_def, media, frame);
+            upipe, uref, flow_def, frame);
     else if (ubase_check(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF)))
         return upipe_avfilt_avframe_from_uref_sound(
-            upipe, uref, media, frame);
+            upipe, uref, flow_def, frame);
 
     const char *def = "(none)";
     uref_flow_get_def(flow_def, &def);
@@ -1274,7 +1100,7 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    if (unlikely(!upipe_avfilt_sub->input)) {
+    if (unlikely(!upipe_avfilt_sub->flow_def_input)) {
         upipe_err(upipe, "receive buffer in an output sub pipe");
         uref_free(uref);
         return;
@@ -1299,11 +1125,11 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
 
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
         int ret = upipe_avfilt_avframe_from_uref(upipe, uref,
-                                                 upipe_avfilt_sub->flow_def,
-                                                 &upipe_avfilt_sub->media,
+                                                 upipe_avfilt_sub->flow_def_input,
                                                  frame);
         if (unlikely(!ubase_check(ret))) {
             upipe_throw_error(upipe, ret);
+            uref_free(uref);
             av_frame_free(&frame);
             return;
         }
@@ -1332,122 +1158,6 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
     upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt));
 }
 
-/** @internal @This sets the media video attributes from flow definition.
- *
- * @param flow_def input flow definition
- * @param video media video attributes
- * @return an error code
- */
-static int upipe_avfilt_set_media_video(struct uref *flow_def,
-                                        struct upipe_avfilt_media_video *video)
-{
-    video->sar = (struct urational){ 0, 0 };
-    video->fps = (struct urational){ 0, 0 };
-    video->pix_fmt = upipe_av_pixfmt_from_flow_def(
-        flow_def, NULL, video->chroma_map);
-    UBASE_RETURN(uref_pic_flow_get_hsize(flow_def, &video->width))
-    UBASE_RETURN(uref_pic_flow_get_vsize(flow_def, &video->height))
-    uref_pic_flow_get_sar(flow_def, &video->sar);
-    uref_pic_flow_get_fps(flow_def, &video->fps);
-    video->full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
-    UBASE_RETURN(uref_pic_flow_get_matrix_coefficients_val(
-            flow_def, &video->matrix_coefficients))
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the media audio attributes from flow definition.
- *
- * @param flow_def input flow definition
- * @param audio media audio attributes
- * @return an error code
- */
-static int upipe_avfilt_set_media_audio(struct uref *flow_def,
-                                        struct upipe_avfilt_media_audio *audio)
-{
-    uint8_t channels = 0;
-
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &audio->sample_rate));
-    audio->sample_fmt = upipe_av_samplefmt_from_flow_def(flow_def, &channels);
-    av_channel_layout_default(&audio->ch_layout, channels);
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the input sub pipe flow definition for video.
- *
- * @param upipe description structure of the sub pipe
- * @param flow_def new input flow definition
- * @return an error code
- */
-static int upipe_avfilt_sub_set_flow_def_pic(struct upipe *upipe,
-                                             struct uref *flow_def)
-{
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
-    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
-
-    struct upipe_avfilt_media_video video;
-    UBASE_RETURN(upipe_avfilt_set_media_video(flow_def, &video))
-
-    struct upipe_avfilt_media_video *v = &upipe_avfilt_sub->media.video;
-    if (upipe_avfilt->filter_graph &&
-        upipe_avfilt_sub->media.type == AVMEDIA_TYPE_VIDEO &&
-        video.pix_fmt == v->pix_fmt &&
-        video.width == v->width &&
-        video.height == v->height &&
-        !urational_cmp(&video.sar, &v->sar) &&
-        !urational_cmp(&video.fps, &v->fps) &&
-        video.full_range == v->full_range &&
-        video.matrix_coefficients == v->matrix_coefficients)
-        return UBASE_ERR_NONE;
-
-    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
-    upipe_avfilt_sub->media.type = AVMEDIA_TYPE_VIDEO;
-    upipe_avfilt_sub->media.video = video;
-
-    upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
-    upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the input sub pipe flow definition for audio.
- *
- * @param upipe description structure of the sub pipe
- * @param flow_def new input flow definition
- * @return an error code
- */
-static int upipe_avfilt_sub_set_flow_def_sound(struct upipe *upipe,
-                                               struct uref *flow_def)
-{
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
-    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
-
-    struct upipe_avfilt_media_audio audio;
-    UBASE_RETURN(upipe_avfilt_set_media_audio(flow_def, &audio))
-
-    struct upipe_avfilt_media_audio *a = &upipe_avfilt_sub->media.audio;
-    if (upipe_avfilt->filter_graph &&
-        upipe_avfilt_sub->media.type == AVMEDIA_TYPE_AUDIO &&
-        audio.sample_fmt == a->sample_fmt &&
-        audio.sample_rate == a->sample_rate &&
-        !av_channel_layout_compare(&audio.ch_layout, &a->ch_layout)) {
-        av_channel_layout_uninit(&audio.ch_layout);
-        return UBASE_ERR_NONE;
-    }
-
-    upipe_avfilt_media_clean(&upipe_avfilt_sub->media);
-    upipe_avfilt_sub->media.type = AVMEDIA_TYPE_AUDIO;
-    upipe_avfilt_sub->media.audio = audio;
-
-    upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
-    upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
-
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This sets the input sub pipe flow definition.
  *
  * @param upipe description structure of the pipe
@@ -1461,25 +1171,17 @@ static int upipe_avfilt_sub_set_flow_def(struct upipe *upipe,
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    upipe_avfilt_sub->input = true;
+    if (upipe_avfilt_sub->flow_def_input &&
+        !udict_cmp(upipe_avfilt_sub->flow_def_input->udict, flow_def->udict))
+        /* nothing changed */
+        return UBASE_ERR_NONE;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
-    upipe_avfilt_sub_store_flow_def(upipe, flow_def_dup);
 
-    if (ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF))) {
-        UBASE_RETURN(upipe_avfilt_sub_set_flow_def_pic(upipe, flow_def));
-    }
-    else if (ubase_check(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF))) {
-        UBASE_RETURN(upipe_avfilt_sub_set_flow_def_sound(upipe, flow_def));
-    }
-    else {
-        const char *def = "(none)";
-        uref_flow_get_def(flow_def, &def);
-        upipe_warn_va(upipe, "unsupported flow def %s", def);
-        upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
-        return UBASE_ERR_INVALID;
-    }
+    upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
+    upipe_avfilt_sub_store_flow_def_input(upipe, flow_def_dup);
+    upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
 
     return UBASE_ERR_NONE;
 }
@@ -1497,7 +1199,7 @@ static int upipe_avfilt_sub_control_real(struct upipe *upipe, int cmd, va_list a
         upipe_avfilt_sub_from_upipe(upipe);
 
     UBASE_HANDLED_RETURN(upipe_avfilt_sub_control_super(upipe, cmd, args));
-    if (!upipe_avfilt_sub->input)
+    if (!upipe_avfilt_sub->flow_def_input)
         UBASE_HANDLED_RETURN(upipe_avfilt_sub_control_output(upipe, cmd, args));
 
     switch (cmd) {
@@ -1527,7 +1229,7 @@ static int upipe_avfilt_sub_check(struct upipe *upipe)
         upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    if (!upipe_avfilt_sub->input)
+    if (!upipe_avfilt_sub->flow_def_input)
         upipe_avfilt_sub_check_upump_mgr(upipe);
 
     if (!upipe_avfilt_sub->upump_mgr)
@@ -1586,8 +1288,8 @@ static void upipe_avfilt_update_outputs(struct upipe *upipe)
     struct uchain *uchain;
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
-        if (!sub->input)
-            upipe_avfilt_sub_throw_update(upipe_avfilt_sub_to_upipe(sub));
+        if (!sub->flow_def_input)
+            upipe_avfilt_sub_wait(upipe_avfilt_sub_to_upipe(sub), 0);
     }
 }
 
@@ -1608,6 +1310,7 @@ static void upipe_avfilt_clean_filters(struct upipe *upipe)
         sub->buffer_ctx = NULL;
     }
     avfilter_graph_free(&upipe_avfilt->filter_graph);
+    upipe_avfilt->buffer_ctx = NULL;
     upipe_avfilt_set_configured(upipe, false);
 }
 
@@ -1648,7 +1351,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
 
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
-        if (!sub->input)
+        if (!sub->flow_def_input)
             continue;
 
         ret = upipe_avfilt_sub_create_filter(upipe_avfilt_sub_to_upipe(sub));
@@ -1663,7 +1366,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
     AVFilterInOut *prev_output = NULL;
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
-        if (!sub->input)
+        if (!sub->flow_def_input)
             continue;
 
         AVFilterInOut *inout = avfilter_inout_alloc();
@@ -1710,7 +1413,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
         struct upipe_avfilt_sub *upipe_avfilt_sub = NULL;
         ulist_foreach(&upipe_avfilt->subs, uchain) {
             struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
-            if (!sub->input && sub->name && output->name &&
+            if (!sub->flow_def_input && sub->name && output->name &&
                 !strcmp(sub->name, output->name))
                 upipe_avfilt_sub = sub;
         }
@@ -1757,7 +1460,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
     AVFilterGraph *graph = upipe_avfilt->filter_graph;
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
-        if (sub->input)
+        if (sub->flow_def_input)
             continue;
 
         bool found = false;
@@ -1790,12 +1493,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
     ret = UBASE_ERR_NONE;
     upipe_avfilt_set_configured(upipe, true);
 
-    ulist_foreach(&upipe_avfilt->subs, uchain) {
-        struct upipe_avfilt_sub *upipe_avfilt_sub =
-            upipe_avfilt_sub_from_uchain(uchain);
-        struct upipe *sub = upipe_avfilt_sub_to_upipe(upipe_avfilt_sub);
-        upipe_avfilt_sub_throw_update(sub);
-    }
+    upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt));
 
 end:
     if (!ubase_check(ret))
@@ -1893,139 +1591,6 @@ static int _upipe_avfilt_send_command(struct upipe *upipe, const char *target,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the input pipe flow definition for video.
- *
- * @param upipe description structure of the pipe
- * @param flow_def new input flow definition
- * @return an error code
- */
-static int upipe_avfilt_set_flow_def_pic(struct upipe *upipe,
-                                         struct uref *flow_def)
-{
-    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
-
-    struct upipe_avfilt_media_video video;
-    UBASE_RETURN(upipe_avfilt_set_media_video(flow_def, &video))
-
-    upipe_avfilt_media_clean(&upipe_avfilt->media);
-    upipe_avfilt->media.type = AVMEDIA_TYPE_VIDEO;
-    upipe_avfilt->media.video = video;
-
-    if (unlikely(upipe_avfilt->buffer_ctx))
-        return UBASE_ERR_BUSY;
-
-    const AVFilter *filter = avfilter_get_by_name("buffer");
-    if (filter == NULL) {
-        upipe_err(upipe, "buffer filter not found");
-        return UBASE_ERR_INVALID;
-    }
-
-    AVFilterContext *ctx = avfilter_graph_alloc_filter(
-        upipe_avfilt->filter_graph, filter, "input");
-    if (ctx == NULL) {
-        upipe_err(upipe, "cannot alloc buffer filter");
-        return UBASE_ERR_ALLOC;
-    }
-
-    AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
-    if (p == NULL) {
-        upipe_err(upipe, "cannot alloc buffer parameters");
-        avfilter_free(ctx);
-        return UBASE_ERR_ALLOC;
-    }
-    p->time_base.num = 1;
-    p->time_base.den = UCLOCK_FREQ;
-    p->format = video.pix_fmt;
-    p->width = video.width;
-    p->height = video.height;
-    if (video.sar.num) {
-        p->sample_aspect_ratio.num = video.sar.num;
-        p->sample_aspect_ratio.den = video.sar.den;
-    }
-    if (video.fps.num) {
-        p->frame_rate.num = video.fps.num;
-        p->frame_rate.den = video.fps.den;
-    }
-
-#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-    p->color_space = video.matrix_coefficients;
-    p->color_range = video.full_range ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
-#endif
-
-    int err = av_buffersrc_parameters_set(ctx, p);
-    av_free(p);
-    if (err < 0) {
-        upipe_err_va(upipe, "cannot set buffer parameters: %s",
-                     av_err2str(err));
-        avfilter_free(ctx);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    upipe_avfilt->buffer_ctx = ctx;
-
-    return UBASE_ERR_NONE;
-}
-
-/** @internal @This sets the input pipe flow definition for audio.
- *
- * @param upipe description structure of the pipe
- * @param flow_def new input flow definition
- * @return an error code
- */
-static int upipe_avfilt_set_flow_def_sound(struct upipe *upipe,
-                                           struct uref *flow_def)
-{
-    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
-
-    struct upipe_avfilt_media_audio audio;
-    UBASE_RETURN(upipe_avfilt_set_media_audio(flow_def, &audio))
-
-    upipe_avfilt_media_clean(&upipe_avfilt->media);
-    upipe_avfilt->media.type = AVMEDIA_TYPE_AUDIO;
-    upipe_avfilt->media.audio = audio;
-
-    if (unlikely(upipe_avfilt->buffer_ctx))
-        return UBASE_ERR_BUSY;
-
-    const AVFilter *filter = avfilter_get_by_name("abuffer");
-    if (filter == NULL) {
-        upipe_err(upipe, "abuffer filter not found");
-        return UBASE_ERR_INVALID;
-    }
-
-    AVFilterContext *ctx = avfilter_graph_alloc_filter(
-        upipe_avfilt->filter_graph, filter, "input");
-    if (ctx == NULL) {
-        upipe_err(upipe, "cannot create abuffer filter");
-        return UBASE_ERR_ALLOC;
-    }
-
-    AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
-    if (p == NULL) {
-        upipe_err(upipe, "cannot alloc abuffer parameters");
-        avfilter_free(ctx);
-        return UBASE_ERR_ALLOC;
-    }
-    p->time_base.num = 1;
-    p->time_base.den = UCLOCK_FREQ;
-    p->format = audio.sample_fmt;
-    p->sample_rate = audio.sample_rate;
-    av_channel_layout_copy(&p->ch_layout, &audio.ch_layout);
-
-    int err = av_buffersrc_parameters_set(ctx, p);
-    av_free(p);
-    if (err < 0) {
-        upipe_err_va(upipe, "cannot set abuffer parameters: %s",
-                     av_err2str(err));
-        avfilter_free(ctx);
-        return UBASE_ERR_EXTERNAL;
-    }
-
-    upipe_avfilt->buffer_ctx = ctx;
-
-    return UBASE_ERR_NONE;
-}
-
 /** @internal @This sets the input pipe flow definition.
  *
  * @param upipe description structure of the pipe
@@ -2040,6 +1605,22 @@ static int upipe_avfilt_set_flow_def(struct upipe *upipe,
     if (upipe_avfilt->filters_desc == NULL)
         return UBASE_ERR_INVALID;
 
+    if (upipe_avfilt->flow_def_input &&
+        !udict_cmp(upipe_avfilt->flow_def_input->udict, flow_def->udict))
+        /* nothing changed */
+        return UBASE_ERR_NONE;
+
+    struct uref *flow_def_dup = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def_dup);
+
+    upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
+    upipe_avfilt_store_flow_def_input(upipe, NULL);
+
+    struct uref *uref = upipe_avfilt_store_flow_def_input(upipe, flow_def_dup);
+    if (uref != NULL)
+        /* output flow definition will be set when outputting frames */
+        uref_free(uref);
+
     if (upipe_avfilt->filter_graph == NULL) {
         upipe_avfilt->filter_graph = avfilter_graph_alloc();
         if (upipe_avfilt->filter_graph == NULL) {
@@ -2051,30 +1632,12 @@ static int upipe_avfilt_set_flow_def(struct upipe *upipe,
                                         AVFILTER_AUTO_CONVERT_NONE);
     }
 
-    struct uref *flow_def_dup = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def_dup);
-    struct uref *uref = upipe_avfilt_store_flow_def_input(upipe, flow_def_dup);
-    if (uref != NULL)
-        upipe_avfilt_store_flow_def(upipe, uref);
-
-    if (ubase_check(uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF))) {
-        UBASE_RETURN(upipe_avfilt_set_flow_def_pic(upipe, flow_def));
-    }
-    else if (ubase_check(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF))) {
-        UBASE_RETURN(upipe_avfilt_set_flow_def_sound(upipe, flow_def));
-    }
-    else {
+    int ret = build_input_filter(upipe, flow_def, &upipe_avfilt->buffer_ctx);
+    if (unlikely(!ubase_check(ret))) {
         const char *def = "(none)";
         uref_flow_get_def(flow_def, &def);
         upipe_warn_va(upipe, "unsupported flow def %s", def);
-        return UBASE_ERR_INVALID;
-    }
-
-    if (avfilter_init_dict(upipe_avfilt->buffer_ctx, NULL)) {
-        avfilter_free(upipe_avfilt->buffer_ctx);
-        upipe_avfilt->buffer_ctx = NULL;
-        upipe_err(upipe, "avfilter_init_dict() failed");
-        return UBASE_ERR_EXTERNAL;
+        return ret;
     }
 
     upipe_notice_va(upipe, "configuring filter %s", upipe_avfilt->filters_desc);
@@ -2145,6 +1708,20 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
+    if (upipe_avfilt->filter_graph == NULL) {
+        if (!upipe_avfilt->flow_def_input)
+            return UBASE_ERR_INVALID;
+
+        // the filter description was reset, so we need to reinitialize the
+        // filter
+        struct uref *flow_def_input = upipe_avfilt->flow_def_input;
+        upipe_avfilt->flow_def_input = NULL;
+        int ret = upipe_avfilt_set_flow_def(upipe, flow_def_input);
+        uref_free(flow_def_input);
+        if (unlikely(!ubase_check(ret)))
+            return ret;
+    }
+
     AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
     if (p == NULL) {
         upipe_err(upipe, "cannot alloc buffer parameters");
@@ -2178,6 +1755,7 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
     if (device_ctx != NULL) {
         AVFilterGraph *graph = upipe_avfilt->filter_graph;
         for (int i = 0; i < graph->nb_filters; i++) {
+            av_buffer_unref(&graph->filters[i]->hw_device_ctx);
             graph->filters[i]->hw_device_ctx = av_buffer_ref(device_ctx);
             if (graph->filters[i]->hw_device_ctx == NULL) {
                 upipe_err(upipe, "cannot alloc hw device context");
@@ -2193,30 +1771,26 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
  * from the buffersink and the first frame.
  *
  * @param upipe description structure of the pipe
- * @param flow_def output flow def
  * @param frame first frame
- * @return an error code
+ * @return the output flow definition or NULL in case of error
  */
-static int upipe_avfilt_build_flow_def(struct upipe *upipe,
-                                       struct uref *flow_def,
-                                       const AVFrame *frame)
+static struct uref *upipe_avfilt_build_flow_def(struct upipe *upipe,
+                                                const AVFrame *frame)
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
     AVFilterContext *ctx = upipe_avfilt->buffersink_ctx;
 
-    switch (av_buffersink_get_type(ctx)) {
-        case AVMEDIA_TYPE_VIDEO:
-            return build_video_flow_def(flow_def, ctx, frame);
+    struct uref *flow_def = upipe_avfilt_alloc_flow_def_attr(upipe);
+    if (unlikely(flow_def == NULL))
+        return NULL;
 
-        case AVMEDIA_TYPE_AUDIO:
-            return build_audio_flow_def(flow_def, ctx, frame);
-
-        default:
-            upipe_err_va(upipe, "unknown buffersink type");
-            break;
+    int ret = build_flow_def(flow_def, ctx, frame);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(flow_def);
+        upipe_err_va(upipe, "unknown buffersink type");
+        return NULL;
     }
-
-    return UBASE_ERR_UNHANDLED;
+    return flow_def;
 }
 
 /** @internal @This outputs a frame.
@@ -2234,18 +1808,13 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     AVRational time_base = av_buffersink_get_time_base(
         upipe_avfilt->buffersink_ctx);
 
-    if (unlikely(!upipe_avfilt->flow_def)) {
-        struct uref *flow_def_attr = upipe_avfilt_alloc_flow_def_attr(upipe);
-        if (flow_def_attr == NULL) {
-            upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-        int ret = upipe_avfilt_build_flow_def(upipe, flow_def_attr, frame);
-        if (!ubase_check(ret)) {
-            uref_free(flow_def_attr);
-            upipe_throw_error(upipe, ret);
-            return;
-        }
+    struct uref *flow_def_attr = upipe_avfilt_build_flow_def(upipe, frame);
+    if (unlikely(flow_def_attr == NULL)) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    if (!upipe_avfilt_check_flow_def_attr(upipe, flow_def_attr)) {
         struct uref *flow_def =
             upipe_avfilt_store_flow_def_attr(upipe, flow_def_attr);
         if (flow_def == NULL) {
@@ -2271,6 +1840,8 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
         uref_clock_set_latency(flow_def, input_latency + latency);
 
         upipe_avfilt_store_flow_def(upipe, flow_def);
+    } else {
+        uref_free(flow_def_attr);
     }
 
     if (unlikely(!upipe_avfilt->ubuf_mgr)) {
@@ -2383,11 +1954,13 @@ static void upipe_avfilt_input(struct upipe *upipe,
     upipe_avfilt->uref = uref;
 
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
-        ret = upipe_avfilt_avframe_from_uref(upipe, uref_dup(uref),
+        struct uref *uref_tmp = uref_dup(uref);
+        ret = upipe_avfilt_avframe_from_uref(upipe, uref_tmp,
                                              upipe_avfilt->flow_def_input,
-                                             &upipe_avfilt->media, frame);
+                                             frame);
         if (!ubase_check(ret)) {
             upipe_throw_error(upipe, ret);
+            uref_free(uref_tmp);
             goto end;
         }
     }
@@ -2411,6 +1984,7 @@ static void upipe_avfilt_input(struct upipe *upipe,
         if (err < 0) {
             upipe_err_va(upipe, "cannot configure filter graph: %s",
                          av_err2str(err));
+            avfilter_graph_free(&upipe_avfilt->filter_graph);
             upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
             goto end;
         }
@@ -2439,6 +2013,7 @@ static void upipe_avfilt_input(struct upipe *upipe,
             break;
         }
         upipe_avfilt_output_frame(upipe, frame, upump_p);
+        av_frame_unref(frame);
     }
 
 end:
@@ -2573,7 +2148,6 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt->buffersink_ctx = NULL;
     upipe_avfilt->uref = NULL;
     upipe_avfilt->options = NULL;
-    upipe_avfilt_media_init(&upipe_avfilt->media);
 
     upipe_throw_ready(upipe);
 
@@ -2593,15 +2167,43 @@ static void upipe_avfilt_free(struct upipe *upipe)
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
+    if (upipe_avfilt->buffer_ctx) {
+        AVFrame *frame = av_frame_alloc();
+        assert(frame);
+
+        /* flush filtergraph by pushing a NULL frame */
+        int err = av_buffersrc_write_frame(upipe_avfilt->buffer_ctx, NULL);
+        if (unlikely(err < 0)) {
+            upipe_err_va(upipe, "cannot write frame to filter graph: %s",
+                         av_err2str(err));
+        }
+
+        /* flush filtered frames from the filtergraph */
+        while (1) {
+            err = av_buffersink_get_frame(upipe_avfilt->buffersink_ctx, frame);
+            if (err == AVERROR(EAGAIN) || err == AVERROR_EOF)
+                break;
+            if (err < 0) {
+                upipe_err_va(upipe, "cannot get frame from filter graph: %s",
+                             av_err2str(err));
+                upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+                break;
+            }
+            upipe_avfilt_output_frame(upipe, frame, NULL);
+            av_frame_unref(frame);
+        }
+
+        av_frame_free(&frame);
+    }
+
     upipe_throw_dead(upipe);
 
+    upipe_avfilt_clean_filters(upipe);
     free(upipe_avfilt->filters_desc);
-    avfilter_graph_free(&upipe_avfilt->filter_graph);
     av_buffer_unref(&upipe_avfilt->hw_device_ctx);
     av_dict_free(&upipe_avfilt->options);
     uref_free(upipe_avfilt->uref);
     ubuf_mgr_release(upipe_avfilt->ubuf_mgr);
-    upipe_avfilt_media_clean(&upipe_avfilt->media);
     upipe_avfilt_clean_sync(upipe);
     upipe_avfilt_clean_sub_subs(upipe);
     upipe_avfilt_clean_urefcount(upipe);
