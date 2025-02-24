@@ -39,9 +39,6 @@
 #include <libavutil/error.h>
 #include <libavcodec/avcodec.h>
 
-/** extra hardware frames for decode and filter */
-#define UPIPE_AV_EXTRA_HW_FRAMES 32
-
 /** @hidden */
 struct uref;
 /** @hidden */
