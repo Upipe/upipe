@@ -1949,13 +1949,22 @@ static void upipe_ts_demux_program_handle_pcr(struct upipe *upipe,
 {
     struct upipe_ts_demux_program *upipe_ts_demux_program =
         upipe_ts_demux_program_from_upipe(upipe);
+    struct upipe_ts_demux *demux = upipe_ts_demux_from_program_mgr(
+        upipe_ts_demux_program_to_upipe(upipe_ts_demux_program)->mgr);
     upipe_verbose_va(upipe, "read PCR %"PRIu64, pcr_orig);
+
+    uint64_t max_pcr_interval = MAX_PCR_INTERVAL_ISO;
+    if (demux->conformance == UPIPE_TS_CONFORMANCE_DVB)
+        max_pcr_interval = MAX_PCR_INTERVAL_DVB;
+
+    if (upipe_ts_demux_program->max_pcr_interval > max_pcr_interval)
+        max_pcr_interval = upipe_ts_demux_program->max_pcr_interval;
 
     /* handle 2^33 wrap-arounds */
     uint64_t delta =
         (TS_CLOCK_MAX + pcr_orig -
          (upipe_ts_demux_program->last_pcr % TS_CLOCK_MAX)) % TS_CLOCK_MAX;
-    if (delta <= upipe_ts_demux_program->max_pcr_interval)
+    if (delta <= max_pcr_interval)
         upipe_ts_demux_program->last_pcr += delta;
     else {
         upipe_warn_va(upipe, "PCR discontinuity %"PRIu64, delta);
