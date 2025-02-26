@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -191,7 +192,7 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
         if (upipe_ts_decaps->last_uref != NULL &&
             ubase_check(uref_block_compare(uref, 0,
                                            upipe_ts_decaps->last_uref))) {
-            upipe_dbg(upipe, "removing duplicate packet");
+            upipe_verbose(upipe, "removing duplicate packet");
             uref_free(uref);
             return;
         }
