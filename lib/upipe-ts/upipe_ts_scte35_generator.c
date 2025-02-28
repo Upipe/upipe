@@ -1,8 +1,9 @@
 /*
  * Copyright (C) 2015 OpenHeadend S.A.R.L.
- * Copyright (C) 2021 EasyTools
+ * Copyright (C) 2021-2025 EasyTools
  *
  * Authors: Christophe Massiot
+ *          Arnaud de Turckheim
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published by
@@ -320,9 +321,29 @@ static struct ubuf *upipe_ts_scte35g_build_splice_insert(struct upipe *upipe,
         scte35_insert_set_avail_num(scte35, 0);
         scte35_insert_set_avails_expected(scte35, 0);
     }
-    scte35_set_desclength(scte35, 0);
-    psi_set_length(scte35,
-                   scte35_get_descl(scte35) + PSI_CRC_SIZE - scte35 - PSI_HEADER_SIZE);
+
+    uint16_t descl_length = 0;
+    uint8_t *descl = scte35_get_descl(scte35);
+
+    uint64_t nb = 0;
+    uref_ts_flow_get_descriptors(uref, &nb);
+    for (uint64_t i = 0, j = 0; i < nb; i++) {
+        const uint8_t *d = NULL;
+        size_t l = 0;
+        uref_ts_flow_get_descriptor(uref, &d, &l, i);
+        if (!d || !l)
+            continue;
+
+        uint8_t *desc =
+            descl_get_desc(descl, descl_length + DESC_HEADER_SIZE, j++);
+        memcpy(desc, d, l);
+        descl_length += DESC_HEADER_SIZE + scte35_splice_desc_get_length(desc);
+    }
+
+    scte35_set_desclength(scte35, descl_length);
+
+    psi_set_length(scte35, scte35_get_descl(scte35) + PSI_CRC_SIZE - scte35 -
+                               PSI_HEADER_SIZE + descl_length);
     psi_set_crc(scte35);
 
     uint16_t scte35_size = psi_get_length(scte35) + PSI_HEADER_SIZE;
