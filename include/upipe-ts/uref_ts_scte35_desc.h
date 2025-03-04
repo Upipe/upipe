@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2025 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -40,8 +40,15 @@ extern "C" {
 #include <string.h>
 #include <stdint.h>
 
+/* splice descriptor */
 UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc, tag, "scte35.desc.tag", tag)
 UREF_ATTR_UNSIGNED(ts_scte35_desc, identifier, "scte35.desc.id", identifier)
+
+/* avail splice descriptor */
+UREF_ATTR_UNSIGNED(ts_scte35_desc_avail, provider_avail_id,
+                   "scte35.desc.avail.provider_avail_id", provider avail id)
+
+/* segmentation splice descriptor*/
 UREF_ATTR_UNSIGNED(ts_scte35_desc_seg, event_id, "scte35.desc.seg.event_id",
                    segmentation event id);
 UREF_ATTR_VOID(ts_scte35_desc_seg, cancel, "scte35.desc.seg.cancel",
@@ -92,6 +99,14 @@ UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc_seg, sub_num, "scte35.desc.seg.sub_num",
 UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc_seg, sub_expected,
                          "scte35.desc.seg.sub_expected",
                          sub segment expected);
+
+/* time splice descriptor */
+UREF_ATTR_UNSIGNED(ts_scte35_desc_time, tai_sec, "scte35.desc.time.tai_sec",
+                   seconds part of the TAI);
+UREF_ATTR_UNSIGNED(ts_scte35_desc_time, tai_nsec, "scte35.desc.time.tai_nsec",
+                   nanoseconds part of the TAI);
+UREF_ATTR_UNSIGNED(ts_scte35_desc_time, utc_off, "scte35.desc.time.utc_off",
+                   offset from UTC in seconds);
 
 #ifdef __cplusplus
 }
