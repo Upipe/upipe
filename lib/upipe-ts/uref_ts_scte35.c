@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 EasyTools
+ * Copyright (C) 2022-2025 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -135,6 +135,20 @@ struct uref *uref_ts_scte35_extract_desc(struct uref *uref, uint64_t at)
     length -= SCTE35_SPLICE_DESC_HEADER_SIZE;
 
     switch (tag) {
+        case SCTE35_SPLICE_DESC_TAG_AVAIL: {
+            if (length < SCTE35_AVAIL_DESC_HEADER_SIZE) {
+                uref_free(out);
+                return NULL;
+            }
+            length -= SCTE35_AVAIL_DESC_HEADER_SIZE;
+
+            uint32_t provider_avail_id =
+                scte35_avail_desc_get_provider_avail_id(desc);
+            uref_ts_scte35_desc_avail_set_provider_avail_id(out,
+                                                            provider_avail_id);
+            break;
+        }
+
         case SCTE35_SPLICE_DESC_TAG_SEG: {
             if (length < SCTE35_SEG_DESC_HEADER_SIZE) {
                 uref_free(out);
