@@ -278,6 +278,21 @@ struct uref *uref_ts_scte35_extract_desc(struct uref *uref, uint64_t at)
             }
             break;
         }
+
+        case SCTE35_SPLICE_DESC_TAG_TIME: {
+            if (length < SCTE35_TIME_DESC_HEADER_SIZE) {
+                uref_free(out);
+                return NULL;
+            }
+
+            uint64_t tai_sec = scte35_time_desc_get_tai_sec(desc);
+            uint64_t tai_nsec = scte35_time_desc_get_tai_ns(desc);
+            uint64_t utc_off = scte35_time_desc_get_utc_off(desc);
+            uref_ts_scte35_desc_time_set_tai_sec(out, tai_sec);
+            uref_ts_scte35_desc_time_set_tai_nsec(out, tai_nsec);
+            uref_ts_scte35_desc_time_set_utc_off(out, utc_off);
+            break;
+        }
     }
     return out;
 }

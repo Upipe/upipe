@@ -100,6 +100,14 @@ UREF_ATTR_SMALL_UNSIGNED(ts_scte35_desc_seg, sub_expected,
                          "scte35.desc.seg.sub_expected",
                          sub segment expected);
 
+/* time splice descriptor */
+UREF_ATTR_UNSIGNED(ts_scte35_desc_time, tai_sec, "scte35.desc.time.tai_sec",
+                   seconds part of the TAI);
+UREF_ATTR_UNSIGNED(ts_scte35_desc_time, tai_nsec, "scte35.desc.time.tai_nsec",
+                   nanoseconds part of the TAI);
+UREF_ATTR_UNSIGNED(ts_scte35_desc_time, utc_off, "scte35.desc.time.utc_off",
+                   offset from UTC in seconds);
+
 #ifdef __cplusplus
 }
 #endif
