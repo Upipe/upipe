@@ -699,8 +699,9 @@ static int upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_dbg(upipe, "received null frame");
 
     /* encode frame */
-    int err;
-    if ((err = avcodec_send_frame(context, frame)) < 0) {
+    int err = avcodec_send_frame(context, frame);
+    av_frame_unref(frame);
+    if (unlikely(err < 0)) {
         upipe_err_va(upipe, "avcodec_send_frame: %s", av_err2str(err));
         return UBASE_ERR_EXTERNAL;
     }
@@ -869,7 +870,6 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
         return;
     }
 
-    av_frame_unref(frame);
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
         for (int i = 0; i < UPIPE_AV_MAX_PLANES &&
              upipe_avcenc->chroma_map[i] != NULL; i++) {
@@ -962,6 +962,7 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
     frame->pts = upipe_avcenc->avcpts++;
     if (unlikely(!ubase_check(uref_avcenc_set_priv(uref, frame->pts)))) {
         uref_free(uref);
+        av_frame_unref(frame);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
