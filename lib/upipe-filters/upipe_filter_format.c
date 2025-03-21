@@ -333,8 +333,10 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     if (upipe_ffmt->flow_def_provided &&
-        !udict_cmp(upipe_ffmt->flow_def_provided->udict, flow_def_dup->udict))
+        !udict_cmp(upipe_ffmt->flow_def_provided->udict, flow_def_dup->udict)) {
+        uref_free(flow_def_dup);
         return UBASE_ERR_NONE;
+    }
 
     uref_free(upipe_ffmt->flow_def_provided);
     upipe_ffmt->flow_def_provided = uref_dup(flow_def_dup);
