@@ -105,6 +105,8 @@ struct upipe_ffmt {
     struct uref *flow_def_wanted;
     /** flow definition requested */
     struct uref *flow_def_requested;
+    /** flow definition provided */
+    struct uref *flow_def_provided;
     /** list of input bin requests */
     struct uchain input_request_list;
     /** list of output bin requests */
@@ -217,6 +219,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt->flow_def_input = NULL;
     upipe_ffmt->flow_def_wanted = flow_def;
     upipe_ffmt->flow_def_requested = NULL;
+    upipe_ffmt->flow_def_provided = NULL;
     upipe_ffmt->sws_flags = 0;
     upipe_ffmt->deinterlace_vaapi_mode = NULL;
     upipe_ffmt->scale_vaapi_mode = NULL;
@@ -273,6 +276,8 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
 
         upipe_ffmt_store_bin_input(upipe, NULL);
         upipe_ffmt_store_bin_output(upipe, NULL);
+        uref_free(upipe_ffmt->flow_def_provided);
+        upipe_ffmt->flow_def_provided = NULL;
         upipe_ffmt_require_flow_format(upipe, uref);
         return true;
     }
@@ -326,6 +331,13 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
     struct uref *flow_def_wanted = upipe_ffmt->flow_def_wanted;
     if (flow_def_dup == NULL)
         return UBASE_ERR_INVALID;
+
+    if (upipe_ffmt->flow_def_provided &&
+        !udict_cmp(upipe_ffmt->flow_def_provided->udict, flow_def_dup->udict))
+        return UBASE_ERR_NONE;
+
+    uref_free(upipe_ffmt->flow_def_provided);
+    upipe_ffmt->flow_def_provided = uref_dup(flow_def_dup);
 
     struct uref *flow_def = uref_dup(upipe_ffmt->flow_def_input);
     UBASE_ALLOC_RETURN(flow_def)
@@ -1026,6 +1038,7 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
     uref_free(upipe_ffmt->flow_def_input);
     uref_free(upipe_ffmt->flow_def_wanted);
     uref_free(upipe_ffmt->flow_def_requested);
+    uref_free(upipe_ffmt->flow_def_provided);
     uprobe_clean(&upipe_ffmt->proxy_probe);
     upipe_ffmt_clean_last_inner_probe(upipe);
     urefcount_clean(urefcount_real);
