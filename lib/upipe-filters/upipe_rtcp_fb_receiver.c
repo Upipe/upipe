@@ -174,7 +174,7 @@ static void upipe_rtcpfb_app_nack(struct upipe *upipe, const uint8_t *rtp, int s
     for (size_t i = 0; i < s; i += 4) {
         uint16_t start = (range[i+0] << 8) | range[i+1];
         uint16_t pkts =  (range[i+2] << 8) | range[i+3];
-        upipe_rtcpfb_lost_sub_n(upipe, start, pkts);
+        upipe_rtcpfb_lost_sub_n(upipe, start, pkts + 1);
     }
 }
 /** @internal @This handles RTCP NACK messages.
