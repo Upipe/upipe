@@ -580,10 +580,7 @@ static int upipe_xfer_mgr_send(struct upipe_mgr *mgr, int type,
     msg->upipe_remote = upipe_remote;
     msg->arg = arg;
 
-    if (unlikely(!uqueue_push(&xfer_mgr->uqueue, msg))) {
-        upipe_xfer_msg_free(mgr, msg);
-        return UBASE_ERR_EXTERNAL;
-    }
+    while (!uqueue_push(&xfer_mgr->uqueue, msg));
     return UBASE_ERR_NONE;
 }
 
