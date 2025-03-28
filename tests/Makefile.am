@@ -259,6 +259,13 @@ TESTS += \
 endif
 endif
 
+if HAVE_AVFILTER
+check_PROGRAMS += \
+	upipe_avfilter_test
+TESTS += \
+	upipe_avfilter_test
+endif
+
 if HAVE_GLX
 check_PROGRAMS += upipe_glx_sink_test
 endif
@@ -494,6 +501,8 @@ upipe_avcodec_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avcodec_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS) -lpthread
 upipe_avcodec_decode_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
 upipe_avcodec_decode_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(AVFORMAT_LIBS) -lpthread
+upipe_avfilter_test_CFLAGS = $(AM_CFLAGS) $(AVFORMAT_CFLAGS)
+upipe_avfilter_test_LDADD = $(LDADD) -lev $(top_builddir)/lib/upump-ev/libupump_ev.la $(top_builddir)/lib/upipe-av/libupipe_av.la $(top_builddir)/lib/upipe-modules/libupipe_modules.la $(AVFORMAT_LIBS)
 
 upipe_sws_test_CFLAGS = $(AM_CFLAGS) $(SWSCALE_CFLAGS)
 upipe_sws_test_LDADD = $(LDADD) $(SWSCALE_LIBS) $(top_builddir)/lib/upipe-swscale/libupipe_swscale.la
