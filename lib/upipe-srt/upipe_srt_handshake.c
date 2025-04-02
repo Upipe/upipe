@@ -838,16 +838,12 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
         Latency is MAX(sender_tsbpd_delay, receiver_tsbpd_delay). sender_tsbpd_delay must be the latency
     */
 
-    /* The below if() is always true, but spell out what's going on */
+    /* Compare with remote latency */
     uint16_t remote_receiver_tsbpd_delay = srt_get_handshake_extension_receiver_tsbpd_delay(ext);
     if (upipe_srt_handshake->sender_tsbpd_delay < remote_receiver_tsbpd_delay)
         upipe_srt_handshake->sender_tsbpd_delay = remote_receiver_tsbpd_delay;
 
-    /* Compare to locally requested latency */
-    if (upipe_srt_handshake->sender_tsbpd_delay < upipe_srt_handshake->receiver_tsbpd_delay)
-        upipe_srt_handshake->sender_tsbpd_delay = upipe_srt_handshake->receiver_tsbpd_delay;
-
-    /* Largely pointless as this value is either 0ms or already negotiated */
+    /* Largely pointless as this value is either 0ms or already negotiated but who knows what libsrt might do */
     uint16_t remote_sender_tsbpd_delay = srt_get_handshake_extension_sender_tsbpd_delay(ext);
     if (upipe_srt_handshake->sender_tsbpd_delay < remote_sender_tsbpd_delay)
         upipe_srt_handshake->sender_tsbpd_delay = remote_sender_tsbpd_delay;
