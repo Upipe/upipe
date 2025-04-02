@@ -570,8 +570,7 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
     }
 
     if (!strcmp(option, "latency")) {
-        upipe_srt_handshake->receiver_tsbpd_delay = atoi(value);
-        upipe_srt_handshake->sender_tsbpd_delay = 0; /* will be negotiated later */
+        upipe_srt_handshake->receiver_tsbpd_delay = upipe_srt_handshake->sender_tsbpd_delay = atoi(value);
         return UBASE_ERR_NONE;
     }
 
