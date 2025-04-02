@@ -830,10 +830,10 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
     upipe_srt_handshake->flags = flags;
 
     /*
-        Listener inbound: receiver_tsbpd_delay = them, sender_tspbd_delay = 0ms (us unknown) - *parse_hsreq*
+        Listener inbound: receiver_tsbpd_delay = them, sender_tspbd_delay = us (some buggy haivision sends 0ms) - *parse_hsreq*
         Listener outbound: receiver_tsbpd_delay = us, sender_tsbpd_delay = negotiated
 
-        Caller outbound: receiver_tsbpd_delay = us, sender_tsbpd_delay = 0ms (us unknown)
+        Caller outbound: receiver_tsbpd_delay = us, sender_tsbpd_delay = us (some buggy haivision sends 0ms)
         Caller inbound: receiver_tsbpd_delay = them, sender_tsbpd_delay = negotiated - *parse_hsreq*
 
         Latency is MAX(sender_tsbpd_delay, receiver_tsbpd_delay). sender_tsbpd_delay must be the latency
@@ -852,6 +852,8 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
     uint16_t remote_sender_tsbpd_delay = srt_get_handshake_extension_sender_tsbpd_delay(ext);
     if (upipe_srt_handshake->sender_tsbpd_delay < remote_sender_tsbpd_delay)
         upipe_srt_handshake->sender_tsbpd_delay = remote_sender_tsbpd_delay;
+
+    upipe_srt_handshake->receiver_tsbpd_delay = upipe_srt_handshake->sender_tsbpd_delay;
 
     upipe_dbg_va(upipe, "Negotiated latency %u ms", upipe_srt_handshake->sender_tsbpd_delay);
 }
