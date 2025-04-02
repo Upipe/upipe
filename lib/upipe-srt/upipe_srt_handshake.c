@@ -607,7 +607,7 @@ static int upipe_srt_handshake_set_option(struct upipe *upipe, const char *optio
 
     if (!strcmp(option, "latency")) {
         upipe_srt_handshake->receiver_tsbpd_delay = atoi(value);
-        upipe_srt_handshake->sender_tsbpd_delay = 0;
+        upipe_srt_handshake->sender_tsbpd_delay = 0; /* will be negotiated later */
         return UBASE_ERR_NONE;
     }
 
@@ -710,7 +710,7 @@ static int _upipe_srt_handshake_control(struct upipe *upipe,
         case UPIPE_SRT_HANDSHAKE_GET_LATENCY: {
             UBASE_SIGNATURE_CHECK(args, UPIPE_SRT_HANDSHAKE_SIGNATURE)
             uint16_t *latency_ms = va_arg(args, uint16_t *);
-            *latency_ms = upipe_srt_handshake->receiver_tsbpd_delay;
+            *latency_ms = upipe_srt_handshake->sender_tsbpd_delay;
             return UBASE_ERR_NONE;
         }
 
@@ -865,18 +865,31 @@ static void upipe_srt_handshake_parse_hsreq(struct upipe *upipe, const uint8_t *
         (flags & SRT_HANDSHAKE_EXT_FLAG_PACKET_FILTER) ? "PACKET_FILTER " : "");
     upipe_srt_handshake->flags = flags;
 
-    /* Latency is MAX(sender_tsbpd_delay, receiver_tsbpd_delay). Arbitrarily use receiver_tsbpd_delay variable as the latency */
-    uint16_t receiver_tsbpd = upipe_srt_handshake->receiver_tsbpd_delay;
+    /*
+        Listener inbound: receiver_tsbpd_delay = them, sender_tspbd_delay = 0ms (us unknown) - *parse_hsreq*
+        Listener outbound: receiver_tsbpd_delay = us, sender_tsbpd_delay = negotiated
 
-    upipe_srt_handshake->receiver_tsbpd_delay = srt_get_handshake_extension_receiver_tsbpd_delay(ext);
-    upipe_srt_handshake->sender_tsbpd_delay = srt_get_handshake_extension_sender_tsbpd_delay(ext);
-    if (upipe_srt_handshake->receiver_tsbpd_delay < upipe_srt_handshake->sender_tsbpd_delay)
-        upipe_srt_handshake->receiver_tsbpd_delay = upipe_srt_handshake->sender_tsbpd_delay;
+        Caller outbound: receiver_tsbpd_delay = us, sender_tsbpd_delay = 0ms (us unknown)
+        Caller inbound: receiver_tsbpd_delay = them, sender_tsbpd_delay = negotiated - *parse_hsreq*
 
-    if (upipe_srt_handshake->receiver_tsbpd_delay < receiver_tsbpd)
-        upipe_srt_handshake->receiver_tsbpd_delay = receiver_tsbpd;
+        Latency is MAX(sender_tsbpd_delay, receiver_tsbpd_delay). sender_tsbpd_delay must be the latency
+    */
 
-    upipe_dbg_va(upipe, "Negotiated latency %u ms", upipe_srt_handshake->receiver_tsbpd_delay);
+    /* The below if() is always true, but spell out what's going on */
+    uint16_t remote_receiver_tsbpd_delay = srt_get_handshake_extension_receiver_tsbpd_delay(ext);
+    if (upipe_srt_handshake->sender_tsbpd_delay < remote_receiver_tsbpd_delay)
+        upipe_srt_handshake->sender_tsbpd_delay = remote_receiver_tsbpd_delay;
+
+    /* Compare to locally requested latency */
+    if (upipe_srt_handshake->sender_tsbpd_delay < upipe_srt_handshake->receiver_tsbpd_delay)
+        upipe_srt_handshake->sender_tsbpd_delay = upipe_srt_handshake->receiver_tsbpd_delay;
+
+    /* Largely pointless as this value is either 0ms or already negotiated */
+    uint16_t remote_sender_tsbpd_delay = srt_get_handshake_extension_sender_tsbpd_delay(ext);
+    if (upipe_srt_handshake->sender_tsbpd_delay < remote_sender_tsbpd_delay)
+        upipe_srt_handshake->sender_tsbpd_delay = remote_sender_tsbpd_delay;
+
+    upipe_dbg_va(upipe, "Negotiated latency %u ms", upipe_srt_handshake->sender_tsbpd_delay);
 }
 
 static bool upipe_srt_handshake_parse_kmreq(struct upipe *upipe, const uint8_t *ext, const size_t ext_len, const uint8_t **wrap, uint8_t *wrap_len)
@@ -1374,8 +1387,8 @@ static struct uref *upipe_srt_handshake_handle_hs_listener_conclusion(struct upi
                 srt_set_handshake_extension_srt_version(out_ext, upipe_srt_handshake->major,
                         upipe_srt_handshake->minor, upipe_srt_handshake->patch);
                 srt_set_handshake_extension_srt_flags(out_ext, upipe_srt_handshake->flags);
-                srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
                 srt_set_handshake_extension_receiver_tsbpd_delay(out_ext, upipe_srt_handshake->receiver_tsbpd_delay);
+                srt_set_handshake_extension_sender_tsbpd_delay(out_ext, upipe_srt_handshake->sender_tsbpd_delay);
 
                 uref_block_unmap(next, 0);
                 uref->uchain.next = &next->uchain;
