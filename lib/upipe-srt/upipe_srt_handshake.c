@@ -295,42 +295,6 @@ static void upipe_srt_handshake_kmreq(struct upump *upump)
     upipe_srt_handshake_output(&upipe_srt_handshake->upipe, uref_dup(kmreq), NULL);
 }
 
-static void upipe_srt_handshake_timeout(struct upump *upump);
-static void upipe_srt_handshake_disconnect(struct upipe *upipe, bool end, bool blacklist)
-{
-    struct upipe_srt_handshake *upipe_srt_handshake = upipe_srt_handshake_from_upipe(upipe);
-
-    /* Connection has just been aborted already */
-
-    /* No need to keep waiting for keepalives */
-    upipe_srt_handshake_set_upump_keepalive_timeout(upipe, NULL);
-    /* No need to keep sending KMREQ packets */
-    upipe_srt_handshake_set_upump_kmreq(upipe, NULL);
-    /* No need to keep sending handshake packets */
-    upipe_srt_handshake_set_upump_handshake_send(upipe, NULL);
-
-    upipe_throw(upipe, UPROBE_SRT_HANDSHAKE_CONNECTED, UPIPE_SRT_HANDSHAKE_SIGNATURE, false, blacklist);
-    upipe_srt_handshake->expect_conclusion = false;
-
-    if (upipe_srt_handshake->upump_handshake_timeout) /* if timeout was running we die */
-        end = true;
-
-    if (end) {
-        upipe_throw_source_end(upipe);
-        /* No need to wait for a timeout */
-        upipe_srt_handshake_set_upump_handshake_timeout(upipe, NULL);
-    } else {
-        /* (new) connection has to succeed within 3 seconds */
-        struct upump *upump =
-            upump_alloc_timer(upipe_srt_handshake->upump_mgr,
-                    upipe_srt_handshake_timeout,
-                    upipe, upipe->refcount,
-                    3 * UCLOCK_FREQ, 0);
-        upump_start(upump);
-        upipe_srt_handshake_set_upump_handshake_timeout(upipe, upump);
-    }
-}
-
 static void upipe_srt_handshake_keepalive_timeout(struct upump *upump)
 {
     struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
