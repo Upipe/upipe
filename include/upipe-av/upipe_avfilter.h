@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2019-2020 EasyTools
+ * Copyright (C) 2019-2025 EasyTools
  *
  * Authors: Clément Vasseur
  *          Arnaud de Turckheim
@@ -49,6 +49,9 @@ enum upipe_avfilt_command {
     UPIPE_AVFILT_SET_FILTERS_DESC,
     /** set the hardware config (const char *, const char *) */
     UPIPE_AVFILT_SET_HW_CONFIG,
+    /** sends a command to one or more filter instances
+        (const char *, const char *, const char *) */
+    UPIPE_AVFILT_SEND_COMMAND,
 };
 
 /** @This converts @ref upipe_avfilt_command to a string.
@@ -61,6 +64,7 @@ static inline const char *upipe_avfilt_command_str(int command)
     switch ((enum upipe_avfilt_command)command) {
         UBASE_CASE_TO_STR(UPIPE_AVFILT_SET_FILTERS_DESC);
         UBASE_CASE_TO_STR(UPIPE_AVFILT_SET_HW_CONFIG);
+        UBASE_CASE_TO_STR(UPIPE_AVFILT_SEND_COMMAND);
         case UPIPE_AVFILT_SENTINEL: break;
     }
     return NULL;
@@ -93,6 +97,46 @@ static inline int upipe_avfilt_set_hw_config(struct upipe *upipe,
     return upipe_control(upipe, UPIPE_AVFILT_SET_HW_CONFIG,
                          UPIPE_AVFILT_SIGNATURE,
                          hw_type, hw_device);
+}
+
+/** @This sends a command to one or more filter instances
+ *
+ * @param upipe description structure of the pipe
+ * @param target the filter(s) to which the command should be sent "all" sends
+ * to all filters otherwise it can be a filter or filter instance name which
+ * will send the command to all matching filters.
+ * @param command the command to send
+ * @param arg the arguments of the command
+ * @return an error code
+ */
+static inline int upipe_avfilt_send_command(struct upipe *upipe,
+                                            const char *target,
+                                            const char *command,
+                                            const char *arg)
+{
+    return upipe_control(upipe, UPIPE_AVFILT_SEND_COMMAND,
+                         UPIPE_AVFILT_SIGNATURE,
+                         target, command, arg);
+}
+
+/** @This sends a command to one or more filter instances
+ *
+ * @param upipe description structure of the pipe
+ * @param target the filter(s) to which the command should be sent "all" sends
+ * to all filters otherwise it can be a filter or filter instance name which
+ * will send the command to all matching filters.
+ * @param command the command to send
+ * @param format the arguments format string of the command
+ * @return an error code
+ */
+UBASE_FMT_PRINTF(4, 5)
+static inline int upipe_avfilt_send_command_va(struct upipe *upipe,
+                                               const char *target,
+                                               const char *command,
+                                               const char *format, ...)
+{
+    UBASE_VARARG(upipe_avfilt_send_command(upipe, target, command, string),
+                 UBASE_ERR_INVALID);
 }
 
 /** @This returns the management structure for all avfilter pipes.

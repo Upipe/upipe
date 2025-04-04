@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2019-2020 EasyTools
+ * Copyright (C) 2019-2025 EasyTools
  *
  * Authors: Clément Vasseur
  *          Arnaud de Turckheim
@@ -1867,6 +1867,32 @@ static int _upipe_avfilt_set_hw_config(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @This sends a command to one or more filter instances
+ *
+ * @param upipe description structure of the pipe
+ * @param target the filter(s) to which the command should be sent "all" sends
+ * to all filters otherwise it can be a filter or filter instance name which
+ * will send the command to all matching filters.
+ * @param command the command to send
+ * @param arg the arguments of the command
+ * @return an error code
+ */
+static int _upipe_avfilt_send_command(struct upipe *upipe, const char *target,
+                                      const char *command, const char *arg)
+{
+    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
+
+    if (unlikely(!upipe_avfilt->configured))
+        return UBASE_ERR_INVALID;
+
+    int err = avfilter_graph_send_command(upipe_avfilt->filter_graph, target,
+                                          command, arg, NULL, 0, 0);
+    if (err < 0)
+        return UBASE_ERR_EXTERNAL;
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This sets the input pipe flow definition for video.
  *
  * @param upipe description structure of the pipe
@@ -2487,6 +2513,13 @@ static int upipe_avfilt_control(struct upipe *upipe,
             const char *hw_type = va_arg(args, const char *);
             const char *hw_device = va_arg(args, const char *);
             return _upipe_avfilt_set_hw_config(upipe, hw_type, hw_device);
+        }
+        case UPIPE_AVFILT_SEND_COMMAND: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_AVFILT_SIGNATURE)
+            const char *target = va_arg(args, const char *);
+            const char *command = va_arg(args, const char *);
+            const char *arg = va_arg(args, const char *);
+            return _upipe_avfilt_send_command(upipe, target, command, arg);
         }
         default:
             return UBASE_ERR_UNHANDLED;
