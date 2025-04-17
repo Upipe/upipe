@@ -109,6 +109,8 @@ struct upipe_rtpfb {
     /** buffer latency */
     uint64_t latency;
 
+    bool clear_ssrc;
+
     struct upipe *rtpfb_output;
 
     /** last time a NACK was sent */
@@ -784,6 +786,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_rtpfb->queue);
     memset(upipe_rtpfb->last_nack, 0, sizeof(upipe_rtpfb->last_nack));
     upipe_rtpfb->rtt = 0;
+    upipe_rtpfb->clear_ssrc = true;
     upipe_rtpfb_require_uclock(upipe);
     upipe_rtpfb->rtpfb_output = NULL;
     upipe_rtpfb->uprobe = uprobe_use(uprobe);
@@ -1014,7 +1017,8 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
 
     rtp_get_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
     bool retransmit = upipe_rtpfb->last_ssrc[3] & 1;
-    upipe_rtpfb->last_ssrc[3] &= 0xfe;
+    if (upipe_rtpfb->clear_ssrc)
+        upipe_rtpfb->last_ssrc[3] &= 0xfe;
     rtp_set_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
 
     uref_block_unmap(uref, 0);
@@ -1161,6 +1165,10 @@ static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char
     } else if (!strcmp(k, "latency")) {
         upipe_dbg_va(upipe, "Setting latency to %s msecs", v);
         upipe_rtpfb->latency = atoi(v) * UCLOCK_FREQ / 1000;
+    } else if (!strcmp(k, "clear_ssrc")) {
+        upipe_rtpfb->clear_ssrc = !!atoi(v);
+        upipe_dbg_va(upipe, "%sclearing ssrc on retransmits",
+            upipe_rtpfb->clear_ssrc ? "" : "Not ");
     } else
         return UBASE_ERR_INVALID;
 
