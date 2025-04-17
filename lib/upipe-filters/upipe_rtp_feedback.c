@@ -858,6 +858,7 @@ static bool upipe_rtpfb_insert_inner(struct upipe *upipe, struct uref *uref,
 
     upipe_dbg_va(upipe, "Repaired %"PRIu64" > %hu > %"PRIu64" -diff %d",
             prev_seqnum, seqnum, next_seqnum, -diff);
+    upipe_throw_clock_ts(upipe, uref);
 
     return true;
 }
@@ -1106,7 +1107,6 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
 
     /* packet is from the past, reordered or retransmitted */
     if (upipe_rtpfb_insert(upipe, uref, seqnum)) {
-        upipe_throw_clock_ts(upipe, uref);
         return;
     }
 
