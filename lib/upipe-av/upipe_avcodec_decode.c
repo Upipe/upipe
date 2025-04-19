@@ -31,6 +31,7 @@
 #include "upipe/uclock.h"
 #include "upipe/ubuf.h"
 #include "upipe/uref.h"
+#include "upipe/uref_attr_s12m.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_flow.h"
 #include "upipe/uref_pic_flow.h"
@@ -1377,6 +1378,13 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_A53_CC);
     if (side_data)
         uref_pic_set_cea_708(uref, side_data->data, side_data->size);
+
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 20, 100)
+    side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_S12M_TIMECODE);
+    if (side_data && uref_attr_s12m_check(side_data->data, side_data->size)) {
+        uref_pic_set_s12m(uref, side_data->data, side_data->size);
+    }
+#endif
 
     /* various time-related attributes */
     upipe_avcdec_set_time_attributes(upipe, uref);
