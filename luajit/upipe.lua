@@ -57,6 +57,14 @@ local function wrap_traceback(f)
     end
 end
 
+local function jit_off(f)
+    if type(f) ~= 'function' then
+        return function (...) return f(...) end
+    end
+    jit.off(f)
+    return f
+end
+
 local props = { }
 
 local function props_key(ptr)
@@ -341,9 +349,9 @@ local upipe_methods = {
         assert(pipe ~= nil, "upipe_flow_alloc_sub failed")
         return ffi.gc(pipe, C.upipe_release)
     end,
-    release = function (pipe)
+    release = jit_off(function (pipe)
         C.upipe_release(ffi.gc(pipe, nil))
-    end,
+    end),
     iterate_sub = function (pipe, p)
         local f = C.upipe_iterate_sub
         return p and f(pipe, p) or iterator(pipe, f, "struct upipe *")
@@ -372,14 +380,18 @@ ffi.metatype("struct upipe", {
         if props and props._control and props._control[key] then
             f = props._control[key]
         else
-            f = C["upipe_" .. key]
+            f = jit_off(C["upipe_" .. key])
         end
         return getter(upipe_getters, f, key)
     end,
-    __newindex = function (pipe, key, val)
+    __newindex = jit_off(function (pipe, key, val)
         local sym = "upipe_set_" .. key
-        assert(C.ubase_check(C[sym](pipe, val)), sym)
-    end,
+        local ret = C[sym](pipe, val)
+        if not C.ubase_check(ret) then
+            local msg = C.ubase_err_str(ret)
+            error(fmt("%s: %s", sym, msg ~= nil and ffi.string(msg) or ret))
+        end
+    end),
     __concat = function (pipe, next_pipe)
         local last = pipe
         local output = ffi.new("struct upipe *[1]")
