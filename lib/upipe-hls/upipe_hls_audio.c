@@ -407,7 +407,7 @@ static int probe_uref(struct uprobe *uprobe, struct upipe *inner,
                         UPROBE_LOG_VERBOSE, "ts"));
                 upipe_mgr_release(upipe_ts_demux_mgr);
                 UBASE_ALLOC_RETURN(output);
-                upipe_ts_demux_set_max_pcr_interval(upipe, 5 * UCLOCK_FREQ);
+                upipe_ts_demux_set_max_pcr_interval(output, 5 * UCLOCK_FREQ);
                 upipe_release(output);
                 break;
             }
