@@ -1290,47 +1290,53 @@ static int upipe_h264f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
 {
     struct upipe_h264f *upipe_h264f = upipe_h264f_from_upipe(upipe);
 
-    uint8_t type;
-    if (unlikely(!ubase_check(ubuf_block_extract(ubuf, offset + 1, 1, &type))))
-        return UBASE_ERR_INVALID;
+    struct upipe_h26xf_stream f;
+    upipe_h26xf_stream_init(&f);
+    struct ubuf_block_stream *s = &f.s;
+    UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset + 1))
 
     int err = UBASE_ERR_NONE;
+    int end = size * 8 - ubuf_block_stream_position(s);
 
-    switch (type) {
-        case H264SEI_BUFFERING_PERIOD:
-        case H264SEI_PIC_TIMING: {
-            struct upipe_h26xf_stream f;
-            upipe_h26xf_stream_init(&f);
-            struct ubuf_block_stream *s = &f.s;
-            UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset + 2))
+    while (ubuf_block_stream_position(s) + 16 < end) {
+        uint8_t octet;
+        int payload_type = 0;
+        do {
+            UBASE_RETURN(upipe_h26xf_stream_get(s, &octet))
+            payload_type += octet;
+        } while (octet == 0xff);
 
-            /* size field */
-            uint8_t octet;
-            do {
-                upipe_h26xf_stream_fill_bits(s, 8);
-                octet = ubuf_block_stream_show_bits(s, 8);
-                ubuf_block_stream_skip_bits(s, 8);
-            } while (octet == UINT8_MAX);
+        int payload_size = 0;
+        do {
+            UBASE_RETURN(upipe_h26xf_stream_get(s, &octet))
+            payload_size += octet;
+        } while (octet == 0xff);
 
-            switch (type) {
-                case H264SEI_BUFFERING_PERIOD:
-                    err = upipe_h264f_handle_sei_buffering_period(upipe, s);
-                    break;
-                case H264SEI_PIC_TIMING:
-                    err = upipe_h264f_handle_sei_pic_timing(upipe, s);
-                    break;
-                default:
-                    break;
+        switch (payload_type) {
+            case H264SEI_BUFFERING_PERIOD:
+            case H264SEI_PIC_TIMING: {
+                struct upipe_h26xf_stream f2 = f;
+                struct ubuf_block_stream *s2 = &f2.s;
+                switch (payload_type) {
+                    case H264SEI_BUFFERING_PERIOD:
+                        err = upipe_h264f_handle_sei_buffering_period(upipe, s2);
+                        break;
+                    case H264SEI_PIC_TIMING:
+                        err = upipe_h264f_handle_sei_pic_timing(upipe, s2);
+                        break;
+                }
             }
-
-            ubuf_block_stream_clean(s);
-            break;
         }
 
-        default:
+        if (unlikely(!ubase_check(err)))
             break;
+
+        for (int i = 0; i < payload_size; i++) {
+            UBASE_RETURN(upipe_h26xf_stream_get(s, &octet))
+        }
     }
 
+    ubuf_block_stream_clean(s);
     if (unlikely(!ubase_check(err)))
         return err;
 
