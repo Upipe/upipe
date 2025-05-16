@@ -13,6 +13,7 @@
 #include "upipe/upipe_helper_sync.h"
 #include "upipe/upipe_helper_uref_stream.h"
 #include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_flow_format.h"
 #include "upipe/upipe_helper_upump.h"
 
 struct upipe_helper_mgr {
@@ -24,10 +25,13 @@ struct upipe_helper_mgr {
     upipe_helper_uclock_check uclock_check;
 
     // uref_mgr
-    upipe_helper_uref_mgr_check uref_check;
+    upipe_helper_uref_mgr_check uref_mgr_check;
 
     // ubuf_mgr
-    upipe_helper_ubuf_mgr_check ubuf_check;
+    upipe_helper_ubuf_mgr_check ubuf_mgr_check;
+
+    // flow_format
+    upipe_helper_flow_format_check flow_format_check;
 
     // input
     bool (*output)(struct upipe *, struct uref *, struct upump **);
@@ -95,6 +99,9 @@ struct upipe_helper {
     struct uref *flow_def_input;
     struct uref *flow_def_attr;
 
+    // flow_format
+    struct urequest flow_format_request;
+
     // upump
     struct upump *upump;
 };
@@ -135,25 +142,36 @@ static int check_uclock(struct upipe *upipe, struct uref *uref)
     return UBASE_ERR_NONE;
 }
 
-static int check_uref(struct upipe *upipe, struct uref *uref)
+static int check_uref_mgr(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_helper_mgr *mgr = upipe_helper_mgr(upipe);
 
-    if (mgr->uref_check != NULL)
-        return mgr->uref_check(upipe, uref);
+    if (mgr->uref_mgr_check != NULL)
+        return mgr->uref_mgr_check(upipe, uref);
 
     uref_free(uref);
     return UBASE_ERR_NONE;
 }
 
-static int check_ubuf(struct upipe *upipe, struct uref *uref)
+static int check_ubuf_mgr(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_helper_mgr *mgr = upipe_helper_mgr(upipe);
 
-    if (mgr->ubuf_check != NULL)
-        return mgr->ubuf_check(upipe, uref);
+    if (mgr->ubuf_mgr_check != NULL)
+        return mgr->ubuf_mgr_check(upipe, uref);
 
     uref_free(uref);
+    return UBASE_ERR_NONE;
+}
+
+static int check_flow_format(struct upipe *upipe, struct uref *flow_format)
+{
+    struct upipe_helper_mgr *mgr = upipe_helper_mgr(upipe);
+
+    if (mgr->flow_format_check != NULL)
+        return mgr->flow_format_check(upipe, flow_format);
+
+    uref_free(flow_format);
     return UBASE_ERR_NONE;
 }
 
@@ -179,11 +197,11 @@ UPIPE_HELPER_UCLOCK(upipe_helper, uclock, uclock_request,
                     upipe_helper_unregister_output_request);
 UPIPE_HELPER_UPUMP_MGR(upipe_helper, upump_mgr);
 UPIPE_HELPER_UREF_MGR(upipe_helper, uref_mgr, uref_mgr_request,
-                      check_uref,
+                      check_uref_mgr,
                       upipe_helper_register_output_request,
                       upipe_helper_unregister_output_request);
 UPIPE_HELPER_UBUF_MGR(upipe_helper, ubuf_mgr, flow_format, ubuf_mgr_request,
-                      check_ubuf,
+                      check_ubuf_mgr,
                       upipe_helper_register_output_request,
                       upipe_helper_unregister_output_request);
 UPIPE_HELPER_INNER(upipe_helper, first_inner);
@@ -194,4 +212,8 @@ UPIPE_HELPER_SYNC(upipe_helper, acquired);
 UPIPE_HELPER_UREF_STREAM(upipe_helper, next_uref, next_uref_size, stream_urefs,
                          append_cb);
 UPIPE_HELPER_FLOW_DEF(upipe_helper, flow_def_input, flow_def_attr);
+UPIPE_HELPER_FLOW_FORMAT(upipe_helper, flow_format_request,
+                         check_flow_format,
+                         upipe_helper_register_output_request,
+                         upipe_helper_unregister_output_request);
 UPIPE_HELPER_UPUMP(upipe_helper, upump, upump_mgr);
