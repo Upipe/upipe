@@ -107,6 +107,8 @@ struct upipe_rtpfb {
     /** buffer latency */
     uint64_t latency;
 
+    bool clear_ssrc;
+
     struct upipe *rtpfb_output;
 
     /** last time a NACK was sent */
@@ -115,6 +117,8 @@ struct upipe_rtpfb {
     uint64_t rtt;
 
     uint8_t last_ssrc[4];
+
+    uint64_t previous_ts;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -494,7 +498,7 @@ static void upipe_rtpfb_timer(struct upump *upump)
         if (unlikely(!ubase_check(uref_clock_get_cr_sys(uref, &cr_sys))))
             upipe_warn_va(upipe, "Couldn't read cr_sys in %s()", __func__);
 
-        if (now - cr_sys <= upipe_rtpfb->latency)
+        if (now <= cr_sys)
             break;
 
         upipe_verbose_va(upipe, "Output seq %"PRIu64" after %"PRIu64" clocks", seqnum, now - cr_sys);
@@ -510,6 +514,10 @@ static void upipe_rtpfb_timer(struct upump *upump)
         upipe_rtpfb->last_output_seqnum = seqnum;
 
         ulist_delete(uchain);
+
+        uref_clock_delete_date_prog(uref);
+        uref_clock_delete_rate(uref);
+
         upipe_rtpfb_output(upipe, uref, NULL); // XXX: use timer upump ?
         if (--upipe_rtpfb->buffered == 0) {
             upipe_warn_va(upipe, "Exhausted buffer");
@@ -555,7 +563,7 @@ static int upipe_rtpfb_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_rtpfb->upump_mgr && !upipe_rtpfb->upump_timer) {
         upipe_rtpfb->upump_timer = upump_alloc_timer(upipe_rtpfb->upump_mgr,
                 upipe_rtpfb_timer, upipe, upipe->refcount,
-                UCLOCK_FREQ/300, UCLOCK_FREQ/300);
+                UCLOCK_FREQ/1000, UCLOCK_FREQ/1000);
         upump_start(upipe_rtpfb->upump_timer);
 
         /* every 10ms, check for lost packets
@@ -775,6 +783,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_rtpfb->queue);
     memset(upipe_rtpfb->last_nack, 0, sizeof(upipe_rtpfb->last_nack));
     upipe_rtpfb->rtt = 0;
+    upipe_rtpfb->clear_ssrc = true;
     upipe_rtpfb_require_uclock(upipe);
     upipe_rtpfb->rtpfb_output = NULL;
     upipe_rtpfb->uprobe = uprobe_use(uprobe);
@@ -789,6 +798,7 @@ static struct upipe *upipe_rtpfb_alloc(struct upipe_mgr *mgr,
     memset(upipe_rtpfb->last_ssrc, 0, sizeof(upipe_rtpfb->last_ssrc));
 
     upipe_rtpfb->latency = UCLOCK_FREQ;
+    upipe_rtpfb->previous_ts = 0;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -845,6 +855,7 @@ static bool upipe_rtpfb_insert_inner(struct upipe *upipe, struct uref *uref,
 
     upipe_dbg_va(upipe, "Repaired %"PRIu64" > %hu > %"PRIu64" -diff %d",
             prev_seqnum, seqnum, next_seqnum, -diff);
+    upipe_throw_clock_ts(upipe, uref);
 
     return true;
 }
@@ -969,7 +980,7 @@ static void upipe_rtpfb_output_input(struct upipe *upipe, struct uref *uref,
             if (rtt < upipe_rtpfb->rtt * 8 / 10)
                 rtt = upipe_rtpfb->rtt * 8 / 10;
         }
-        upipe_notice_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
+        upipe_verbose_va(upipe, "RTT %f", (float)rtt / UCLOCK_FREQ);
         upipe_rtpfb->rtt = rtt;
         upipe_rtpfb_restart_timer(upipe_rtpfb_to_upipe(upipe_rtpfb));
     }
@@ -989,11 +1000,10 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
     struct upipe_rtpfb *upipe_rtpfb = upipe_rtpfb_from_upipe(upipe);
-    uint8_t rtp_buffer[RTP_HEADER_SIZE];
-    const uint8_t *rtp_header = uref_block_peek(uref, 0, RTP_HEADER_SIZE,
-                                                rtp_buffer);
-    if (unlikely(rtp_header == NULL)) {
-        upipe_warn(upipe, "invalid buffer received");
+    uint8_t *rtp_header = NULL;
+    int s = RTP_HEADER_SIZE;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &s, &rtp_header)))) {
+        upipe_warn(upipe, "Couldn't modify RTP header");
         uref_free(uref);
         return;
     }
@@ -1001,10 +1011,16 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     /* parse RTP header */
     bool valid = rtp_check_hdr(rtp_header);
     uint16_t seqnum = rtp_get_seqnum(rtp_header);
+    uint32_t ts = rtp_get_timestamp(rtp_header);
 
     rtp_get_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
+    bool retransmit = upipe_rtpfb->last_ssrc[3] & 1;
+    if (upipe_rtpfb->clear_ssrc)
+        upipe_rtpfb->last_ssrc[3] &= 0xfe;
+    rtp_set_ssrc(rtp_header, upipe_rtpfb->last_ssrc);
 
-    uref_block_peek_unmap(uref, 0, rtp_buffer, rtp_header);
+    uref_block_unmap(uref, 0);
+
     if (unlikely(!valid)) {
         upipe_warn(upipe, "invalid RTP header");
         uref_free(uref);
@@ -1023,6 +1039,36 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(upipe_rtpfb->expected_seqnum == UINT_MAX))
         upipe_rtpfb->expected_seqnum = seqnum;
 
+    static const uint64_t wrap = UINT64_C(4294967296);
+    uint64_t delta = (wrap + ts - (upipe_rtpfb->previous_ts % wrap)) % wrap;
+    int32_t d32 = delta;
+    bool discontinuity = upipe_rtpfb->previous_ts == 0;
+
+    uint64_t latency_90khz = (upipe_rtpfb->latency * 90000) / UCLOCK_FREQ;
+    bool past = d32 < 0; // TS went backwards
+
+    /* new ts keeps increasing even if 32 bits TS wraps
+     * Packets in the near past get a negative offset applied
+     */
+    uint64_t new_ts = upipe_rtpfb->previous_ts + d32;
+
+    if (discontinuity || abs(d32) > latency_90khz) {
+        /* Timestamp is clearly outside of our buffer
+         * Ignore previous timestamp and signal discontinuity */
+        new_ts = ts;
+        discontinuity = true;
+        if (discontinuity)
+            upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
+    }
+
+    if (discontinuity || !past) {
+        /* Update timestamp origin */
+        upipe_rtpfb->previous_ts = new_ts;
+    }
+
+    upipe_verbose_va(upipe, "Data seq %u", seqnum);
+    uref_clock_set_cr_prog(uref, new_ts * UCLOCK_FREQ / 90000);
+
     uint16_t diff = seqnum - upipe_rtpfb->expected_seqnum;
 
     if (diff < 0x8000) { // seqnum > last seq, insert at the end
@@ -1040,13 +1086,26 @@ static void upipe_rtpfb_input(struct upipe *upipe, struct uref *uref,
                     upipe_rtpfb->last_nack[seq] = fake_last_nack;
         }
 
+        if (!retransmit && diff == 0) {
+            uint64_t cr_prog;
+            if (unlikely(!ubase_check(uref_clock_get_cr_prog(uref, &cr_prog)))) {
+                upipe_warn(upipe, "no cr_prog in packet");
+                return;
+            }
+
+            upipe_throw_clock_ref(upipe, uref, cr_prog, discontinuity);
+        }
+
         upipe_rtpfb->expected_seqnum = seqnum + 1;
+
+        upipe_throw_clock_ts(upipe, uref);
         return;
     }
 
     /* packet is from the past, reordered or retransmitted */
-    if (upipe_rtpfb_insert(upipe, uref, seqnum))
+    if (upipe_rtpfb_insert(upipe, uref, seqnum)) {
         return;
+    }
 
     uint64_t first_seq = 0, last_seq = 0;
     uref_attr_get_priv(uref_from_uchain(upipe_rtpfb->queue.next), &first_seq);
@@ -1101,6 +1160,10 @@ static int upipe_rtpfb_set_option(struct upipe *upipe, const char *k, const char
     } else if (!strcmp(k, "latency")) {
         upipe_dbg_va(upipe, "Setting latency to %s msecs", v);
         upipe_rtpfb->latency = atoi(v) * UCLOCK_FREQ / 1000;
+    } else if (!strcmp(k, "clear_ssrc")) {
+        upipe_rtpfb->clear_ssrc = !!atoi(v);
+        upipe_dbg_va(upipe, "%sclearing ssrc on retransmits",
+            upipe_rtpfb->clear_ssrc ? "" : "Not ");
     } else
         return UBASE_ERR_INVALID;
 

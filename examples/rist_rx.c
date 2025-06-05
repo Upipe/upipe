@@ -336,6 +336,9 @@ int main(int argc, char *argv[])
     logger = uprobe_uclock_alloc(logger, uclock);
     assert(logger != NULL);
 
+    struct uprobe *uprobe_arq_dejitter = uprobe_dejitter_alloc(logger, true, 0);
+    assert(uprobe_arq_dejitter != NULL);
+
     /* rtp source */
     struct upipe_mgr *upipe_udpsrc_mgr = upipe_udpsrc_mgr_alloc();
     upipe_udpsrc = upipe_void_alloc(upipe_udpsrc_mgr, uprobe_pfx_alloc(uprobe_use(logger),
@@ -358,7 +361,7 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_rtpfb_mgr = upipe_rtpfb_mgr_alloc();
     upipe_rtpfb = upipe_void_alloc_output(upipe_probe_uref,
             upipe_rtpfb_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), loglevel, "rtpfb"));
+            uprobe_pfx_alloc(uprobe_use(uprobe_arq_dejitter), loglevel, "rtpfb"));
     upipe_mgr_release(upipe_rtpfb_mgr);
 
     upipe_rtpfb_sub = upipe_void_alloc_output_sub(upipe_udpsrc_rtcp, upipe_rtpfb,
@@ -377,6 +380,13 @@ int main(int argc, char *argv[])
     if (!ubase_check(upipe_set_option(upipe_rtpfb, "latency", latency))) {
         return EXIT_FAILURE;
     }
+
+    int i_latency = atoi(latency);
+    const uint64_t deviation = i_latency * UCLOCK_FREQ / 1000 / 3; // actual delay is 3 * this
+    uprobe_dejitter_set(uprobe_arq_dejitter, true, deviation);
+    uprobe_dejitter_set_minimum_deviation(uprobe_arq_dejitter, deviation);
+    uprobe_dejitter_set_maximum_deviation(uprobe_arq_dejitter, deviation);
+    uprobe_dejitter_set_maximum_jitter(uprobe_arq_dejitter, (uint64_t)i_latency * UCLOCK_FREQ / 1000 / 2);
 
     /* receive RTP */
     if (!ubase_check(upipe_set_uri(upipe_udpsrc, srcpath))) {
@@ -434,6 +444,7 @@ int main(int argc, char *argv[])
     uprobe_clean(&uprobe);
     uprobe_clean(&uprobe_udp);
     uprobe_release(logger);
+    uprobe_release(uprobe_arq_dejitter);
 
     const size_t n = sizeof(rtcp_sink) / sizeof(*rtcp_sink);
     for (size_t i = 0; i < n; i++) {
