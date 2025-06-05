@@ -1245,25 +1245,29 @@ static void upipe_srt_receiver_input(struct upipe *upipe, struct uref *uref,
     bool discontinuity = upipe_srt_receiver->previous_ts == 0;
 
     uint64_t latency_us = (upipe_srt_receiver->latency * 1000000) / UCLOCK_FREQ;
-    /* Note: d32 is converted to unsigned implictly */
-    if (!discontinuity && (d32 <= latency_us || -d32 <= latency_us)) {
-        if (d32 <= latency_us) {
-            upipe_srt_receiver->previous_ts += delta;
-            assert(d32 >= 0);
-        } else {
-             /* out of order but not too old or new */
-        }
-    } else {
-        upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
-        upipe_srt_receiver->previous_ts = ts;
+    bool past = d32 < 0; // TS went backwards
+
+    /* new ts keeps increasing even if 32 bits TS wraps
+     * Packets in the near past get a negative offset applied
+     */
+    uint64_t new_ts = upipe_srt_receiver->previous_ts + d32;
+
+    if (discontinuity || abs(d32) > latency_us) {
+        /* Timestamp is clearly outside of our buffer
+         * Ignore previous timestamp and signal discontinuity */
+        new_ts = ts;
         discontinuity = true;
+        if (discontinuity)
+            upipe_warn_va(upipe, "clock ref discontinuity %"PRIu64, delta);
+    }
+
+    if (discontinuity || !past) {
+        /* Update timestamp origin */
+        upipe_srt_receiver->previous_ts = new_ts;
     }
 
     upipe_verbose_va(upipe, "Data seq %u (retx %u)", seqnum, retransmit);
-    if (d32 < 0 && !discontinuity)
-        uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts + d32) * UCLOCK_FREQ / 1000000);
-    else
-        uref_clock_set_cr_prog(uref, (upipe_srt_receiver->previous_ts) * UCLOCK_FREQ / 1000000);
+    uref_clock_set_cr_prog(uref, new_ts * UCLOCK_FREQ / 1000000);
 
     (void)order;
     (void)num;
