@@ -825,7 +825,7 @@ static int upipe_srt_receiver_check(struct upipe *upipe, struct uref *flow_forma
         uint64_t latency;
         if (!ubase_check(uref_clock_get_latency(flow_format, &latency)))
             latency = 0;
-        uref_clock_set_latency(flow_format, latency + upipe_srt_receiver->latency);
+        uref_clock_set_latency(flow_format, latency);
 
         upipe_srt_receiver_store_flow_def(upipe, flow_format);
     }
