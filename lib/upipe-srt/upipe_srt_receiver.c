@@ -612,7 +612,6 @@ static void upipe_srt_receiver_timer(struct upump *upump)
             size = 0;
         upipe_srt_receiver->bytes -= size;
 
-        uref_clock_set_cr_sys(uref, cr_sys);
         uref_clock_delete_date_prog(uref);
         uref_clock_delete_rate(uref);
         upipe_srt_receiver_output(upipe, uref, NULL); // XXX: use timer upump ?
