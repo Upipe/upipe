@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -391,12 +392,13 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
     if (unlikely(dest_macropixel != src_macropixel))
         return UBASE_ERR_INVALID;
 
+#define MAX_PLANES  3
+
     const char *chroma;
     ubuf_pic_foreach_plane(dest, chroma) {
-        size_t src_stride;
-        uint8_t src_hsub, src_vsub, src_macropixel_size;
-        UBASE_RETURN(ubuf_pic_plane_size(src, chroma, &src_stride,
-                    &src_hsub, &src_vsub, &src_macropixel_size))
+        const char *in_chroma[MAX_PLANES] = { chroma };
+        unsigned in_planes = 1;
+        int err;
 
         size_t dest_stride;
         uint8_t dest_hsub, dest_vsub, dest_macropixel_size;
@@ -404,23 +406,49 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                      &dest_stride, &dest_hsub, &dest_vsub,
                      &dest_macropixel_size))
 
-        if (unlikely(src_hsub != dest_hsub || src_vsub != dest_vsub ||
-                     src_macropixel_size != dest_macropixel_size))
+        size_t src_stride;
+        uint8_t src_hsub, src_vsub, src_macropixel_size;
+        err = ubuf_pic_plane_size(src, in_chroma[0], &src_stride, &src_hsub,
+                                  &src_vsub, &src_macropixel_size);
+        if (!ubase_check(err)) {
+            if (!strcmp(chroma, "u8v8")) {
+                in_chroma[0] = "u8";
+                in_chroma[1] = "v8";
+                in_planes = 2;
+            } else
+                return err;
+
+            for (unsigned i = 0; i < in_planes; i++) {
+                UBASE_RETURN(ubuf_pic_plane_size(src, in_chroma[i], &src_stride,
+                                                 &src_hsub, &src_vsub,
+                                                 &src_macropixel_size));
+                if (unlikely(src_hsub != dest_hsub || src_vsub != dest_vsub ||
+                             src_macropixel_size !=
+                                 dest_macropixel_size / in_planes))
+                    return UBASE_ERR_INVALID;
+            }
+        } else if (unlikely(src_hsub != dest_hsub || src_vsub != dest_vsub ||
+                            src_macropixel_size != dest_macropixel_size))
             return UBASE_ERR_INVALID;
 
         uint8_t *dest_buffer;
-        const uint8_t *src_buffer;
+        const uint8_t *in[MAX_PLANES];
         UBASE_RETURN(ubuf_pic_plane_write(dest, chroma,
                     dest_hoffset, dest_voffset,
                     extract_hsize, extract_vsize, &dest_buffer))
-        int err = ubuf_pic_plane_read(src, chroma, src_hoffset, src_voffset,
-                                      extract_hsize, extract_vsize,
-                                      &src_buffer);
-        if (unlikely(!ubase_check(err))) {
-            ubuf_pic_plane_unmap(dest, chroma,
-                                 dest_hoffset, dest_voffset,
-                                 extract_hsize, extract_vsize);
-            return err;
+        for (unsigned i = 0; i < in_planes; i++) {
+            err =
+                ubuf_pic_plane_read(src, in_chroma[i], src_hoffset, src_voffset,
+                                    extract_hsize, extract_vsize, &in[i]);
+            if (unlikely(!ubase_check(err))) {
+                for (; i; i--)
+                    ubuf_pic_plane_unmap(src, in_chroma[i - 1], src_hoffset,
+                                         src_voffset, extract_hsize,
+                                         extract_vsize);
+                ubuf_pic_plane_unmap(dest, chroma, dest_hoffset, dest_voffset,
+                                     extract_hsize, extract_vsize);
+                return err;
+            }
         }
 
         int plane_hsize = extract_hsize / src_hsub / src_macropixel *
@@ -429,10 +457,25 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
 
         for (int i = 0; i < plane_vsize; i++) {
             if ((!alpha_plane && alpha == 0xff) || threshold == 0) {
-                memcpy(dest_buffer, src_buffer, plane_hsize);
+                if (in_planes == 1)
+                    memcpy(dest_buffer, in[0], plane_hsize);
+                else {
+                    for (int j = 0; j < plane_hsize; j++) {
+                        for (int p = 0; p < in_planes; p++)
+                            dest_buffer[j * in_planes + p] =
+                                (dest_buffer[j * in_planes + p] *
+                                     (0xff - alpha) +
+                                 in[p][j] * alpha) /
+                                0xff;
+                    }
+                }
             } else if (!alpha_plane) {
                 for (int j = 0; j < plane_hsize; j++) {
-                    dest_buffer[j] = (dest_buffer[j] * (0xff - alpha) + src_buffer[j] * alpha) / 0xff;
+                    for (int p = 0; p < in_planes; p++)
+                        dest_buffer[j * in_planes + p] =
+                            (dest_buffer[j * in_planes + p] * (0xff - alpha) +
+                             in[p][j] * alpha) /
+                            0xff;
                 }
             } else if (threshold != 0xff) {
                 /* This is an on/off blending
@@ -441,12 +484,18 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                 if (alpha == 0xff) {
                     for (int j = 0; j < plane_hsize; j++) {
                         const uint8_t a = alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub];
-                        if (a > threshold) dest_buffer[j] = src_buffer[j];
+                        if (a > threshold) {
+                            for (int p = 0; p < in_planes; p++)
+                                dest_buffer[j * in_planes + p] = in[p][j];
+                        }
                     }
                 } else {
                     for (int j = 0; j < plane_hsize; j++) {
                         const uint8_t a = (uint16_t)alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub] * (uint16_t)alpha / 0xff;
-                        if (a > threshold) dest_buffer[j] = src_buffer[j];
+                        if (a > threshold) {
+                            for (int p = 0; p < in_planes; p++)
+                                dest_buffer[j * in_planes + p] = in[p][j];
+                        }
                     }
                 }
             } else {
@@ -454,27 +503,40 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                 if (alpha == 0xff) {
                     for (int j = 0; j < plane_hsize; j++) {
                         const uint8_t a = alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub];
-                        dest_buffer[j] = (dest_buffer[j] * (0xff - a) + src_buffer[j] * a) / 0xff;
+                        for (int p = 0; p < in_planes; p++)
+                            dest_buffer[j * in_planes + p] =
+                                (dest_buffer[j * in_planes + p] * (0xff - a) +
+                                 in[p][j] * a) /
+                                0xff;
                     }
                 } else {
                     for (int j = 0; j < plane_hsize; j++) {
                         const uint8_t a = (uint16_t)alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub] * (uint16_t)alpha / 0xff;
-                        dest_buffer[j] = (dest_buffer[j] * (0xff - a) + src_buffer[j] * a) / 0xff;
+                        for (int p = 0; p < in_planes; p++)
+                            dest_buffer[j * in_planes + p] =
+                                (dest_buffer[j * in_planes + p] * (0xff - a) +
+                                 in[p][j] * a) /
+                                0xff;
                     }
                 }
             }
             dest_buffer += dest_stride;
-            src_buffer += src_stride;
+            for (int p = 0; p < in_planes; p++)
+                in[p] += src_stride;
         }
 
         err = ubuf_pic_plane_unmap(dest, chroma,
                                    dest_hoffset, dest_voffset,
                                    extract_hsize, extract_vsize);
-        UBASE_RETURN(ubuf_pic_plane_unmap(src, chroma,
-                                          src_hoffset, src_voffset,
-                                          extract_hsize, extract_vsize))
+        for (int p = 0; p < in_planes; p++)
+            UBASE_RETURN(ubuf_pic_plane_unmap(src, in_chroma[p], src_hoffset,
+                                              src_voffset, extract_hsize,
+                                              extract_vsize))
         UBASE_RETURN(err)
     }
+
+#undef MAX_PLANES
+
     return UBASE_ERR_NONE;
 }
 
