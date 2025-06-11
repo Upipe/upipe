@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017-2019 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -387,6 +388,8 @@ static int upipe_vblk_set_pic_real(struct upipe *upipe, struct uref *uref)
 static int upipe_vblk_check_flow_format(struct upipe *upipe,
                                         struct uref *flow_format)
 {
+    struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
+    uref_attr_import(flow_format, upipe_vblk->flow_attr);
     uref_pic_flow_delete_surface_type(flow_format);
     upipe_vblk_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
