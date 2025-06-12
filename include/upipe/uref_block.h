@@ -47,6 +47,8 @@ UREF_ATTR_VOID_UREF(block, start, UREF_FLAG_BLOCK_START, start of logical block)
 UREF_ATTR_VOID_UREF(block, end, UREF_FLAG_BLOCK_END, end of logical block)
 UREF_ATTR_UNSIGNED(block, header_size, "b.header", global headers size)
 UREF_ATTR_UNSIGNED(block, net_ifindex, "b.ifindex", network interface index)
+UREF_ATTR_SOCKADDR(block, net_srcaddr, "b.srcaddr", source address)
+UREF_ATTR_SOCKADDR(block, net_ipi6_addr, "b.ipi6_addr", destination address when packet was received)
 
 /** @This returns a new uref pointing to a new ubuf pointing to a block.
  * This is equivalent to the two operations sequentially, and is a shortcut.
