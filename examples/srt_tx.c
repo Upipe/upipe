@@ -110,30 +110,6 @@ static bool restart = true;
 static size_t packets = 0;
 static const size_t km_refresh_period = 1 << 25;
 
-static void addr_to_str(const struct sockaddr *s, char uri[INET6_ADDRSTRLEN+6])
-{
-    uint16_t port = 0;
-    switch(s->sa_family) {
-    case AF_INET: {
-        struct sockaddr_in *in = (struct sockaddr_in *)s;
-        inet_ntop(AF_INET, &in->sin_addr, uri, INET6_ADDRSTRLEN);
-        port = ntohs(in->sin_port);
-        break;
-    }
-    case AF_INET6: {
-        struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)s;
-        inet_ntop(AF_INET6, &in6->sin6_addr, uri, INET6_ADDRSTRLEN);
-        port = ntohs(in6->sin6_port);
-        break;
-    }
-    default:
-        uri[0] = '\0';
-    }
-
-    size_t uri_len = strlen(uri);
-    sprintf(&uri[uri_len], ":%hu", port);
-}
-
 static void stop(struct upump *upump);
 
 /** definition of our uprobe */
@@ -219,8 +195,8 @@ static int catch_udp(struct uprobe *uprobe, struct upipe *upipe,
         const struct sockaddr *s = va_arg(args, struct sockaddr*);
         const socklen_t *len = va_arg(args, socklen_t *);
 
-        char uri[INET6_ADDRSTRLEN+6];
-        addr_to_str(s, uri);
+        char uri[INET6_ADDRSTRLEN+8];
+        addr_to_str(s, *len, uri);
         upipe_warn_va(upipe, "Remote %s", uri);
 
         ubase_assert(upipe_udpsrc_get_fd(upipe_udpsrc_srt, &udp_fd));
@@ -320,8 +296,8 @@ static int start(void)
     struct sockaddr *peer = (struct sockaddr*) &ad;
 
     if (!getsockname(udp_fd, peer, &peer_len)) {
-        char uri[INET6_ADDRSTRLEN+6];
-        addr_to_str(peer, uri);
+        char uri[INET6_ADDRSTRLEN+8];
+        addr_to_str(peer, peer_len, uri);
         upipe_warn_va(upipe_srt_handshake, "Local %s (%u)", uri, z); // XXX: INADDR_ANY when listening
         upipe_srt_handshake_set_peer(upipe_srt_handshake, peer, peer_len);
     }
