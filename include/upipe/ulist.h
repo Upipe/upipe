@@ -214,6 +214,34 @@ static inline struct uchain *ulist_at(struct uchain *ulist, unsigned index)
     return NULL;
 }
 
+/** @This return the next element in the list or NULL.
+ *
+ * @param ulist pointer to a ulist
+ * @param element pointer to element
+ * @return point to the next element or NULL
+ */
+static inline struct uchain *ulist_next(struct uchain *ulist,
+                                        struct uchain *element)
+{
+    if (!element)
+        return ulist_peek(ulist);
+    return element->next != ulist ? element->next : NULL;
+}
+
+/** @This return the previous element in the list or NULL.
+ *
+ * @param ulist pointer to a ulist
+ * @param element pointer to element
+ * @return point to the previous element or NULL
+ */
+static inline struct uchain *ulist_prev(struct uchain *ulist,
+                                        struct uchain *element)
+{
+    if (!element)
+        return ulist_peek_last(ulist);
+    return element->prev != ulist ? element->prev : NULL;
+}
+
 /** @This sorts through a list using a comparison function.
  *
  * @param ulist pointer to a ulist
