@@ -173,6 +173,8 @@ struct upipe_avfilt {
     AVFilterGraph *filter_graph;
     /** filter graph is configured? */
     bool configured;
+    /** filter graph is not a source only? */
+    bool has_input;
 
     /** reference to hardware device context for filters */
     AVBufferRef *hw_device_ctx;
@@ -187,6 +189,13 @@ struct upipe_avfilt {
     /** uref from input */
     struct uref *uref;
 
+    /** input latency */
+    uint64_t input_latency;
+    /** last input pts prog */
+    uint64_t last_input_pts_prog;
+    /** last input pts sys */
+    uint64_t last_input_pts_sys;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -196,7 +205,8 @@ static int upipe_avfilt_init_filters(struct upipe *upipe);
 /** @hidden */
 static void upipe_avfilt_clean_filters(struct upipe *upipe);
 /** @hidden */
-static void upipe_avfilt_update_outputs(struct upipe *upipe);
+static void upipe_avfilt_update_outputs(struct upipe *upipe,
+                                        struct upump **upump_p);
 
 UPIPE_HELPER_UPIPE(upipe_avfilt, upipe, UPIPE_AVFILT_SIGNATURE)
 UPIPE_HELPER_VOID(upipe_avfilt)
@@ -410,6 +420,7 @@ static struct uref *upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
+    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
     AVFilterContext *ctx = upipe_avfilt_sub->buffer_ctx;
 
     struct uref *flow_def =
@@ -423,7 +434,33 @@ static struct uref *upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
         upipe_err_va(upipe, "unknown buffersink type");
         return NULL;
     }
+
+    uint64_t latency = 0;
+    if (frame->pts != AV_NOPTS_VALUE) {
+        AVRational time_base = av_buffersink_get_time_base(ctx);
+
+        uint64_t pts =
+            av_rescale_q(frame->pts, time_base, av_make_q(1, UCLOCK_FREQ));
+        if (upipe_avfilt->last_input_pts_prog != UINT64_MAX &&
+            upipe_avfilt->last_input_pts_prog >= pts) {
+            latency = upipe_avfilt->last_input_pts_prog - pts;
+        } else if (upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
+            upipe_warn_va(upipe, "pts in the past %.2f ms",
+                          (pts - upipe_avfilt->last_input_pts_prog) * 1000. /
+                              UCLOCK_FREQ);
+        }
+    } else {
+        upipe_warn(upipe, "no pts");
+    }
+    if (upipe_avfilt->input_latency + latency > upipe_avfilt_sub->latency) {
+        upipe_notice_va(upipe, "increase latency %.2fms to %.2fms",
+                        (upipe_avfilt_sub->latency * 1000.) / UCLOCK_FREQ,
+                        ((upipe_avfilt->input_latency + latency) * 1000.) /
+                            UCLOCK_FREQ);
+        upipe_avfilt_sub->latency = upipe_avfilt->input_latency + latency;
+    }
     uref_clock_set_latency(flow_def, upipe_avfilt_sub->latency);
+
     return flow_def;
 }
 
@@ -453,6 +490,7 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
+    struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
     struct uref *flow_def = upipe_avfilt_sub_build_flow_def(upipe, frame);
     if (unlikely(flow_def == NULL)) {
@@ -498,9 +536,6 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     }
     uref_attach_ubuf(uref, ubuf);
 
-    /* get system time */
-    uint64_t now = upipe_avfilt_sub_now(upipe);
-
     /* set pts orig */
     AVRational time_base = av_buffersink_get_time_base(
         upipe_avfilt_sub->buffer_ctx);
@@ -518,23 +553,18 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     }
     upipe_avfilt_sub->last_pts_prog = pts_prog;
 
-    if (upipe_avfilt_sub->pts_sys_offset == UINT64_MAX) {
-        upipe_avfilt_sub->pts_sys_offset = now;
-        upipe_avfilt_sub->first_pts_prog = pts_prog;
-    }
     uint64_t pts_sys = UINT64_MAX;
-    if (upipe_avfilt_sub->pts_sys_offset != UINT64_MAX) {
+    if (upipe_avfilt->last_input_pts_sys != UINT64_MAX &&
+        upipe_avfilt->last_input_pts_prog != UINT64_MAX)
+        pts_sys = upipe_avfilt->last_input_pts_sys +
+                  (upipe_avfilt->last_input_pts_prog - pts_prog);
+    else if (upipe_avfilt_sub->pts_sys_offset == UINT64_MAX) {
+        upipe_avfilt_sub->pts_sys_offset = upipe_avfilt_sub_now(upipe);
+        upipe_avfilt_sub->first_pts_prog = pts_prog;
+        pts_sys = upipe_avfilt_sub->pts_sys_offset;
+    } else {
         pts_sys = upipe_avfilt_sub->pts_sys_offset +
-            pts_prog - upipe_avfilt_sub->first_pts_prog;
-    }
-
-    if (pts_sys < now && now - pts_sys > upipe_avfilt_sub->latency) {
-        upipe_avfilt_sub->latency = now - pts_sys;
-        uref_clock_set_latency(upipe_avfilt_sub->flow_def,
-                               upipe_avfilt_sub->latency);
-        struct uref *flow_def = upipe_avfilt_sub->flow_def;
-        upipe_avfilt_sub->flow_def = NULL;
-        upipe_avfilt_sub_store_flow_def(upipe, flow_def);
+            (pts_prog - upipe_avfilt_sub->first_pts_prog);
     }
 
     uref_clock_set_pts_orig(uref, pts_orig);
@@ -1099,9 +1129,8 @@ static int upipe_avfilt_avframe_from_uref(struct upipe *upipe,
  * @param uref input buffer to handle
  * @param upump_p reference to the pump that generated the buffer
  */
-static void upipe_avfilt_sub_input(struct upipe *upipe,
-                                  struct uref *uref,
-                                  struct upump **upump_p)
+static void upipe_avfilt_sub_input(struct upipe *upipe, struct uref *uref,
+                                   struct upump **upump_p)
 {
     struct upipe_avfilt_sub *upipe_avfilt_sub =
         upipe_avfilt_sub_from_upipe(upipe);
@@ -1141,6 +1170,17 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
         return;
     }
 
+    uint64_t pts_sys = UINT64_MAX;
+    uint64_t pts_prog = UINT64_MAX;
+    if (ubase_check(uref_clock_get_pts_sys(uref, &pts_sys)) &&
+        ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))) {
+        if (upipe_avfilt->last_input_pts_prog == UINT64_MAX ||
+            pts_prog > upipe_avfilt->last_input_pts_prog) {
+            upipe_avfilt->last_input_pts_prog = pts_prog;
+            upipe_avfilt->last_input_pts_sys = pts_sys;
+        }
+    }
+
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
         int ret = upipe_avfilt_avframe_from_uref(upipe, uref,
                                                  upipe_avfilt_sub->flow_def_input,
@@ -1173,7 +1213,7 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
         return;
     }
 
-    upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt));
+    upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt), upump_p);
 }
 
 /** @internal @This sets the input sub pipe flow definition.
@@ -1198,6 +1238,10 @@ static int upipe_avfilt_sub_set_flow_def(struct upipe *upipe,
     UBASE_ALLOC_RETURN(flow_def_dup);
 
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
+    uint64_t input_latency = 0;
+    uref_clock_get_latency(flow_def_dup, &input_latency);
+    if (input_latency > upipe_avfilt->input_latency)
+        upipe_avfilt->input_latency = input_latency;
     upipe_avfilt_sub_store_flow_def_input(upipe, flow_def_dup);
     upipe_avfilt_init_filters(upipe_avfilt_to_upipe(upipe_avfilt));
 
@@ -1253,7 +1297,7 @@ static int upipe_avfilt_sub_check(struct upipe *upipe)
     if (!upipe_avfilt_sub->upump_mgr)
         return UBASE_ERR_NONE;
 
-    if (upipe_avfilt->filter_graph)
+    if (upipe_avfilt->configured && !upipe_avfilt->has_input)
         upipe_avfilt_sub_wait(upipe, 0);
 
     return UBASE_ERR_NONE;
@@ -1278,9 +1322,11 @@ static int upipe_avfilt_sub_control(struct upipe *upipe, int cmd, va_list args)
  *
  * @param upipe description structure of the pipe
  * @param configured true if the filter is configured, false otherwise
+ * @param has_input true if the filter has an input
  * @return an error code
  */
-static int upipe_avfilt_set_configured(struct upipe *upipe, bool configured)
+static int upipe_avfilt_set_configured(struct upipe *upipe, bool configured,
+                                       bool has_input)
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
 
@@ -1291,6 +1337,7 @@ static int upipe_avfilt_set_configured(struct upipe *upipe, bool configured)
                     upipe_avfilt->filters_desc ?: "(none)",
                     configured ? "configured" :
                     "not configured");
+    upipe_avfilt->has_input = has_input;
     if (configured)
         return upipe_avfilt_sync_acquired(upipe);
     return upipe_avfilt_sync_lost(upipe);
@@ -1299,15 +1346,28 @@ static int upipe_avfilt_set_configured(struct upipe *upipe, bool configured)
 /** @internal @This updates the outputs if needed.
  *
  * @param upipe description structure of the pipe
+ * @param upump_p reference to the pump that generated the last input buffer
  */
-static void upipe_avfilt_update_outputs(struct upipe *upipe)
+static void upipe_avfilt_update_outputs(struct upipe *upipe,
+                                        struct upump **upump_p)
 {
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_upipe(upipe);
     struct uchain *uchain;
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
-        if (!sub->flow_def_input)
-            upipe_avfilt_sub_wait(upipe_avfilt_sub_to_upipe(sub), 0);
+        struct upipe *sub_pipe = upipe_avfilt_sub_to_upipe(sub);
+
+        if (sub->flow_def_input)
+            continue;
+        if (!upipe_avfilt->has_input)
+            upipe_avfilt_sub_wait(sub_pipe, 0);
+        else {
+            struct uref *uref;
+            upipe_use(sub_pipe);
+            while ((uref = upipe_avfilt_sub_pop(sub_pipe)))
+                upipe_avfilt_sub_output(sub_pipe, uref, upump_p);
+            upipe_release(sub_pipe);
+        }
     }
 }
 
@@ -1329,7 +1389,7 @@ static void upipe_avfilt_clean_filters(struct upipe *upipe)
     }
     avfilter_graph_free(&upipe_avfilt->filter_graph);
     upipe_avfilt->buffer_ctx = NULL;
-    upipe_avfilt_set_configured(upipe, false);
+    upipe_avfilt_set_configured(upipe, false, false);
 }
 
 /** @internal @This initializes the avfilter graph.
@@ -1353,6 +1413,8 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
         return UBASE_ERR_NONE;
 
     upipe_avfilt->filter_graph = avfilter_graph_alloc();
+    upipe_avfilt->last_input_pts_prog = UINT64_MAX;
+    upipe_avfilt->last_input_pts_sys = UINT64_MAX;
 
     AVDictionaryEntry *option = NULL;
     while ((option = av_dict_get(upipe_avfilt->options,
@@ -1367,6 +1429,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
         }
     }
 
+    bool has_input = false;
     ulist_foreach(&upipe_avfilt->subs, uchain) {
         struct upipe_avfilt_sub *sub = upipe_avfilt_sub_from_uchain(uchain);
         if (!sub->flow_def_input)
@@ -1377,6 +1440,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
             upipe_err_va(upipe, "create filter for input %s failed", sub->name);
             goto end;
         }
+        has_input = true;
     }
 
     ret = UBASE_ERR_EXTERNAL;
@@ -1509,9 +1573,10 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
     }
 
     ret = UBASE_ERR_NONE;
-    upipe_avfilt_set_configured(upipe, true);
+    upipe_avfilt_set_configured(upipe, true, has_input);
 
-    upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt));
+    if (has_input)
+        upipe_avfilt_update_outputs(upipe_avfilt_to_upipe(upipe_avfilt), NULL);
 
 end:
     if (!ubase_check(ret))
@@ -1634,6 +1699,8 @@ static int upipe_avfilt_set_flow_def(struct upipe *upipe,
     upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
     upipe_avfilt_store_flow_def_input(upipe, NULL);
 
+    upipe_avfilt->input_latency = 0;
+    uref_clock_get_latency(flow_def_dup, &upipe_avfilt->input_latency);
     struct uref *uref = upipe_avfilt_store_flow_def_input(upipe, flow_def_dup);
     if (uref != NULL)
         /* output flow definition will be set when outputting frames */
@@ -1844,18 +1911,14 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
         if (frame->pts != AV_NOPTS_VALUE) {
             uint64_t pts = av_rescale_q(frame->pts, time_base,
                                         av_make_q(1, UCLOCK_FREQ));
-            uint64_t input_pts;
-            if (ubase_check(uref_clock_get_pts_prog(
-                        upipe_avfilt->uref, &input_pts)) &&
-                input_pts >= pts) {
-                latency = input_pts - pts;
+            if (upipe_avfilt->last_input_pts_prog != UINT64_MAX &&
+                upipe_avfilt->last_input_pts_prog >= pts) {
+                latency = upipe_avfilt->last_input_pts_prog - pts;
                 upipe_notice_va(upipe, "latency: %" PRIu64 " ms",
                                 1000 * latency / UCLOCK_FREQ);
             }
         }
-        uint64_t input_latency = 0;
-        uref_clock_get_latency(upipe_avfilt->flow_def_input, &input_latency);
-        uref_clock_set_latency(flow_def, input_latency + latency);
+        uref_clock_set_latency(flow_def, upipe_avfilt->input_latency + latency);
 
         upipe_avfilt_store_flow_def(upipe, flow_def);
     } else {
@@ -1969,6 +2032,8 @@ static void upipe_avfilt_input(struct upipe *upipe,
     }
 
     uref_free(upipe_avfilt->uref);
+    upipe_avfilt->last_input_pts_prog = UINT64_MAX;
+    uref_clock_get_pts_prog(uref, &upipe_avfilt->last_input_pts_prog);
     upipe_avfilt->uref = uref;
 
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
@@ -2006,7 +2071,7 @@ static void upipe_avfilt_input(struct upipe *upipe,
             upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
             goto end;
         }
-        upipe_avfilt_set_configured(upipe, true);
+        upipe_avfilt_set_configured(upipe, true, true);
     }
 
     /* push incoming frame to the filtergraph */
@@ -2166,6 +2231,10 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt->buffersink_ctx = NULL;
     upipe_avfilt->uref = NULL;
     upipe_avfilt->options = NULL;
+    upipe_avfilt->input_latency = 0;
+    upipe_avfilt->last_input_pts_prog = UINT64_MAX;
+    upipe_avfilt->configured = false;
+    upipe_avfilt->has_input = false;
 
     upipe_throw_ready(upipe);
 
