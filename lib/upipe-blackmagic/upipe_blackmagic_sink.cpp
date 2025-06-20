@@ -148,6 +148,12 @@ public:
     }
 
     virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv) {
+        if (memcmp(&iid, &IID_IDeckLinkVideoFrame, sizeof(REFIID)) == 0) {
+            frame_anc->AddRef();
+            uatomic_fetch_add(&refcount, 1);
+            *ppv = (LPVOID *)this;
+            return S_OK;
+        }
         return E_NOINTERFACE;
     }
 
