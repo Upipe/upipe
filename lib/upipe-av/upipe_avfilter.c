@@ -103,6 +103,8 @@ struct upipe_avfilt_sub {
     const char *name;
     /** avfilter buffer source */
     AVFilterContext *buffer_ctx;
+   /** reference to hardware frames context for input filters */
+    AVBufferRef *hw_frames_ctx;
     /** system clock offset */
     uint64_t pts_sys_offset;
     /** prog clock offset */
@@ -724,6 +726,9 @@ static int build_input_filter(struct upipe *upipe, struct uref *flow_def,
     }
     p->time_base.num = 1;
     p->time_base.den = UCLOCK_FREQ;
+    if (upipe_avfilt_sub)
+        p->hw_frames_ctx = upipe_avfilt_sub->hw_frames_ctx;
+
     switch (type) {
         case AVMEDIA_TYPE_VIDEO: {
             const char *chroma_map[UPIPE_AV_MAX_PLANES];
@@ -852,6 +857,7 @@ static struct upipe *upipe_avfilt_sub_alloc(struct upipe_mgr *mgr,
     upipe_avfilt_sub->last_pts_prog = UINT64_MAX;
     upipe_avfilt_sub->last_duration = 0;
     upipe_avfilt_sub->buffer_ctx = NULL;
+    upipe_avfilt_sub->hw_frames_ctx = NULL;
     upipe_avfilt_sub->warn_not_configured = true;
     upipe_avfilt_sub->latency = 0;
     ulist_init(&upipe_avfilt_sub->urefs);
@@ -886,6 +892,7 @@ static void upipe_avfilt_sub_free(struct upipe *upipe)
 
     upipe_throw_dead(upipe);
 
+    av_buffer_unref(&upipe_avfilt_sub->hw_frames_ctx);
     uref_free(upipe_avfilt_sub->flow_def_alloc);
     ubuf_mgr_release(upipe_avfilt_sub->ubuf_mgr);
     upipe_avfilt_sub_clean_upump(upipe);
@@ -1107,6 +1114,17 @@ static void upipe_avfilt_sub_input(struct upipe *upipe,
     }
 
     if (unlikely(!upipe_avfilt->configured)) {
+        AVFrame *frame = av_frame_alloc();
+        assert(frame);
+        if (ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
+            if (frame->hw_frames_ctx != NULL) {
+                av_buffer_unref(&upipe_avfilt_sub->hw_frames_ctx);
+                upipe_avfilt_sub->hw_frames_ctx = av_buffer_ref(frame->hw_frames_ctx);
+            }
+        }
+        av_frame_free(&frame);
+        upipe_avfilt_reset(upipe_avfilt_to_upipe(upipe_avfilt));
+
         if (upipe_avfilt_sub->warn_not_configured)
             upipe_warn(upipe, "filter graph is not configured");
         upipe_avfilt_sub->warn_not_configured = false;
