@@ -609,6 +609,21 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
             if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (void *) &i, sizeof(i)))
                 upipe_warn(upipe, "fail to increase receive buffer");
 
+#ifdef SO_BINDTODEVICE
+            if (ifname) {
+                /* linux specific, needs root or CAP_NET_RAW */
+                if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
+                            ifname, strlen(ifname) + 1) < 0) {
+                    upipe_err_va(upipe, "couldn't bind to device %s (%m)",
+                            ifname);
+                    free(ifname);
+                    close(fd);
+                    return -1;
+                }
+                ubase_clean_str(&ifname);
+            }
+#endif
+
             /* Join the multicast group if the socket is a multicast address */
             if (bind_addr.ss.ss_family == AF_INET
                   && IN_MULTICAST(ntohl(bind_addr.sin.sin_addr.s_addr))) {
@@ -663,20 +678,6 @@ int upipe_udp_open_socket(struct upipe *upipe, const char *_uri, int ttl,
                         return -1;
                     }
                 }
-#ifdef SO_BINDTODEVICE
-                if (ifname) {
-                    /* linux specific, needs root or CAP_NET_RAW */
-                    if (setsockopt(fd, SOL_SOCKET, SO_BINDTODEVICE,
-                                   ifname, strlen(ifname) + 1) < 0) {
-                        upipe_err_va(upipe, "couldn't bind to device %s (%m)",
-                                     ifname);
-                        free(ifname);
-                        close(fd);
-                        return -1;
-                    }
-                    ubase_clean_str(&ifname);
-                }
-#endif
             }
         }
     }
