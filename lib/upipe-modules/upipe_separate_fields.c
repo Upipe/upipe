@@ -62,6 +62,8 @@ struct upipe_separate_fields {
 
     /** frame duration in ticks */
     uint64_t field_duration;
+    /** whether to warn about progressive input */
+    bool force;
 };
 
 UPIPE_HELPER_UPIPE(upipe_separate_fields, upipe, UPIPE_SEPARATE_FIELDS_SIGNATURE)
@@ -110,6 +112,17 @@ static int upipe_separate_fields_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+static int upipe_separate_fields_set_option(struct upipe *upipe,
+        const char *key, const char *value)
+{
+    struct upipe_separate_fields *ctx = upipe_separate_fields_from_upipe(upipe);
+    if (!strcmp(key, "force")) {
+        ctx->force = !!atoi(value);
+        return UBASE_ERR_NONE;
+    }
+    return UBASE_ERR_INVALID;
+}
+
 static int upipe_separate_fields_control(struct upipe *upipe, int command,
                                   va_list args)
 {
@@ -124,6 +137,11 @@ static int upipe_separate_fields_control(struct upipe *upipe, int command,
         case UPIPE_GET_OUTPUT:
         case UPIPE_SET_OUTPUT:
             return upipe_separate_fields_control_output(upipe, command, args);
+        case UPIPE_SET_OPTION: {
+            const char *key   = va_arg(args, const char *);
+            const char *value = va_arg(args, const char *);
+            return upipe_separate_fields_set_option(upipe, key, value);
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -149,6 +167,10 @@ static struct upipe *upipe_separate_fields_alloc(struct upipe_mgr *mgr,
 
     upipe_separate_fields_init_urefcount(upipe);
     upipe_separate_fields_init_output(upipe);
+
+    struct upipe_separate_fields *ctx = upipe_separate_fields_from_upipe(upipe);
+    ctx->force = false;
+
     upipe_throw_ready(upipe);
 
     return upipe;
@@ -172,7 +194,7 @@ static void upipe_separate_fields_input(struct upipe *upipe, struct uref *uref,
     bool has_progressive_attr = ubase_check(uref_pic_get_progressive(uref));
     bool has_tff_attr         = ubase_check(uref_pic_get_tff(uref));
 
-    if (has_progressive_attr)
+    if (has_progressive_attr && !ctx->force)
         upipe_warn(upipe, "picture marked as progressive, separating fields anyway");
 
     uref_clock_set_duration(uref, ctx->field_duration);
