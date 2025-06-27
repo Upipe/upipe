@@ -1556,9 +1556,9 @@ static void upipe_mpgaf_output_frame(struct upipe *upipe, struct uref *uref,
             if (upipe_mpgaf->octetrate == 0)
                 upipe_info_va(upipe, "set octetrate to %"PRIu64, octetrate);
             else
-                upipe_info_va(upipe, "raise octetrate "
-                              "from %"PRIu64" to %"PRIu64,
-                              upipe_mpgaf->octetrate, octetrate);
+                upipe_dbg_va(upipe, "raise octetrate "
+                             "from %"PRIu64" to %"PRIu64,
+                             upipe_mpgaf->octetrate, octetrate);
             upipe_mpgaf->octetrate = octetrate;
             struct uref *flow_def = uref_dup(upipe_mpgaf->flow_def);
             if (unlikely(flow_def == NULL)) {
