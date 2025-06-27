@@ -32,13 +32,6 @@ jobs:
             compiler: clang
             version: 19
 
-        # - name: ubuntu-i386-gcc-12
-        #   os: ubuntu-22.04
-        #   arch: i386
-        #   host: i686-linux-gnu
-        #   compiler: gcc
-        #   version: 12
-
           - name: ubuntu-armhf-gcc-14
             os: ubuntu-24.04
             arch: armhf
@@ -100,9 +93,6 @@ jobs:
           sudo apt-get install $PKG
           set-env HOST_CC "$CC"
           set-env HOST_CXX "$CXX"
-          if [ "${{ matrix.arch }}" = "i386" ]; then
-            set-env CFLAGS "-msse2 -mfpmath=sse"
-          fi
           if [ -n "${{ matrix.host }}" ]; then
             set-env HOST "--host=${{ matrix.host }}"
           fi
@@ -131,12 +121,8 @@ jobs:
           LIBS: >
             ev asound2 x264 x265 speexdsp png freetype6 zvbi gcrypt tasn1 dvbv5
             udev avcodec avformat swresample swscale gl1-mesa glu1-mesa
-            srt-gnutls gnutls28 ssl
-          LIBS_FULL: ebur128 dvbcsa
+            srt-gnutls gnutls28 ssl ebur128 dvbcsa
         run: |
-          if [ "${{ matrix.arch }}" != "i386" ]; then
-            LIBS="$LIBS $LIBS_FULL"
-          fi
           if [ "${{ matrix.arch }}" != "amd64" ]; then
             sudo apt-get install qemu-user-binfmt
           fi
@@ -173,11 +159,8 @@ jobs:
           set-env PKG_CONFIG_PATH "$PKG_CONFIG_PATH:$PWD/usr-bitstream/share/pkgconfig"
 
       - name: Build and install libamt
-        if: runner.os == 'Linux' && (matrix.arch == 'amd64' || matrix.arch == 'i386')
+        if: runner.os == 'Linux' && matrix.arch == 'amd64'
         run: |
-          if [ "${{ matrix.arch }}" = "i386" ]; then
-            LIBAMT_PLATFORM="PLATFORM32=1"
-          fi
           git clone --depth 1 https://github.com/cisco/SSMAMTtools.git
           make -C SSMAMTtools/build/linux \
             CC="$HOST_CC -fPIC" \
@@ -188,7 +171,7 @@ jobs:
           sudo install -D SSMAMTtools/lib/linux/libamt.a /usr/local/lib/libamt.a
 
       - name: Build and install libdvbcsa
-        if: runner.os == 'macOS' || matrix.arch == 'i386'
+        if: runner.os == 'macOS'
         run: |
           git clone --depth 1 https://github.com/glenvt18/libdvbcsa.git
           cd libdvbcsa
