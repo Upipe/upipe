@@ -603,9 +603,23 @@ local function control_args(cmd, args)
     return va_args(args, unpack(ctrl_args[cmd]))
 end
 
+local function wrap_check(f)
+    if not f then return end
+    return wrap_traceback(function (...)
+        return ubase_err(f(...))
+    end)
+end
+
 local function upipe_helper_alloc(cb)
     local ct = ffi.typeof("struct upipe_helper_mgr")
     local h_mgr = ffi.cast(ffi.typeof("$ *", ct), C.calloc(1, ffi.sizeof(ct)))
+
+    if cb.check then
+        h_mgr.uclock_check = wrap_check(cb.check.uclock)
+        h_mgr.uref_mgr_check = wrap_check(cb.check.uref_mgr)
+        h_mgr.ubuf_mgr_check = wrap_check(cb.check.ubuf_mgr)
+        h_mgr.flow_format_check = wrap_check(cb.check.flow_format)
+    end
 
     if cb.input_output then
         h_mgr.output = cb.input_output
@@ -634,6 +648,7 @@ local function upipe_helper_alloc(cb)
             pipe:helper_init_sync()
             pipe:helper_init_uref_stream()
             pipe:helper_init_flow_def()
+            pipe:helper_init_flow_format()
             pipe:helper_init_upump()
             props_init(pipe)
             pipe.props.helper = h_pipe
@@ -783,6 +798,7 @@ local function upipe_helper_alloc(cb)
         pipe:throw_dead()
         props[k] = nil
         pipe:helper_clean_upump()
+        pipe:helper_clean_flow_format()
         pipe:helper_clean_flow_def()
         pipe:helper_clean_uref_stream()
         pipe:helper_clean_sync()
@@ -807,9 +823,11 @@ local function upipe_helper_alloc(cb)
         props_destroy(mgr)
         mgr.upipe_alloc:free()
         mgr.upipe_control:free()
-        if mgr.upipe_input ~= nil then
-            mgr.upipe_input:free()
-        end
+        if mgr.upipe_input ~= nil then mgr.upipe_input:free() end
+        if h_mgr.uclock_check ~= nil then h_mgr.uclock_check:free() end
+        if h_mgr.uref_mgr_check ~= nil then h_mgr.uref_mgr_check:free() end
+        if h_mgr.ubuf_mgr_check ~= nil then h_mgr.ubuf_mgr_check:free() end
+        if h_mgr.flow_format_check ~= nil then h_mgr.flow_format_check:free() end
         h_mgr.refcount_cb:free()
         refcount_cb:free()
         C.free(ffi.cast("void *", h_mgr))

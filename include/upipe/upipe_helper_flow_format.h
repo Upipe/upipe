@@ -77,8 +77,8 @@ typedef int (*upipe_helper_flow_format_register)(struct upipe *,
  * Internal function called when the request is answered.
  *
  * @item @code
- *  int upipe_foo_require_flow_format(struct upipe *upipe,
- *                                    struct uref *flow_format)
+ *  void upipe_foo_require_flow_format(struct upipe *upipe,
+ *                                     struct uref *flow_format)
  * @end code
  * Initializes and registers the request to get a flow format. The base flow
  * format belongs to the callee and will be eventually freed.
