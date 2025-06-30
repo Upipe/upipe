@@ -173,7 +173,7 @@ static void upipe_separate_fields_input(struct upipe *upipe, struct uref *uref,
     bool has_tff_attr         = ubase_check(uref_pic_get_tff(uref));
 
     if (has_progressive_attr)
-        upipe_warn(upipe, "picture marked as progrssive, separating fields anyway");
+        upipe_warn(upipe, "picture marked as progressive, separating fields anyway");
 
     uref_clock_set_duration(uref, ctx->field_duration);
 
