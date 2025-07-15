@@ -669,6 +669,8 @@ upipe_h265f_stream_parse_short_term_ref_pic_set(struct ubuf_block_stream *s,
         if (num_negative_pics[idx] > max_dec_pic_buffering_1)
             return false;
         num_positive_pics[idx] = upipe_h26xf_stream_ue(s);
+        if (num_positive_pics[idx] > max_dec_pic_buffering_1)
+            return false;
         if (num_positive_pics[idx] + num_negative_pics[idx] >
             max_dec_pic_buffering_1)
             return false;
