@@ -61,6 +61,9 @@
 
 #include <bitstream/itu/h265.h>
 
+#define MIN(A, B) ((A) < (B) ? (A) : (B))
+#define MAX(A, B) ((A) > (B) ? (A) : (B))
+
 /** @internal @This is the private context of an h265f pipe. */
 struct upipe_h265f {
     /** refcount management structure */
@@ -802,43 +805,56 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             uref_h265_flow_set_level(flow_def, upipe_h265f->level_idc))
 
     uint64_t max_octetrate, max_bs;
+    uint32_t max_luma_ps;
     switch (upipe_h265f->level_idc) {
         case H265VPS_LEVEL_1_0:
             max_octetrate = 128000 / 8;
             max_bs = 350000 / 8;
+            max_luma_ps = 36864;
             break;
         case H265VPS_LEVEL_2_0:
             max_octetrate = max_bs = 1500000 / 8;
+            max_luma_ps = 122880;
             break;
         case H265VPS_LEVEL_2_1:
             max_octetrate = max_bs = 3000000 / 8;
+            max_luma_ps = 245760;
             break;
         case H265VPS_LEVEL_3_0:
             max_octetrate = max_bs = 6000000 / 8;
+            max_luma_ps = 552960;
             break;
         case H265VPS_LEVEL_3_1:
             max_octetrate = max_bs = 10000000 / 8;
+            max_luma_ps = 983040;
             break;
         case H265VPS_LEVEL_4_0:
             max_octetrate = max_bs = tier ? (30000000 / 8) : (12000000 / 8);
+            max_luma_ps = 2228224;
             break;
         case H265VPS_LEVEL_4_1:
             max_octetrate = max_bs = tier ? (50000000 / 8) : (20000000 / 8);
+            max_luma_ps = 2228224;
             break;
         case H265VPS_LEVEL_5_0:
             max_octetrate = max_bs = tier ? (100000000 / 8) : (25000000 / 8);
+            max_luma_ps = 8912896;
             break;
         case H265VPS_LEVEL_5_1:
             max_octetrate = max_bs = tier ? (160000000 / 8) : (40000000 / 8);
+            max_luma_ps = 8912896;
             break;
         case H265VPS_LEVEL_5_2:
             max_octetrate = max_bs = tier ? (240000000 / 8) : (60000000 / 8);
+            max_luma_ps = 8912896;
             break;
         case H265VPS_LEVEL_6_0:
             max_octetrate = max_bs = tier ? (240000000 / 8) : (60000000 / 8);
+            max_luma_ps = 35651584;
             break;
         case H265VPS_LEVEL_6_1:
             max_octetrate = max_bs = tier ? (480000000 / 8) : (120000000 / 8);
+            max_luma_ps = 35651584;
             break;
         default:
             upipe_warn_va(upipe, "unknown level %"PRIu8,
@@ -846,6 +862,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             /* fallthrough */
         case H265VPS_LEVEL_6_2:
             max_octetrate = max_bs = tier ? (800000000 / 8) : (240000000 / 8);
+            max_luma_ps = 35651584;
             break;
     }
     UBASE_FATAL(upipe,
@@ -961,6 +978,21 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         upipe_h26xf_stream_ue(s); /* max_num_reorder_pics */
         upipe_h26xf_stream_ue(s); /* max_latency_increase */
     }
+
+    uint32_t pic_size_y = hsize * vsize;
+    uint32_t max_dpb_size;
+    uint8_t max_dpb_pic_buf = 8;
+
+    if (pic_size_y <= (max_luma_ps >> 2))
+        max_dpb_size = MIN(4 * max_dpb_pic_buf, 16);
+    else if (pic_size_y <= (max_luma_ps >> 1))
+        max_dpb_size = MIN(2 * max_dpb_pic_buf, 16);
+    else if (pic_size_y <= (3*max_luma_ps) >> 2)
+        max_dpb_size = MIN((4 * max_dpb_pic_buf) / 3, 16);
+    else
+        max_dpb_size = max_dpb_pic_buf;
+
+    max_dec_pic_buffering_1 = MIN(max_dec_pic_buffering_1, max_dpb_size - 1);
 
     upipe_h26xf_stream_ue(s); /* min_luma_coding_block_size */
     upipe_h26xf_stream_ue(s); /* diff_max_min_luma_coding_block_size */
