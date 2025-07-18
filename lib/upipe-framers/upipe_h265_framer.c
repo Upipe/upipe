@@ -601,6 +601,8 @@ upipe_h265f_stream_parse_short_term_ref_pic_set(struct ubuf_block_stream *s,
         int ref_idx = delta_idx > idx ? 0 : idx - delta_idx;
         int num_delta_pocs = num_negative_pics[ref_idx] +
             num_positive_pics[ref_idx];
+        if (num_delta_pocs > max)
+            return false;
         bool used_by_curr_pic_flag[num_delta_pocs + 1];
         bool use_delta_flag[num_delta_pocs + 1];
         for (int i = 0; i <= num_delta_pocs; i++) {
