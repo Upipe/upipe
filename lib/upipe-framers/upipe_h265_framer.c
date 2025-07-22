@@ -876,9 +876,11 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                                  NULL, NULL, NULL, NULL, NULL);
     upipe_h26xf_stream_ue(s); /* sps_id */
     uint32_t chroma_idc = upipe_h265f->chroma_idc = upipe_h26xf_stream_ue(s);
+    bool separate_colour_plane = false;
     if (chroma_idc == 3) {
         upipe_h26xf_stream_fill_bits(s, 1);
-        ubuf_block_stream_skip_bits(s, 1); /* separate_colour_plane */
+        separate_colour_plane = !!ubuf_block_stream_show_bits(s, 1);
+        ubuf_block_stream_skip_bits(s, 1);
     }
 
     uint32_t hsize = upipe_h26xf_stream_ue(s);
@@ -888,10 +890,21 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     bool conformance_window = !!ubuf_block_stream_show_bits(s, 1);
     ubuf_block_stream_skip_bits(s, 1);
     if (conformance_window) {
-        upipe_h26xf_stream_ue(s); /* left offset */
-        upipe_h26xf_stream_ue(s); /* right offset */
-        upipe_h26xf_stream_ue(s); /* top offset */
-        upipe_h26xf_stream_ue(s); /* bottom offset */
+        uint32_t conf_win_left_offset = upipe_h26xf_stream_ue(s); /* left offset */
+        uint32_t conf_win_right_offset = upipe_h26xf_stream_ue(s); /* right offset */
+        uint32_t conf_win_top_offset = upipe_h26xf_stream_ue(s); /* top offset */
+        uint32_t conf_win_bottom_offset = upipe_h26xf_stream_ue(s); /* bottom offset */
+        uint8_t chroma_array_type = 0;
+        if (separate_colour_plane)
+            chroma_array_type = chroma_idc;
+        if (!chroma_array_type) {
+            hsize -= conf_win_left_offset + conf_win_right_offset;
+            vsize -= (conf_win_top_offset + conf_win_bottom_offset);
+        } else {
+            hsize -= (conf_win_left_offset + conf_win_right_offset) *
+                ((chroma_idc == 1 || chroma_idc == 2) ? 2 : 1);
+            vsize -= (conf_win_top_offset + conf_win_bottom_offset) * (chroma_idc == 1 ? 2 : 1);
+        }
     }
 
     uint32_t luma_depth = upipe_h26xf_stream_ue(s) + 8;
