@@ -2123,7 +2123,9 @@ static void upipe_ts_mux_program_change(struct upipe *upipe)
             continue;
         if (pcr_input == NULL ||
             (pcr_input->input_type == UPIPE_TS_MUX_INPUT_AUDIO &&
-             input->input_type == UPIPE_TS_MUX_INPUT_VIDEO)) {
+             input->input_type == UPIPE_TS_MUX_INPUT_VIDEO) ||
+            (pcr_input->input_type == input->input_type &&
+             pcr_pid > input->pid)) {
             pcr_pid = input->pid;
             pcr_input = input;
         }
