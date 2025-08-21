@@ -109,7 +109,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 
     uint8_t *buffer = malloc(size);
     assert(buffer);
-    uref_block_extract(uref, 0, size, buffer);
+    ubase_assert(uref_block_extract(uref, 0, size, buffer));
 
     assert(size == a52_get_frame_size(a52_get_fscod(buffer),
                                       a52_get_frmsizecod(buffer)));
