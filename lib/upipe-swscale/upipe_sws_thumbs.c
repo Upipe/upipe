@@ -490,7 +490,7 @@ static int upipe_sws_thumbs_amend_ubuf_mgr(struct upipe *upipe,
 
     uint64_t align;
     if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)) || !align)
-        uref_pic_flow_set_align(flow_format, 16);
+        uref_pic_flow_set_align(flow_format, align = 16);
 
     if (align % 16) {
         align = align * 16 / ubase_gcd(align, 16);
