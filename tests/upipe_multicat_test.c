@@ -154,7 +154,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 
     static uint64_t systime = 0;
     uint64_t cr_sys;
-    uref_clock_get_cr_sys(uref, &cr_sys);
+    ubase_assert(uref_clock_get_cr_sys(uref, &cr_sys));
     assert(cr_sys == systime);
 
     int size = -1;

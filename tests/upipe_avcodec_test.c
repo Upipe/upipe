@@ -131,10 +131,10 @@ static int catch_avcenc(struct uprobe *uprobe, struct upipe *upipe,
         return uprobe_throw_next(uprobe, upipe, event, args);
     }
 
-    upipe_get_flow_def(upipe, &flow);
+    ubase_assert(upipe_get_flow_def(upipe, &flow));
     assert(flow != NULL);
-    uref_xflow_get_num(flow, &num);
-    uref_flow_get_def(flow, &def);
+    ubase_assert(uref_xflow_get_num(flow, &num));
+    ubase_assert(uref_flow_get_def(flow, &def));
     assert(def != NULL);
 
     /* decoder lives in encoder's thread */
