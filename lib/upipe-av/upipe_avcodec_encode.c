@@ -1998,7 +1998,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
 
     if (upipe_avcenc->context != NULL)
-        av_free(upipe_avcenc->context);
+        avcodec_free_context(&upipe_avcenc->context);
     av_frame_free(&upipe_avcenc->frame);
     av_packet_free(&upipe_avcenc->avpkt);
 
