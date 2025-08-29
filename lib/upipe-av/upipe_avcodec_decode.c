@@ -1377,9 +1377,16 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         duration = av_rescale_q(1, time_base, uclock_time_base);
     }
 
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(60, 15, 100)
+    int ticks_per_frame = context->ticks_per_frame;
+#else
+    int ticks_per_frame = (context->codec_descriptor->props &
+                           AV_CODEC_PROP_FIELDS) ? 2 : 1;
+#endif
+
     if (!duration && frame->time_base.den)
         duration = (uint64_t)(2 + frame->repeat_pict) *
-            context->ticks_per_frame * UCLOCK_FREQ * frame->time_base.num /
+            ticks_per_frame * UCLOCK_FREQ * frame->time_base.num /
             (2 * frame->time_base.den);
 
     if (duration)
