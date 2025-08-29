@@ -320,7 +320,13 @@ static int build_video_flow_def(struct uref *flow_def,
     UBASE_RETURN(uref_pic_flow_set_fps(flow_def, urational(fps)))
     UBASE_RETURN(uref_pic_flow_set_sar(flow_def, urational(sar)))
 
-    if (!frame->interlaced_frame)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    bool interlaced_frame = frame->interlaced_frame;
+#else
+    bool interlaced_frame = frame->flags & AV_FRAME_FLAG_INTERLACED;
+#endif
+
+    if (!interlaced_frame)
         UBASE_RETURN(uref_pic_set_progressive(flow_def))
     if (color_range == AVCOL_RANGE_JPEG)
         UBASE_RETURN(uref_pic_flow_set_full_range(flow_def))
@@ -578,12 +584,22 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
             duration = av_rescale_q(frame->pkt_duration, time_base,
                                     av_make_q(1, UCLOCK_FREQ));
 
-            if (!frame->interlaced_frame)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+            bool key_frame = frame->key_frame;
+            bool interlaced_frame = frame->interlaced_frame;
+            bool top_field_first = frame->top_field_first;
+#else
+            bool key_frame = frame->flags & AV_FRAME_FLAG_KEY;
+            bool interlaced_frame = frame->flags & AV_FRAME_FLAG_INTERLACED;
+            bool top_field_first = frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST;
+#endif
+
+            if (!interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
-            else if (frame->top_field_first)
+            else if (top_field_first)
                 UBASE_ERROR(upipe, uref_pic_set_tff(uref))
 
-            if (frame->key_frame)
+            if (key_frame)
                 UBASE_ERROR(upipe, uref_pic_set_key(uref))
 
             break;
@@ -1983,12 +1999,22 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
             duration = av_rescale_q(frame->pkt_duration, time_base,
                                     av_make_q(1, UCLOCK_FREQ));
 
-            if (!frame->interlaced_frame)
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+            bool key_frame = frame->key_frame;
+            bool interlaced_frame = frame->interlaced_frame;
+            bool top_field_first = frame->top_field_first;
+#else
+            bool key_frame = frame->flags & AV_FRAME_FLAG_KEY;
+            bool interlaced_frame = frame->flags & AV_FRAME_FLAG_INTERLACED;
+            bool top_field_first = frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST;
+#endif
+
+            if (!interlaced_frame)
                 UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
-            else if (frame->top_field_first)
+            else if (top_field_first)
                 UBASE_ERROR(upipe, uref_pic_set_tff(uref))
 
-            if (frame->key_frame)
+            if (key_frame)
                 UBASE_ERROR(upipe, uref_pic_set_key(uref))
 
             break;
