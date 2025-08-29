@@ -137,9 +137,24 @@ int upipe_av_set_frame_properties(struct upipe *upipe,
                                   struct uref *flow_def,
                                   struct uref *uref)
 {
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
     frame->key_frame = ubase_check(uref_pic_get_key(uref));
     frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
     frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
+#else
+    if (ubase_check(uref_pic_get_key(uref)))
+        frame->flags |= AV_FRAME_FLAG_KEY;
+    else
+        frame->flags &= ~AV_FRAME_FLAG_KEY;
+    if (!ubase_check(uref_pic_get_progressive(uref)))
+        frame->flags |= AV_FRAME_FLAG_INTERLACED;
+    else
+        frame->flags &= ~AV_FRAME_FLAG_INTERLACED;
+    if (ubase_check(uref_pic_get_tff(uref)))
+        frame->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST;
+    else
+        frame->flags &= ~AV_FRAME_FLAG_TOP_FIELD_FIRST;
+#endif
     frame->color_range = ubase_check(uref_pic_flow_get_full_range(
             flow_def)) ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
 

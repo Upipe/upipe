@@ -396,6 +396,12 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     if (context->color_range == AVCOL_RANGE_JPEG)
         uref_pic_flow_set_full_range(flow_def_attr);
 
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    bool key_frame = frame->key_frame;
+#else
+    bool key_frame = frame->flags & AV_FRAME_FLAG_KEY;
+#endif
+
     AVFrameSideData *sd = av_frame_get_side_data(
         frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
     if (sd) {
@@ -404,7 +410,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
                 flow_def_attr, clm->MaxCLL))
         UBASE_FATAL(upipe, uref_pic_flow_set_max_fall(
                 flow_def_attr, clm->MaxFALL))
-    } else if (!frame->key_frame && upipe_avcdec->flow_def_format) {
+    } else if (!key_frame && upipe_avcdec->flow_def_format) {
         uint64_t max_cll;
         if (ubase_check(uref_pic_flow_get_max_cll(
                     upipe_avcdec->flow_def_format, &max_cll))) {
@@ -439,7 +445,7 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
                 .min_luminance = av_rescale_q(1, mdcv->min_luminance, luma),
                 .max_luminance = av_rescale_q(1, mdcv->max_luminance, luma),
             }))
-    } else if (!frame->key_frame && upipe_avcdec->flow_def_format) {
+    } else if (!key_frame && upipe_avcdec->flow_def_format) {
         const uint8_t *mdcv;
         size_t size;
         if (ubase_check(uref_pic_flow_get_mdcv(upipe_avcdec->flow_def_format,
@@ -1344,11 +1350,21 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
         upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
     }
 
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    bool key_frame = frame->key_frame;
+    bool interlaced_frame = frame->interlaced_frame;
+    bool top_field_first = frame->top_field_first;
+#else
+    bool key_frame = frame->flags & AV_FRAME_FLAG_KEY;
+    bool interlaced_frame = frame->flags & AV_FRAME_FLAG_INTERLACED;
+    bool top_field_first = frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST;
+#endif
+
     UBASE_FATAL(upipe, uref_pic_set_tf(uref))
     UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-    if (!frame->interlaced_frame)
+    if (!interlaced_frame)
         UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
-    else if (frame->top_field_first)
+    else if (top_field_first)
         UBASE_FATAL(upipe, uref_pic_set_tff(uref))
 
     uint64_t duration = 0;
@@ -1367,7 +1383,7 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     if (duration)
         UBASE_FATAL(upipe, uref_clock_set_duration(uref, duration))
 
-    if (frame->key_frame)
+    if (key_frame)
         uref_pic_set_key(uref);
 
     side_data = av_frame_get_side_data(frame, AV_FRAME_DATA_AFD);
