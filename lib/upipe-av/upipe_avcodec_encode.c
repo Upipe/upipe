@@ -331,7 +331,9 @@ static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
     if (upipe_avcenc->close) {
         upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
                         context->codec->long_name, context->codec->id);
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(60, 40, 100)
         avcodec_close(context);
+#endif
         return false;
     }
 
@@ -1997,8 +1999,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
 
-    if (upipe_avcenc->context != NULL)
-        avcodec_free_context(&upipe_avcenc->context);
+    avcodec_free_context(&upipe_avcenc->context);
     av_frame_free(&upipe_avcenc->frame);
     av_packet_free(&upipe_avcenc->avpkt);
 
