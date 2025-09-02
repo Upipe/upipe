@@ -103,6 +103,7 @@ libupipe_modules_la_SOURCES += \
 	upipe_id3v2_decaps.c \
 	upipe_id3v2_encaps.c \
 	upipe_id3v2.c \
+	upipe_rtp_anc_unpack.c \
 	$(NULL)
 libupipe_modules_la_CFLAGS = $(AM_CFLAGS) $(BITSTREAM_CFLAGS)
 endif
