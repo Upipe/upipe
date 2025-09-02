@@ -148,6 +148,7 @@ AC_LANG_PUSH([C++])
 PKG_CHECK_UPIPE(QTWEBKIT, QtWebKit, [QtWebKit])
 AC_LANG_POP([C++])
 PKG_CHECK_UPIPE(OPENSSL, openssl, [openssl/ssl.h])
+PKG_CHECK_UPIPE(PCAP, libpcap, [pcap/pcap.h])
 
 # if have gcrypt and tasn then
 AC_SUBST(LIBUPIPE_TS_PKGCONFIG_REQUIRES)

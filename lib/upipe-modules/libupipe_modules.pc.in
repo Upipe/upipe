@@ -6,5 +6,5 @@ Name: libupipe_modules
 Description: Upipe multimedia framework, base modules
 Version: @VERSION@
 Requires: libupipe
-Libs: -L${libdir} -lupipe_modules
-Cflags: -I${includedir}
+Libs: -L${libdir} -lupipe_modules @PCAP_LIBS@
+Cflags: -I${includedir} @PCAP_CFLAGS@
