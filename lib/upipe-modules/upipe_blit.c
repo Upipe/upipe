@@ -32,6 +32,7 @@
 #include "upipe/uref.h"
 #include "upipe/ubuf.h"
 #include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic_flow_formats.h"
 #include "upipe/uref_pic.h"
 #include "upipe/ubuf_pic.h"
 #include "upipe/uref_flow.h"
@@ -471,13 +472,31 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             UBASE_ALLOC_RETURN(chroma);
         }
 
+        bool input_yuva = false;
+        if (alpha)
+            input_yuva = ubase_check(uref_pic_flow_check_yuva420p(uref)) ||
+                         ubase_check(uref_pic_flow_check_yuva422p(uref)) ||
+                         ubase_check(uref_pic_flow_check_yuva444p(uref));
+
         uref_pic_flow_clear_format(uref);
-        uref_pic_flow_copy_format(uref, upipe_blit->flow_def);
+        if (input_yuva &&
+            ubase_check(uref_pic_flow_check_nv12(upipe_blit->flow_def)))
+            uref_pic_flow_set_yuva420p(uref);
+        else if (input_yuva &&
+                 ubase_check(uref_pic_flow_check_nv16(upipe_blit->flow_def)))
+            uref_pic_flow_set_yuva422p(uref);
+        else if (input_yuva &&
+                 ubase_check(uref_pic_flow_check_nv24(upipe_blit->flow_def)))
+            uref_pic_flow_set_yuva444p(uref);
+        else if (alpha) {
+            /* If the alpha was found add the alpha back into the flow format. */
+            uref_pic_flow_copy_format(uref, upipe_blit->flow_def);
+            uref_pic_flow_add_plane(uref, 1, 1, macropixel_size, chroma);
+        } else
+            uref_pic_flow_copy_format(uref, upipe_blit->flow_def);
         uref_pic_flow_copy_full_range(uref, upipe_blit->flow_def);
 
-        /* If the alpha was found add the alpha back into the flow format. */
         if (alpha) {
-            uref_pic_flow_add_plane(uref, 1, 1, macropixel_size, chroma);
             free((void*)chroma);
         }
 
