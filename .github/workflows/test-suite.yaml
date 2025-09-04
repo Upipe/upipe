@@ -26,11 +26,11 @@ jobs:
             version: 14
             static: true
 
-          - name: ubuntu-amd64-clang-20
+          - name: ubuntu-amd64-clang-21
             os: ubuntu-24.04
             arch: amd64
             compiler: clang
-            version: 20
+            version: 21
 
           - name: ubuntu-armhf-gcc-14
             os: ubuntu-24.04
