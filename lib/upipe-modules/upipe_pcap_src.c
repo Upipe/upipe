@@ -117,16 +117,16 @@ UPIPE_HELPER_UPUMP(upipe_pcap_src, upump, upump_mgr)
 /* Skip straight to UDP data */
 static size_t upipe_pcap_skip(struct upipe *upipe, const uint8_t *buf, size_t len)
 {
-    if (len < ETHERNET_HEADER_LEN)
+    if (len < ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN)
         return 0;
 
-    if (ethernet_get_lentype(buf) != ETHERNET_TYPE_IP)
-        return 0;
+    const uint8_t *ip = ethernet_payload(buf);
 
-    const uint8_t *ip = &buf[ETHERNET_HEADER_LEN];
-    len -= ETHERNET_HEADER_LEN;
+    len -= ip - buf;
+
     if (len < IP_HEADER_MINSIZE)
         return 0;
+
     if (len < 4 * ip_get_ihl(ip))
         return 0;
 
@@ -137,9 +137,7 @@ static size_t upipe_pcap_skip(struct upipe *upipe, const uint8_t *buf, size_t le
     if (len < UDP_HEADER_SIZE)
         return 0;
 
-    len -= UDP_HEADER_SIZE;
-
-    return len;
+    return len - UDP_HEADER_SIZE;
 }
 
 static void upipe_pcap_src_worker(struct upump *upump)
