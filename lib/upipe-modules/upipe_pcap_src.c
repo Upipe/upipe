@@ -31,26 +31,26 @@
     - avoid memcpy? custom ubuf_mgr to delay pcap_close?
     - filtering? pcap_setfilter() or something else
     - set uref source ip?
-    - sleep to release packets in real time
  */
 
 #include <stdlib.h>
 
-#include <upipe/upipe.h>
-#include <upipe/upump.h>
-#include <upipe/uref_block.h>
-#include <upipe/uref_clock.h>
-#include <upipe/uclock.h>
-#include <upipe/uref_block_flow.h>
-#include <upipe/upipe_helper_upipe.h>
-#include <upipe/upipe_helper_urefcount.h>
-#include <upipe/upipe_helper_void.h>
-#include <upipe/upipe_helper_upump_mgr.h>
-#include <upipe/upipe_helper_upump.h>
-#include <upipe/upipe_helper_output.h>
-#include <upipe/upipe_helper_uref_mgr.h>
-#include <upipe/upipe_helper_ubuf_mgr.h>
-#include <upipe-modules/upipe_pcap_src.h>
+#include "upipe/upipe.h"
+#include "upipe/upump.h"
+#include "upipe/uref_block.h"
+#include "upipe/uref_clock.h"
+#include "upipe/uclock.h"
+#include "upipe/uref_block_flow.h"
+#include "upipe/upipe_helper_upipe.h"
+#include "upipe/upipe_helper_urefcount.h"
+#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_upump_mgr.h"
+#include "upipe/upipe_helper_upump.h"
+#include "upipe/upipe_helper_output.h"
+#include "upipe/upipe_helper_uref_mgr.h"
+#include "upipe/upipe_helper_ubuf_mgr.h"
+#include "upipe/upipe_helper_uclock.h"
+#include "upipe-modules/upipe_pcap_src.h"
 
 #include <pcap/pcap.h>
 
@@ -89,8 +89,15 @@ struct upipe_pcap_src {
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
+    /** uclock structure, if not NULL we are in live mode */
+    struct uclock *uclock;
+    /** uclock request */
+    struct urequest uclock_request;
+
     pcap_t *pcap;
     char errbuf[PCAP_ERRBUF_SIZE];
+    uint64_t cr_offset;
+    struct uref *uref;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -113,6 +120,9 @@ UPIPE_HELPER_UBUF_MGR(upipe_pcap_src, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_pcap_src_unregister_output_request)
 UPIPE_HELPER_UPUMP_MGR(upipe_pcap_src, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_pcap_src, upump, upump_mgr)
+UPIPE_HELPER_UCLOCK(upipe_pcap_src, uclock, uclock_request, upipe_pcap_src_check,
+                    upipe_pcap_src_register_output_request,
+                    upipe_pcap_src_unregister_output_request)
 
 /* Skip straight to UDP data */
 static size_t upipe_pcap_skip(struct upipe *upipe, const uint8_t *buf, size_t len)
@@ -120,7 +130,7 @@ static size_t upipe_pcap_skip(struct upipe *upipe, const uint8_t *buf, size_t le
     if (len < ETHERNET_HEADER_LEN + ETHERNET_VLAN_LEN)
         return 0;
 
-    const uint8_t *ip = ethernet_payload(buf);
+    const uint8_t *ip = ethernet_payload((uint8_t*)buf);
 
     len -= ip - buf;
 
@@ -146,6 +156,11 @@ static void upipe_pcap_src_worker(struct upump *upump)
     struct upipe_pcap_src *upipe_pcap_src = upipe_pcap_src_from_upipe(upipe);
 
     pcap_t *pcap = upipe_pcap_src->pcap;
+
+    if (upipe_pcap_src->uref) {
+        upipe_pcap_src_output(upipe, upipe_pcap_src->uref, &upipe_pcap_src->upump);
+        upipe_pcap_src->uref = NULL;
+    }
 
     struct pcap_pkthdr *hdr;
     const u_char *data;
@@ -201,8 +216,26 @@ static void upipe_pcap_src_worker(struct upump *upump)
 
     uref_block_unmap(uref, 0);
 
-    /* XXX: rebase to start from uclock_now ? */
     uint64_t ts = hdr->ts.tv_sec * UCLOCK_FREQ + hdr->ts.tv_usec * (UCLOCK_FREQ / 1000000);
+
+    if (upipe_pcap_src->uclock) {
+        uint64_t now = uclock_now(upipe_pcap_src->uclock);
+
+        if (upipe_pcap_src->cr_offset == 0)
+            upipe_pcap_src->cr_offset = now - ts;
+
+        ts += upipe_pcap_src->cr_offset;
+
+        uref_clock_set_cr_sys(uref, ts);
+        upipe_pcap_src->uref = uref;
+
+        uint64_t ticks = 0;
+        if (now < ts)
+            ticks = ts - now;
+
+        upipe_pcap_src_wait_upump(upipe, ticks, upipe_pcap_src_worker);
+        return;
+    }
 
     uref_clock_set_cr_sys(uref, ts);
 
@@ -260,6 +293,9 @@ static int _upipe_pcap_src_control(struct upipe *upipe, int command,
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             return upipe_pcap_src_attach_upump_mgr(upipe);
+        case UPIPE_ATTACH_UCLOCK:
+            upipe_pcap_src_require_uclock(upipe);
+            return UBASE_ERR_NONE;
         case UPIPE_REGISTER_REQUEST: {
             struct urequest *request = va_arg(args, struct urequest *);
             if (request->type == UREQUEST_FLOW_FORMAT ||
@@ -307,6 +343,8 @@ static void upipe_pcap_src_free(struct upipe *upipe)
 
     if (upipe_pcap_src->pcap)
         pcap_close(upipe_pcap_src->pcap);
+    if (upipe_pcap_src->uref)
+        uref_free(upipe_pcap_src->uref);
 
     upipe_pcap_src_clean_output(upipe);
     upipe_pcap_src_clean_urefcount(upipe);
@@ -314,6 +352,7 @@ static void upipe_pcap_src_free(struct upipe *upipe)
     upipe_pcap_src_clean_uref_mgr(upipe);
     upipe_pcap_src_clean_upump_mgr(upipe);
     upipe_pcap_src_clean_upump(upipe);
+    upipe_pcap_src_clean_uclock(upipe);
     upipe_pcap_src_free_void(upipe);
 }
 
@@ -329,6 +368,8 @@ static struct upipe *upipe_pcap_src_alloc(struct upipe_mgr *mgr,
 
     struct upipe_pcap_src *upipe_pcap_src = upipe_pcap_src_from_upipe(upipe);
     upipe_pcap_src->pcap = NULL;
+    upipe_pcap_src->uref = NULL;
+    upipe_pcap_src->cr_offset = 0;
 
     upipe_pcap_src_init_urefcount(upipe);
     upipe_pcap_src_init_ubuf_mgr(upipe);
@@ -336,6 +377,7 @@ static struct upipe *upipe_pcap_src_alloc(struct upipe_mgr *mgr,
     upipe_pcap_src_init_output(upipe);
     upipe_pcap_src_init_upump_mgr(upipe);
     upipe_pcap_src_init_upump(upipe);
+    upipe_pcap_src_init_uclock(upipe);
 
     upipe_throw_ready(upipe);
 
