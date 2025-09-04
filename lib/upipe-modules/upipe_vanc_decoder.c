@@ -59,6 +59,9 @@ struct upipe_vanc_decoder {
     struct urequest ubuf_mgr_request;
     /** ubuf flow format */
     struct uref *flow_format;
+
+    /* rfc8331 format */
+    bool rfc8331;
 };
 
 UPIPE_HELPER_UPIPE(upipe_vanc_decoder, upipe, UPIPE_VANC_DECODER_SIGNATURE);
@@ -145,13 +148,15 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
     ubits_init(&s, (uint8_t*)r, end, UBITS_READ);
 
     while (end >= 9) {
-        if (ubits_get(&s, 6))
+        if (!vancd->rfc8331 && ubits_get(&s, 6))
             goto ret;
 
         bool c_not_y = ubits_get(&s, 1);
 
         unsigned line = ubits_get(&s, 11);
         unsigned offset = ubits_get(&s, 12);
+        if (vancd->rfc8331) /* skip Stream_Num */
+            ubits_get(&s, 8);
         uint16_t did = ubits_get(&s, 10);
         uint16_t sdid = ubits_get(&s, 10);
         uint16_t dc = ubits_get(&s, 10);
@@ -241,7 +246,12 @@ ret:
 static int upipe_vanc_decoder_set_flow_def(struct upipe *upipe,
                                           struct uref *flow_def)
 {
-    UBASE_RETURN(uref_flow_match_def(flow_def, "block.vanc.pic."));
+
+    struct upipe_vanc_decoder *vancd = upipe_vanc_decoder_from_upipe(upipe);
+
+    vancd->rfc8331 = ubase_check(uref_flow_match_def(flow_def, "block.vanc.rfc8331.pic."));
+    if (!ubase_check(uref_flow_match_def(flow_def, "block.vanc.pic.")) && !vancd->rfc8331)
+        return UBASE_ERR_UNHANDLED;
 
     flow_def = uref_sibling_alloc(flow_def);
     if (unlikely(flow_def == NULL)) {
