@@ -203,14 +203,8 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
             data[S291_HEADER_SIZE+i] = ubits_get(&s, 10);
         }
 
-        while (s.available) {
-            if (!ubits_get(&s, 1)) {
-                upipe_dbg(upipe, "Invalid byte align, skipping");
-                uref_pic_plane_unmap(pic, "x10", 0, 0, -1, -1);
-                uref_free(pic);
-                continue;
-            }
-        }
+        if (s.available) /* stuffing */
+            ubits_get(&s, s.available);
 
         if (!s291_check_cs(data)) {
             upipe_dbg(upipe, "Invalid checksum, skipping");
