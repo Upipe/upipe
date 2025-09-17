@@ -48,9 +48,6 @@
 #include "upipe/upipe_helper_output.h"
 #include "upipe/upipe_helper_flow_def.h"
 #include "upipe/upipe_helper_flow_def_check.h"
-#include "upipe/upipe_helper_upump_mgr.h"
-#include "upipe/upipe_helper_upump.h"
-#include "upipe/upipe_helper_input.h"
 #include "upipe-av/upipe_avcodec_decode.h"
 #include "upipe-av/ubuf_av.h"
 #include "upipe-framers/uref_h26x.h"
@@ -122,25 +119,12 @@ struct upipe_avcdec {
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
 
-    /** upump mgr */
-    struct upump_mgr *upump_mgr;
     /** pixel format used for the ubuf manager */
     enum AVPixelFormat pix_fmt;
     /** sample format used for the ubuf manager */
     enum AVSampleFormat sample_fmt;
     /** number of channels used for the ubuf manager */
     unsigned int channels;
-
-    /** avcodec_open watcher */
-    struct upump *upump_av_deal;
-    /** temporary uref storage (used during udeal) */
-    struct uchain urefs;
-    /** nb urefs in storage */
-    unsigned int nb_urefs;
-    /** max urefs in storage */
-    unsigned int max_urefs;
-    /** list of blockers (used during udeal) */
-    struct uchain blockers;
 
     /** frame counter */
     uint64_t counter;
@@ -179,15 +163,13 @@ struct upipe_avcdec {
     AVFrame *frame;
     /** avcodec packet */
     AVPacket *avpkt;
-    /** true if the context will be closed */
-    bool close;
 
     /** public upipe structure */
     struct upipe upipe;
 };
 
 UPIPE_HELPER_UPIPE(upipe_avcdec, upipe, UPIPE_AVCDEC_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_avcdec, urefcount, upipe_avcdec_close)
+UPIPE_HELPER_UREFCOUNT(upipe_avcdec, urefcount, upipe_avcdec_free)
 UPIPE_HELPER_VOID(upipe_avcdec)
 UPIPE_HELPER_OUTPUT(upipe_avcdec, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_DEF(upipe_avcdec, flow_def_input, flow_def_attr)
@@ -197,12 +179,6 @@ UPIPE_HELPER_UBUF_MGR(upipe_avcdec, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_avcdec_check,
                       upipe_avcdec_register_output_request,
                       upipe_avcdec_unregister_output_request)
-UPIPE_HELPER_UPUMP_MGR(upipe_avcdec, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_avcdec, upump_av_deal, upump_mgr)
-UPIPE_HELPER_INPUT(upipe_avcdec, urefs, nb_urefs, max_urefs, blockers, upipe_avcdec_decode)
-
-/** @hidden */
-static void upipe_avcdec_free(struct upipe *upipe);
 
 /** @internal @This provides a ubuf_mgr request.
  *
@@ -719,21 +695,6 @@ static int upipe_avcdec_get_buffer_sound(struct AVCodecContext *context,
     return 0; /* success */
 }
 
-/** @This aborts and frees an existing upump watching for exclusive access to
- * avcodec_open().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdec_abort_av_deal(struct upipe *upipe)
-{
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    if (unlikely(upipe_avcdec->upump_av_deal != NULL)) {
-        upipe_av_deal_abort(upipe_avcdec->upump_av_deal);
-        upump_free(upipe_avcdec->upump_av_deal);
-        upipe_avcdec->upump_av_deal = NULL;
-    }
-}
-
 static enum AVPixelFormat upipe_avcodec_get_format(AVCodecContext *context,
                                                    const enum AVPixelFormat *pix_fmts)
 {
@@ -750,25 +711,21 @@ static enum AVPixelFormat upipe_avcodec_get_format(AVCodecContext *context,
     return AV_PIX_FMT_NONE;
 }
 
-/** @internal @This actually calls avcodec_open(). It may only be called by
- * one thread at a time.
+/** @internal @This calls avcodec_open().
  *
  * @param upipe description structure of the pipe
- * @return false if the buffers mustn't be dequeued
+ * @return an error code
  */
-static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
+static int upipe_avcdec_open(struct upipe *upipe)
 {
-    assert(upipe);
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     AVCodecContext *context = upipe_avcdec->context;
 
-    if (upipe_avcdec->close) {
-        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
-                        context->codec->long_name, context->codec->id);
+    if (!context)
+        return UBASE_ERR_INVALID;
 
-        avcodec_close(context);
-        return false;
-    }
+    if (avcodec_is_open(context))
+        return UBASE_ERR_NONE;
 
     switch (context->codec->type) {
         case AVMEDIA_TYPE_SUBTITLE:
@@ -790,7 +747,7 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
             /* This should not happen */
             upipe_err_va(upipe, "Unsupported media type (%d)",
                          context->codec->type);
-            return false;
+            return UBASE_ERR_UNHANDLED;
     }
 
     /* open hardware decoder */
@@ -802,8 +759,7 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
                                                    NULL, 0)) < 0)) {
             upipe_warn_va(upipe, "could not create hw device context (%s)",
                           av_err2str(err));
-            upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-            return false;
+            return UBASE_ERR_EXTERNAL;
         }
         upipe_notice_va(upipe, "created %s hw device context (%s)",
                         av_hwdevice_get_type_name(upipe_avcdec->hw_device_type),
@@ -817,121 +773,11 @@ static bool upipe_avcdec_do_av_deal(struct upipe *upipe)
     /* open new context */
     if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
         upipe_warn_va(upipe, "could not open codec (%s)", av_err2str(err));
-        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
     upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name,
                     context->codec->long_name, context->codec->id);
-
-    return true;
-}
-
-/** @internal @This is called to try an exclusive access on avcodec_open() or
- * avcodec_close().
- *
- * @param upump description structure of the pump
- */
-static void upipe_avcdec_cb_av_deal(struct upump *upump)
-{
-    assert(upump);
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-
-    /* check udeal */
-    if (unlikely(!upipe_av_deal_grab()))
-        return;
-
-    /* real open_codec function */
-    bool ret = upipe_avcdec_do_av_deal(upipe);
-
-    /* clean dealer */
-    upipe_av_deal_yield(upump);
-    upump_free(upipe_avcdec->upump_av_deal);
-    upipe_avcdec->upump_av_deal = NULL;
-
-    if (upipe_avcdec->close) {
-        upipe_avcdec_free(upipe);
-        return;
-    }
-
-    if (ret)
-        upipe_avcdec_output_input(upipe);
-    else
-        upipe_avcdec_flush_input(upipe);
-    upipe_avcdec_unblock_input(upipe);
-    /* All packets have been output, release again the pipe that has been
-     * used in @ref upipe_avcdec_start_av_deal. */
-    upipe_release(upipe);
-}
-
-/** @internal @This is called to trigger avcodec_open() or avcodec_close().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdec_start_av_deal(struct upipe *upipe)
-{
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    /* abort a pending open request */
-    upipe_avcdec_abort_av_deal(upipe);
-
-    /* use udeal/upump callback if available */
-    upipe_avcdec_check_upump_mgr(upipe);
-    if (upipe_avcdec->upump_mgr == NULL) {
-        upipe_dbg(upipe, "no upump_mgr present, direct call to avcodec_open");
-        upipe_avcdec_do_av_deal(upipe);
-        if (upipe_avcdec->close)
-            upipe_avcdec_free(upipe);
-        return;
-    }
-
-    upipe_dbg(upipe, "upump_mgr present, using udeal");
-    struct upump *upump_av_deal =
-        upipe_av_deal_upump_alloc(upipe_avcdec->upump_mgr,
-                upipe_avcdec_cb_av_deal, upipe, upipe->refcount);
-    if (unlikely(!upump_av_deal)) {
-        upipe_err(upipe, "can't create dealer");
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return;
-    }
-    upipe_avcdec->upump_av_deal = upump_av_deal;
-    /* Increment upipe refcount to avoid disappearing before all packets
-     * have been sent. */
-    upipe_use(upipe);
-    upipe_av_deal_start(upump_av_deal);
-}
-
-/** @internal @This is called to trigger avcodec_open().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdec_open(struct upipe *upipe)
-{
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    upipe_avcdec->close = false;
-    upipe_avcdec_start_av_deal(upipe);
-}
-
-/** @internal @This is called to trigger avcodec_close().
- *
- * We close the context even if it was not opened because it supposedly
- * "frees allocated structures".
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcdec_close(struct upipe *upipe)
-{
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-    if (upipe_avcdec->context == NULL) {
-        upipe_avcdec_free(upipe);
-        return;
-    }
-
-    if (upipe_avcdec->context->codec->capabilities & AV_CODEC_CAP_DELAY) {
-        /* Feed avcodec with NULL packet to output the remaining frames */
-        upipe_avcdec_decode_avpkt(upipe, NULL, NULL);
-    }
-    upipe_avcdec->close = true;
-    upipe_avcdec_start_av_deal(upipe);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This sets the various time attributes.
@@ -1655,19 +1501,10 @@ static bool upipe_avcdec_decode(struct upipe *upipe, struct uref *uref,
 static void upipe_avcdec_input(struct upipe *upipe, struct uref *uref,
                                struct upump **upump_p)
 {
-    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
-
-    while (unlikely(!avcodec_is_open(upipe_avcdec->context))) {
-        if (upipe_avcdec->upump_av_deal != NULL) {
-            upipe_avcdec_hold_input(upipe, uref);
-            upipe_avcdec_block_input(upipe, upump_p);
-            return;
-        }
-
-        upipe_avcdec_open(upipe);
-    }
-
-    upipe_avcdec_decode(upipe, uref, upump_p);
+    if (unlikely(!ubase_check(upipe_avcdec_open(upipe))))
+        uref_free(uref);
+    else
+        upipe_avcdec_decode(upipe, uref, upump_p);
 }
 
 /** @internal @This looks for a decoder with suitable hw support.
@@ -1912,10 +1749,6 @@ static int upipe_avcdec_control(struct upipe *upipe, int command, va_list args)
                 return UBASE_ERR_NONE;
             return upipe_avcdec_free_output_proxy(upipe, request);
         }
-        case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_avcdec_set_upump_av_deal(upipe, NULL);
-            upipe_avcdec_abort_av_deal(upipe);
-            return upipe_avcdec_attach_upump_mgr(upipe);
 
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -1953,6 +1786,30 @@ static int upipe_avcdec_control(struct upipe *upipe, int command, va_list args)
     }
 }
 
+/** @internal @This calls avcodec_close().
+ *
+ * We close the context even if it was not opened because it supposedly
+ * "frees allocated structures".
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avcdec_close(struct upipe *upipe)
+{
+    struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcdec->context;
+
+    if (context) {
+        if (upipe_avcdec->context->codec->capabilities & AV_CODEC_CAP_DELAY) {
+            /* Feed avcodec with NULL packet to output the remaining frames */
+            upipe_avcdec_decode_avpkt(upipe, NULL, NULL);
+        }
+        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
+                        context->codec->long_name, context->codec->id);
+
+        avcodec_close(context);
+    }
+}
+
 /** @This frees a upipe.
  *
  * @param upipe description structure of the pipe
@@ -1961,9 +1818,11 @@ static void upipe_avcdec_free(struct upipe *upipe)
 {
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
 
+    upipe_avcdec_close(upipe);
+
     if (upipe_avcdec->context != NULL) {
         free(upipe_avcdec->context->extradata);
-        av_free(upipe_avcdec->context);
+        avcodec_free_context(&upipe_avcdec->context);
     }
     av_frame_free(&upipe_avcdec->frame);
     av_packet_free(&upipe_avcdec->avpkt);
@@ -1973,14 +1832,10 @@ static void upipe_avcdec_free(struct upipe *upipe)
     uref_free(upipe_avcdec->uref);
     uref_free(upipe_avcdec->flow_def_format);
     uref_free(upipe_avcdec->flow_def_provided);
-    upipe_avcdec_abort_av_deal(upipe);
-    upipe_avcdec_clean_input(upipe);
     upipe_avcdec_clean_output(upipe);
     upipe_avcdec_clean_flow_def(upipe);
     upipe_avcdec_clean_flow_def_check(upipe);
     upipe_avcdec_clean_ubuf_mgr(upipe);
-    upipe_avcdec_clean_upump_av_deal(upipe);
-    upipe_avcdec_clean_upump_mgr(upipe);
     upipe_avcdec_clean_urefcount(upipe);
     upipe_avcdec_free_void(upipe);
 }
@@ -2015,12 +1870,9 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     }
     upipe_avcdec_init_urefcount(upipe);
     upipe_avcdec_init_ubuf_mgr(upipe);
-    upipe_avcdec_init_upump_mgr(upipe);
-    upipe_avcdec_init_upump_av_deal(upipe);
     upipe_avcdec_init_output(upipe);
     upipe_avcdec_init_flow_def(upipe);
     upipe_avcdec_init_flow_def_check(upipe);
-    upipe_avcdec_init_input(upipe);
 
     struct upipe_avcdec *upipe_avcdec = upipe_avcdec_from_upipe(upipe);
     upipe_avcdec->hw_device_type = AV_HWDEVICE_TYPE_NONE;
@@ -2030,7 +1882,6 @@ static struct upipe *upipe_avcdec_alloc(struct upipe_mgr *mgr,
     upipe_avcdec->frame = frame;
     upipe_avcdec->avpkt = avpkt;
     upipe_avcdec->counter = 0;
-    upipe_avcdec->close = false;
     upipe_avcdec->pix_fmt = AV_PIX_FMT_NONE;
     upipe_avcdec->sample_fmt = AV_SAMPLE_FMT_NONE;
     upipe_avcdec->channels = 0;
