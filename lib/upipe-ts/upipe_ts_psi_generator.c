@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013-2019 OpenHeadend S.A.R.L.
- * Copyright (C) 2021 EasyTools S.A.S.
+ * Copyright (C) 2021-2025 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -1798,7 +1798,8 @@ static void upipe_ts_psig_build(struct upipe *upipe)
             patn_set_pid(program, pmt_pid);
         }
 
-        pat_set_length(buffer, program - buffer - PAT_HEADER_SIZE);
+        if (program != NULL)
+            pat_set_length(buffer, program - buffer - PAT_HEADER_SIZE);
         uint16_t pat_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
         ubuf_block_unmap(ubuf, 0);
 

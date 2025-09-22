@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
- * Copyright (C) 2023 EasyTools S.A.S.
+ * Copyright (C) 2023-2025 EasyTools S.A.S.
  *
  * Authors: Christophe Massiot
  *
@@ -532,7 +532,8 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
             j++;
         }
 
-        eit_set_length(buffer, event - buffer - EIT_HEADER_SIZE);
+        if (event != NULL)
+            eit_set_length(buffer, event - buffer - EIT_HEADER_SIZE);
         uint16_t eit_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
         ubuf_block_unmap(ubuf, 0);
 
@@ -640,7 +641,8 @@ static void upipe_ts_sig_service_build_eit(struct upipe *upipe)
                 j++;
             }
 
-            eit_set_length(buffer, event - buffer - EIT_HEADER_SIZE);
+            if (event != NULL)
+                eit_set_length(buffer, event - buffer - EIT_HEADER_SIZE);
             uint16_t eit_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
             ubuf_block_unmap(ubuf, 0);
 
@@ -1280,8 +1282,10 @@ static void upipe_ts_sig_build_nit(struct upipe *upipe)
             i++;
         }
 
-        nith_set_tslength(nith, ts - nith - NIT_HEADER2_SIZE);
-        nit_set_length(buffer, ts - buffer - NIT_HEADER_SIZE);
+        if (ts != NULL) {
+            nith_set_tslength(nith, ts - nith - NIT_HEADER2_SIZE);
+            nit_set_length(buffer, ts - buffer - NIT_HEADER_SIZE);
+        }
         uint16_t nit_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
         ubuf_block_unmap(ubuf, 0);
 
@@ -1541,7 +1545,8 @@ static void upipe_ts_sig_build_sdt(struct upipe *upipe)
                         descs_get_desc(sdtn_get_descs(service), 1));
         }
 
-        sdt_set_length(buffer, service - buffer - SDT_HEADER_SIZE);
+        if (service != NULL)
+            sdt_set_length(buffer, service - buffer - SDT_HEADER_SIZE);
         uint16_t sdt_size = psi_get_length(buffer) + PSI_HEADER_SIZE;
         ubuf_block_unmap(ubuf, 0);
 
