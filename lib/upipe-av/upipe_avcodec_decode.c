@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -470,9 +471,11 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
         !(context->codec->capabilities & AV_CODEC_CAP_DR1);
 
     if (unlikely(upipe_avcdec->ubuf_mgr == NULL)) {
+        uref_free(upipe_avcdec->flow_def_format);
         upipe_avcdec->flow_def_format = uref_dup(flow_def_attr);
         if (use_ubuf_av) {
             upipe_avcdec->ubuf_mgr = ubuf_av_mgr_alloc();
+            uref_free(upipe_avcdec->flow_def_provided);
             upipe_avcdec->flow_def_provided = flow_def_attr;
             if (upipe_avcdec->ubuf_mgr == NULL) {
                 uref_free(uref);
