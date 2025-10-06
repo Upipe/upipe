@@ -46,8 +46,8 @@ jobs:
             compiler: gcc
             version: 14
 
-          - name: macos-13-amd64-xcode
-            os: macos-13
+          - name: macos-15-amd64-xcode
+            os: macos-15-intel
             compiler: xcode
 
           - name: macos-15-arm64-xcode
