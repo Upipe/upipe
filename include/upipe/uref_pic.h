@@ -58,6 +58,7 @@ UREF_ATTR_VOID_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
 UREF_ATTR_SMALL_UNSIGNED_SH(pic, afd, UDICT_TYPE_PIC_AFD, active format description)
 UREF_ATTR_OPAQUE_SH(pic, cea_708, UDICT_TYPE_PIC_CEA_708, cea-708 captions)
 UREF_ATTR_OPAQUE_SH(pic, bar_data, UDICT_TYPE_PIC_BAR_DATA, afd bar data)
+UREF_ATTR_OPAQUE_SH(pic, s12m, UDICT_TYPE_PIC_S12M, SMPTE 12M timecode compatible with ffmpeg AV_FRAME_DATA_S12M_TIMECODE)
 UREF_ATTR_UNSIGNED(pic, original_height, "p.original_height", original picture height before chunking)
 UREF_ATTR_VOID(pic, c_not_y, "p.c_not_y", whether ancillary data is found in chroma space)
 
