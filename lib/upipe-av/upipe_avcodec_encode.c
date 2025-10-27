@@ -51,8 +51,6 @@
 #include "upipe/upipe_helper_flow_format.h"
 #include "upipe/upipe_helper_flow_def.h"
 #include "upipe/upipe_helper_flow_def_check.h"
-#include "upipe/upipe_helper_upump_mgr.h"
-#include "upipe/upipe_helper_upump.h"
 #include "upipe/upipe_helper_input.h"
 #include "upipe-av/upipe_avcodec_encode.h"
 #include "upipe-av/ubuf_av.h"
@@ -147,11 +145,6 @@ struct upipe_avcenc {
     /** flow format request */
     struct urequest flow_format_request;
 
-    /** upump mgr */
-    struct upump_mgr *upump_mgr;
-
-    /** avcodec_open watcher */
-    struct upump *upump_av_deal;
     /** temporary uref storage (used during udeal) */
     struct uchain urefs;
     /** nb urefs in storage */
@@ -201,10 +194,6 @@ struct upipe_avcenc {
     AVFrame *frame;
     /** avcodec packet */
     AVPacket *avpkt;
-    /** true if the context will be closed */
-    bool close;
-    /** true if the context will be reinitialized */
-    bool reinit;
     /** true if the pipe need to be released after output_input */
     bool release_needed;
 
@@ -213,7 +202,7 @@ struct upipe_avcenc {
 };
 
 UPIPE_HELPER_UPIPE(upipe_avcenc, upipe, UPIPE_AVCENC_SIGNATURE);
-UPIPE_HELPER_UREFCOUNT(upipe_avcenc, urefcount, upipe_avcenc_close)
+UPIPE_HELPER_UREFCOUNT(upipe_avcenc, urefcount, upipe_avcenc_free)
 UPIPE_HELPER_FLOW(upipe_avcenc, "block.")
 UPIPE_HELPER_OUTPUT(upipe_avcenc, output, flow_def, output_state, request_list)
 UPIPE_HELPER_INPUT(upipe_avcenc, urefs, nb_urefs, max_urefs, blockers, upipe_avcenc_handle)
@@ -227,33 +216,13 @@ UPIPE_HELPER_UBUF_MGR(upipe_avcenc, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_avcenc_check_ubuf_mgr,
                       upipe_avcenc_register_output_request,
                       upipe_avcenc_unregister_output_request)
-UPIPE_HELPER_UPUMP_MGR(upipe_avcenc, upump_mgr)
-UPIPE_HELPER_UPUMP(upipe_avcenc, upump_av_deal, upump_mgr)
-
-/** @hidden */
-static void upipe_avcenc_free(struct upipe *upipe);
-
-/** @This aborts and frees an existing upump watching for exclusive access to
- * avcodec_open().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcenc_abort_av_deal(struct upipe *upipe)
-{
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    if (unlikely(upipe_avcenc->upump_av_deal != NULL)) {
-        upipe_av_deal_abort(upipe_avcenc->upump_av_deal);
-        upump_free(upipe_avcenc->upump_av_deal);
-        upipe_avcenc->upump_av_deal = NULL;
-    }
-}
 
 /** @internal @This closes and reinitializes the avcodec context.
  *
  * @param upipe description structure of the pipe
  * @return an error code
  */
-static int upipe_avcenc_do_reinit(struct upipe *upipe)
+static int upipe_avcenc_reinit(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
@@ -316,141 +285,31 @@ static int upipe_avcenc_do_reinit(struct upipe *upipe)
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This actually calls avcodec_open(). It may only be called by
- * one thread at a time.
+/** @internal @This is called to trigger avcodec_open().
  *
  * @param upipe description structure of the pipe
- * @return false if the buffers mustn't be dequeued
+ * @return an error code
  */
-static bool upipe_avcenc_do_av_deal(struct upipe *upipe)
+static int upipe_avcenc_open(struct upipe *upipe)
 {
-    assert(upipe);
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
 
-    if (upipe_avcenc->close) {
-        upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
-                        context->codec->long_name, context->codec->id);
-        avcodec_close(context);
-        return false;
-    }
+    if (!context)
+        return UBASE_ERR_INVALID;
 
-    /* reinit context */
-    if (upipe_avcenc->reinit)
-        return ubase_check(upipe_avcenc_do_reinit(upipe));
+    if (avcodec_is_open(context))
+        return UBASE_ERR_NONE;
 
     /* open new context */
     int err;
     if (unlikely((err = avcodec_open2(context, context->codec, NULL)) < 0)) {
         upipe_warn_va(upipe, "could not open codec (%s)", av_err2str(err));
-        upipe_throw_fatal(upipe, UBASE_ERR_EXTERNAL);
-        return false;
+        return UBASE_ERR_EXTERNAL;
     }
     upipe_notice_va(upipe, "codec %s (%s) %d opened", context->codec->name,
                     context->codec->long_name, context->codec->id);
-
-    return true;
-}
-
-/** @internal @This is called to try an exclusive access on avcodec_open() or
- * avcodec_close().
- *
- * @param upump description structure of the pump
- */
-static void upipe_avcenc_cb_av_deal(struct upump *upump)
-{
-    assert(upump);
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-
-    /* check udeal */
-    if (unlikely(!upipe_av_deal_grab()))
-        return;
-
-    /* real open_codec function */
-    bool ret = upipe_avcenc_do_av_deal(upipe);
-
-    /* clean dealer */
-    upipe_av_deal_yield(upump);
-    upump_free(upipe_avcenc->upump_av_deal);
-    upipe_avcenc->upump_av_deal = NULL;
-
-    if (upipe_avcenc->close) {
-        upipe_avcenc_free(upipe);
-        return;
-    }
-
-    bool was_buffered = !upipe_avcenc_check_input(upipe);
-    if (ret)
-        upipe_avcenc_output_input(upipe);
-    else
-        upipe_avcenc_flush_input(upipe);
-    upipe_avcenc_unblock_input(upipe);
-    if (was_buffered && upipe_avcenc_check_input(upipe)) {
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_avcenc_input. */
-        if (upipe_avcenc->release_needed) {
-            upipe_release(upipe);
-            upipe_avcenc->release_needed = false;
-        }
-    }
-}
-
-/** @internal @This is called to trigger avcodec_open() or avcodec_close().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcenc_start_av_deal(struct upipe *upipe)
-{
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    /* abort a pending open request */
-    upipe_avcenc_abort_av_deal(upipe);
-
-    /* use udeal/upump callback if available */
-    upipe_avcenc_check_upump_mgr(upipe);
-    if (upipe_avcenc->upump_mgr == NULL) {
-        upipe_dbg(upipe, "no upump_mgr present, direct call to avcodec_open");
-        upipe_avcenc_do_av_deal(upipe);
-        if (upipe_avcenc->close)
-            upipe_avcenc_free(upipe);
-        return;
-    }
-
-    upipe_dbg(upipe, "upump_mgr present, using udeal");
-    struct upump *upump_av_deal =
-        upipe_av_deal_upump_alloc(upipe_avcenc->upump_mgr,
-                upipe_avcenc_cb_av_deal, upipe, upipe->refcount);
-    if (unlikely(!upump_av_deal)) {
-        upipe_err(upipe, "can't create dealer");
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return;
-    }
-    upipe_avcenc->upump_av_deal = upump_av_deal;
-    upipe_av_deal_start(upump_av_deal);
-}
-
-/** @internal @This is called to trigger avcodec_open().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcenc_open(struct upipe *upipe)
-{
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    upipe_avcenc->close = false;
-    upipe_avcenc->reinit = false;
-    upipe_avcenc_start_av_deal(upipe);
-}
-
-/** @internal @This is called to trigger context reinitialization.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avcenc_reinit(struct upipe *upipe)
-{
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
-    upipe_avcenc->close = false;
-    upipe_avcenc->reinit = true;
-    upipe_avcenc_start_av_deal(upipe);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This is called to trigger avcodec_close().
@@ -464,10 +323,8 @@ static void upipe_avcenc_close(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
     AVCodecContext *context = upipe_avcenc->context;
-    if ((context == NULL) || !avcodec_is_open(context)) {
-        upipe_avcenc_free(upipe);
+    if ((context == NULL) || !avcodec_is_open(context))
         return;
-    }
 
     if (avcodec_is_open(context)) {
         if (!ulist_empty(&upipe_avcenc->sound_urefs))
@@ -479,8 +336,10 @@ static void upipe_avcenc_close(struct upipe *upipe)
             upipe_avcenc_encode_frame(upipe, NULL, NULL);
         }
     }
-    upipe_avcenc->close = true;
-    upipe_avcenc_start_av_deal(upipe);
+
+    upipe_notice_va(upipe, "codec %s (%s) %d closed", context->codec->name,
+                    context->codec->long_name, context->codec->id);
+    avcodec_close(context);
 }
 
 /** @internal @This builds the flow definition packet.
@@ -1162,11 +1021,9 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
         av_frame_free(&frame);
     }
 
-    while (unlikely(!avcodec_is_open(upipe_avcenc->context))) {
-        if (upipe_avcenc->upump_av_deal != NULL)
-            return false;
-
-        upipe_avcenc_open(upipe);
+    if (unlikely(!ubase_check(upipe_avcenc_open(upipe)))) {
+        uref_free(uref);
+        return true;
     }
 
     uref_clock_get_rate(uref, &upipe_avcenc->drift_rate);
@@ -1959,10 +1816,6 @@ static int upipe_avcenc_control(struct upipe *upipe,
                 return UBASE_ERR_NONE;
             return upipe_avcenc_free_output_proxy(upipe, request);
         }
-        case UPIPE_ATTACH_UPUMP_MGR:
-            upipe_avcenc_set_upump_av_deal(upipe, NULL);
-            upipe_avcenc_abort_av_deal(upipe);
-            return upipe_avcenc_attach_upump_mgr(upipe);
 
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
@@ -1997,6 +1850,7 @@ static void upipe_avcenc_free(struct upipe *upipe)
 {
     struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
 
+    upipe_avcenc_close(upipe);
     if (upipe_avcenc->context != NULL)
         avcodec_free_context(&upipe_avcenc->context);
     av_frame_free(&upipe_avcenc->frame);
@@ -2015,11 +1869,8 @@ static void upipe_avcenc_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     uref_free(upipe_avcenc->flow_def_requested);
     uref_free(upipe_avcenc->options);
-    upipe_avcenc_abort_av_deal(upipe);
     upipe_avcenc_clean_input(upipe);
     upipe_avcenc_clean_ubuf_mgr(upipe);
-    upipe_avcenc_clean_upump_av_deal(upipe);
-    upipe_avcenc_clean_upump_mgr(upipe);
     upipe_avcenc_clean_output(upipe);
     upipe_avcenc_clean_flow_format(upipe);
     upipe_avcenc_clean_flow_def(upipe);
@@ -2097,8 +1948,6 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
 
     upipe_avcenc_init_urefcount(upipe);
     upipe_avcenc_init_ubuf_mgr(upipe);
-    upipe_avcenc_init_upump_mgr(upipe);
-    upipe_avcenc_init_upump_av_deal(upipe);
     upipe_avcenc_init_output(upipe);
     upipe_avcenc_init_input(upipe);
     upipe_avcenc_init_flow_format(upipe);
