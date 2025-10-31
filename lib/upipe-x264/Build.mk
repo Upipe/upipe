@@ -7,10 +7,12 @@ libupipe_x264-libs = libupipe libupipe_framers x264 bitstream
 
 configs += x264-obe
 x264-obe-functions = x264_speedcontrol_sync
+x264-obe-includes = stdint.h x264.h
 x264-obe-libs = x264
 
 configs += x264-mpeg2
 x264-mpeg2-functions = x264_param_default_mpeg2
+x264-mpeg2-includes = stdint.h x264.h
 x264-mpeg2-libs = x264
 
 libupipe_x264-cppflags = \
