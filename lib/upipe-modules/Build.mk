@@ -50,7 +50,6 @@ libupipe_modules-includes = \
     upipe_rate_limit.h \
     upipe_row_join.h \
     upipe_row_split.h \
-    upipe_rtp_anc_unpack.h \
     upipe_rtp_h264.h \
     upipe_rtp_mpeg4.h \
     upipe_rtp_pcm_pack.h \
@@ -138,7 +137,6 @@ libupipe_modules-src = \
     upipe_rate_limit.c \
     upipe_row_join.c \
     upipe_row_split.c \
-    upipe_rtp_anc_unpack.c \
     upipe_rtp_h264.c \
     upipe_rtp_mpeg4.c \
     upipe_rtp_pcm_pack.c \
@@ -167,19 +165,20 @@ libupipe_modules-src = \
     uprobe_blit_prepare.c \
     uprobe_http_redirect.c
 
-have_upipe_fsink        = $(have_writev)
-have_upipe_udpsink      = $(have_writev)
-have_upipe_id3v2        = $(have_bitstream)
-have_upipe_id3v2_encaps = $(have_bitstream)
-have_upipe_id3v2_decaps = $(have_bitstream)
-have_upipe_rtcp         = $(have_bitstream)
-have_upipe_rtpd         = $(have_bitstream)
-have_upipe_rtp_demux    = $(have_bitstream)
-have_upipe_rtp_prepend  = $(have_bitstream)
-have_upipe_rtpr         = $(have_bitstream)
-have_upipe_rtpsrc       = $(have_bitstream)
-have_upipe_s337_encaps  = $(have_bitstream)
-have_upipe_vancd        = $(have_bitstream)
+have_upipe_fsink          = $(have_writev)
+have_upipe_udpsink        = $(have_writev)
+have_upipe_id3v2          = $(have_bitstream)
+have_upipe_id3v2_encaps   = $(have_bitstream)
+have_upipe_id3v2_decaps   = $(have_bitstream)
+have_upipe_rtcp           = $(have_bitstream)
+have_upipe_rtpd           = $(have_bitstream)
+have_upipe_rtp_anc_unpack = $(have_bitstream)
+have_upipe_rtp_demux      = $(have_bitstream)
+have_upipe_rtp_prepend    = $(have_bitstream)
+have_upipe_rtpr           = $(have_bitstream)
+have_upipe_rtpsrc         = $(have_bitstream)
+have_upipe_s337_encaps    = $(have_bitstream)
+have_upipe_vancd          = $(have_bitstream)
 
 libupipe_modules-includes += \
     $(if $(have_upipe_fsink),upipe_file_sink.h) \
@@ -187,6 +186,7 @@ libupipe_modules-includes += \
     $(if $(have_upipe_id3v2_encaps),upipe_id3v2_encaps.h) \
     $(if $(have_upipe_id3v2_decaps),upipe_id3v2_decaps.h) \
     $(if $(have_upipe_rtcp),upipe_rtcp.h) \
+    $(if $(have_upipe_rtp_anc_unpack),upipe_rtp_anc_unpack.h) \
     $(if $(have_upipe_rtp_demux),upipe_rtp_demux.h) \
     $(if $(have_upipe_rtpd),upipe_rtp_decaps.h) \
     $(if $(have_upipe_rtp_prepend),upipe_rtp_prepend.h) \
@@ -202,6 +202,7 @@ libupipe_modules-src += \
     $(if $(have_upipe_id3v2_encaps),upipe_id3v2_encaps.c) \
     $(if $(have_upipe_id3v2_decaps),upipe_id3v2_decaps.c) \
     $(if $(have_upipe_rtcp),upipe_rtcp.c) \
+    $(if $(have_upipe_rtp_anc_unpack),upipe_rtp_anc_unpack.c) \
     $(if $(have_upipe_rtp_demux),upipe_rtp_demux.c) \
     $(if $(have_upipe_rtpd),upipe_rtp_decaps.c) \
     $(if $(have_upipe_rtp_prepend),upipe_rtp_prepend.c) \
