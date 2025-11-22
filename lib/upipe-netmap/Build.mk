@@ -1,5 +1,5 @@
 configs += netmap
-netmap-includes = net/netmap.h
+netmap-includes = net/if.h stdint.h sys/time.h net/netmap.h
 
 lib-targets = libupipe_netmap
 
