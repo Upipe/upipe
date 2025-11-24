@@ -29,6 +29,7 @@
  * @short Upipe avcodec decode module
  */
 
+#include "upipe/ubase.h"
 #include "upipe/uclock.h"
 #include "upipe/ubuf.h"
 #include "upipe/uref.h"
@@ -1120,7 +1121,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         }
 
         if (unlikely(
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
                 !ubase_check(uref_pic_flow_set_argb(flow_def_attr)) ||
 #else
                 !ubase_check(uref_pic_flow_set_bgra(flow_def_attr)) ||

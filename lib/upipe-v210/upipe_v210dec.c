@@ -26,7 +26,7 @@
  * @short Upipe v210dec module
  */
 
-#include "upipe/config.h"
+#include "config.h"
 #include "upipe/ubase.h"
 #include "upipe/uref.h"
 #include "upipe/ubuf.h"
@@ -168,7 +168,7 @@ static void v210dec_setup_asm(struct upipe *upipe, bool assembly)
     if (!assembly)
         return;
 
-#ifdef UPIPE_HAVE_X86ASM
+#ifdef HAVE_X86ASM
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         v210dec->v210_to_planar_8  = upipe_v210_to_planar_8_ssse3;

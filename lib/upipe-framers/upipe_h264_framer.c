@@ -23,6 +23,7 @@
  * @short Upipe module building frames from chunks of an ISO 14496-10 stream
  */
 
+#include "upipe/ubase.h"
 #include "upipe/uref.h"
 #include "upipe/uref_flow.h"
 #include "upipe/uref_block.h"
@@ -622,7 +623,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
                     chroma_idc != H264SPS_CHROMA_444 ? 8 : 12);
     }
 
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
 # define ENDIANNESS "b"
 #else
 # define ENDIANNESS "l"

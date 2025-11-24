@@ -15,7 +15,7 @@ checkasm-src += \
     $(if $(have_x86asm),checkasm_x86.asm timer_x86.h)
 
 checkasm-nasmflags = $(if $(have_pic),-DPIC)
-checkasm-cppflags = -I$(top_srcdir) -I$(top_builddir)
+checkasm-cppflags = -I$(top_srcdir)
 checkasm-libs = libavutil
 
 $(builddir)/checkasm: \

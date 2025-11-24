@@ -22,6 +22,7 @@
  * @short Upipe module building frames from chunks of an ITU-T H.265 stream
  */
 
+#include "upipe/ubase.h"
 #include "upipe/uref.h"
 #include "upipe/uref_flow.h"
 #include "upipe/uref_block.h"
@@ -923,7 +924,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         return false;
     }
 
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
 # define ENDIANNESS "b"
 #else
 # define ENDIANNESS "l"

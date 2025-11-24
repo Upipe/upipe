@@ -14,7 +14,3 @@ configs += x264-mpeg2
 x264-mpeg2-functions = x264_param_default_mpeg2
 x264-mpeg2-includes = stdint.h x264.h
 x264-mpeg2-libs = x264
-
-libupipe_x264-cppflags = \
-    $(if $(have_x264-obe),-DHAVE_X264_OBE) \
-    $(if $(have_x264-mpeg2),-DHAVE_X264_MPEG2)

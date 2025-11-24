@@ -39,13 +39,13 @@ void checkasm_check_sdi_input(void)
     struct {
         void (*uyvy)(const uint8_t *src, uint16_t *dst, uintptr_t pixels);
     } s = {
-#ifdef HAVE_BITSTREAM_COMMON_H
+#ifdef HAVE_BITSTREAM
         .uyvy = upipe_sdi_to_uyvy_c,
 #endif
     };
 
 #ifdef HAVE_X86ASM
-#ifdef HAVE_BITSTREAM_COMMON_H
+#ifdef HAVE_BITSTREAM
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_SSSE3) {

@@ -65,7 +65,7 @@ typedef void * _Atomic uatomic_ptr_t;
 #define uatomic_fetch_add atomic_fetch_add
 #define uatomic_fetch_sub atomic_fetch_sub
 
-#elif defined(UPIPE_HAVE_ATOMIC_OPS)
+#elif defined(UPIPE_HAVE_ATOMIC)
 
 /*
  * Preferred method: gcc atomic operations
@@ -161,7 +161,7 @@ static inline uint32_t uatomic_fetch_sub(uatomic_uint32_t *obj,
 }
 
 
-#elif defined(UPIPE_HAVE_SEMAPHORE_H) /* mkdoc:skip */
+#elif defined(UPIPE_HAVE_SEMAPHORE) /* mkdoc:skip */
 
 /*
  * On POSIX platforms use semaphores (slower)

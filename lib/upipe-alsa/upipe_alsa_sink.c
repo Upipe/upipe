@@ -162,7 +162,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "s16be."))
         format = SND_PCM_FORMAT_S16_BE;
     else if (!ubase_ncmp(def, "s16."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_S16_BE;
 #else
         format = SND_PCM_FORMAT_S16_LE;
@@ -172,7 +172,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "u16be."))
         format = SND_PCM_FORMAT_U16_BE;
     else if (!ubase_ncmp(def, "u16."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_U16_BE;
 #else
         format = SND_PCM_FORMAT_U16_LE;
@@ -190,7 +190,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "s32be."))
         format = SND_PCM_FORMAT_S32_BE;
     else if (!ubase_ncmp(def, "s32."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_S32_BE;
 #else
         format = SND_PCM_FORMAT_S32_LE;
@@ -200,7 +200,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "u32be."))
         format = SND_PCM_FORMAT_U32_BE;
     else if (!ubase_ncmp(def, "u32."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_U32_BE;
 #else
         format = SND_PCM_FORMAT_U32_LE;
@@ -210,7 +210,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "s24be."))
         format = SND_PCM_FORMAT_S24_BE;
     else if (!ubase_ncmp(def, "s24."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_S24_BE;
 #else
         format = SND_PCM_FORMAT_S24_LE;
@@ -220,7 +220,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "u24be."))
         format = SND_PCM_FORMAT_U24_BE;
     else if (!ubase_ncmp(def, "u24."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_U24_BE;
 #else
         format = SND_PCM_FORMAT_U24_LE;
@@ -230,7 +230,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "f32be."))
         format = SND_PCM_FORMAT_FLOAT_BE;
     else if (!ubase_ncmp(def, "f32."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_FLOAT_BE;
 #else
         format = SND_PCM_FORMAT_FLOAT_LE;
@@ -240,7 +240,7 @@ static snd_pcm_format_t upipe_alsink_format_from_flow_def(struct uref *flow_def)
     else if (!ubase_ncmp(def, "f64be."))
         format = SND_PCM_FORMAT_FLOAT64_BE;
     else if (!ubase_ncmp(def, "f64."))
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         format = SND_PCM_FORMAT_FLOAT64_BE;
 #else
         format = SND_PCM_FORMAT_FLOAT64_LE;

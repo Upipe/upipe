@@ -27,7 +27,7 @@
 #define __STDC_FORMAT_MACROS   1
 #define __STDC_CONSTANT_MACROS 1
 
-#include "upipe/config.h"
+#include "config.h"
 #include "upipe/uatomic.h"
 #include "upipe/ulist.h"
 #include "upipe/uqueue.h"
@@ -55,7 +55,7 @@
 #include <arpa/inet.h>
 #include <assert.h>
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
 #include <libzvbi.h>
 #endif
 
@@ -278,7 +278,7 @@ struct upipe_bmd_sink {
     /** OP47 teletext buffer. 5, packets per field */
     uint8_t op47_ttx_buf[DVBVBI_LENGTH * OP47_PACKETS_PER_FIELD * 2];
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
     /** vbi **/
     vbi_sampling_par sp;
 #endif
@@ -477,7 +477,7 @@ public:
     uint64_t pts;
 };
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
 /* VBI Teletext */
 static void upipe_bmd_sink_extract_ttx(IDeckLinkVideoFrameAncillary *ancillary,
         const uint8_t *pic_data, size_t pic_data_size, int w, int sd,
@@ -859,7 +859,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
     int w = upipe_bmd_sink->displayMode->GetWidth();
     int h = upipe_bmd_sink->displayMode->GetHeight();
     int sd = upipe_bmd_sink->mode == bmdModePAL || upipe_bmd_sink->mode == bmdModeNTSC;
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
     int ttx = upipe_bmd_sink->mode == bmdModePAL || upipe_bmd_sink->mode == bmdModeHD1080i50;
 #endif
 
@@ -932,7 +932,7 @@ static upipe_bmd_sink_frame *get_video_frame(struct upipe *upipe,
     uref_clock_get_pts_sys(uref, &vid_pts);
     vid_pts += upipe_bmd_sink->pic_subpipe.latency;
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
     /* iterate through input subpipes */
     pthread_mutex_lock(&upipe_bmd_sink->lock);
     struct uchain *uchain = NULL;
@@ -1740,7 +1740,7 @@ static int upipe_bmd_open_vid(struct upipe *upipe)
     upipe_bmd_sink->genlock_status = -1;
     upipe_bmd_sink->genlock_transition_time = 0;
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
     if (upipe_bmd_sink->mode == bmdModePAL) {
         upipe_bmd_sink->sp.scanning         = 625; /* PAL */
         upipe_bmd_sink->sp.sampling_format  = VBI_PIXFMT_YUV420;

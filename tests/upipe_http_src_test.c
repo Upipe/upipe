@@ -29,7 +29,7 @@
 
 #undef NDEBUG
 
-#include "upipe/config.h"
+#include "config.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_stdio.h"
 #include "upipe/uprobe_prefix.h"
@@ -50,10 +50,10 @@
 #include "upipe-modules/upipe_http_source.h"
 #include "upipe-modules/uprobe_http_redirect.h"
 #include "upipe-modules/upipe_file_sink.h"
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
 #include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
 #include "upipe-openssl/uprobe_https_openssl.h"
 #endif
 
@@ -126,10 +126,10 @@ int main(int argc, char *argv[])
     int opt;
     int index;
     int parallel = 1;
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     bool use_bearssl = true;
 #endif
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     bool use_openssl = true;
 #endif
 
@@ -157,19 +157,19 @@ int main(int argc, char *argv[])
             parallel = atoi(optarg);
             break;
 
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
         case OPT_USE_BEARSSL:
             use_bearssl = true;
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
             use_openssl = false;
 #endif
             break;
 #endif
 
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
         case OPT_USE_OPENSSL:
             use_openssl = true;
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
             use_bearssl = false;
 #endif
             break;
@@ -218,14 +218,14 @@ int main(int argc, char *argv[])
     assert(logger != NULL);
     logger = uprobe_http_redir_alloc(logger);
     assert(logger);
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     if (use_bearssl) {
         logger = uprobe_https_bearssl_alloc(logger);
         assert(logger);
     }
 #endif
 
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     if (use_openssl) {
         logger = uprobe_https_openssl_alloc(logger);
         assert(logger);

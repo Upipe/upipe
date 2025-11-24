@@ -29,6 +29,7 @@
 
 #define _GNU_SOURCE
 
+#include "config.h"
 #include "upipe/uclock.h"
 #include "upipe/uref.h"
 #include "upipe/uref_flow.h"
