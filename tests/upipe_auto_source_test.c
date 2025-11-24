@@ -1,6 +1,6 @@
 #undef NDEBUG
 
-#include "upipe/config.h"
+#include "config.h"
 #include "upump-ev/upump_ev.h"
 #include "upipe/uprobe_stdio.h"
 #include "upipe/umem.h"
@@ -21,10 +21,10 @@
 #include "upipe-modules/upipe_http_source.h"
 #include "upipe-modules/upipe_dump.h"
 #include "upipe-modules/upipe_null.h"
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
 #include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
 #include "upipe-openssl/uprobe_https_openssl.h"
 #endif
 
@@ -243,12 +243,12 @@ int main(int argc, char *argv[])
         assert(main_probe);
     }
 
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     main_probe = uprobe_https_bearssl_alloc(main_probe);
     assert(main_probe);
 #endif
 
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     main_probe = uprobe_https_openssl_alloc(main_probe);
     assert(main_probe);
 #endif
@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
                                                 upipe_fsrc_mgr));
         ubase_assert(upipe_auto_src_mgr_set_mgr(upipe_auto_src_mgr, "http",
                                                 upipe_http_src_mgr));
-#if defined(UPIPE_HAVE_BEARSSL_H) || defined(UPIPE_HAVE_OPENSSL_SSL_H)
+#if defined(HAVE_BEARSSL) || defined(HAVE_OPENSSL)
         ubase_assert(upipe_auto_src_mgr_set_mgr(upipe_auto_src_mgr, "https",
                                                 upipe_http_src_mgr));
 #endif

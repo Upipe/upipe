@@ -26,7 +26,7 @@
  * @short Upipe v210enc module
  */
 
-#include "upipe/config.h"
+#include "config.h"
 #include "upipe/ubase.h"
 #include "upipe/uref.h"
 #include "upipe/ubuf.h"
@@ -577,7 +577,7 @@ static struct upipe *upipe_v210enc_alloc(struct upipe_mgr *mgr,
     upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_c;
     upipe_v210enc->pack_line_10 = upipe_planar_to_v210_10_c;
 
-#ifdef UPIPE_HAVE_X86ASM
+#ifdef HAVE_X86ASM
 #if defined(__i686__) || defined(__x86_64__)
     if (__builtin_cpu_supports("ssse3")) {
         upipe_v210enc->pack_line_8  = upipe_planar_to_v210_8_ssse3;

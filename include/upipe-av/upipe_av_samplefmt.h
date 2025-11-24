@@ -35,6 +35,7 @@
 extern "C" {
 #endif
 
+#include "upipe/ubase.h"
 #include "upipe/uref_sound_flow.h"
 #include "upipe/uref_sound_flow_formats.h"
 #include <libavutil/samplefmt.h>
@@ -50,7 +51,7 @@ static const struct {
     { AV_SAMPLE_FMT_S32, "sound.s32." },
     { AV_SAMPLE_FMT_FLT, "sound.f32." },
     { AV_SAMPLE_FMT_DBL, "sound.f64." },
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
     { AV_SAMPLE_FMT_S16, "sound.s16be." },
     { AV_SAMPLE_FMT_S32, "sound.s32be." },
     { AV_SAMPLE_FMT_FLT, "sound.f32be." },
@@ -91,7 +92,7 @@ upipe_av_samplefmt_to_flow_format(enum AVSampleFormat fmt)
         { AV_SAMPLE_FMT_S64, &uref_sound_flow_format_s64 },
         { AV_SAMPLE_FMT_S64P, &uref_sound_flow_format_s64_planar },
 
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
         { AV_SAMPLE_FMT_S16, &uref_sound_flow_format_s16be },
         { AV_SAMPLE_FMT_S32, &uref_sound_flow_format_s32be },
         { AV_SAMPLE_FMT_FLT, &uref_sound_flow_format_f32be },

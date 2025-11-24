@@ -81,7 +81,7 @@ static void upipe_htons_input(struct upipe *upipe, struct uref *uref,
     int bufsize = -1, offset = 0;
     uint8_t *buf = NULL;
 
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
     upipe_htons_output(upipe, uref, upump_p);
     return;
 #endif

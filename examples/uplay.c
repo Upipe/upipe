@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "config.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_stdio.h"
 #include "upipe/uprobe_prefix.h"
@@ -81,9 +82,9 @@
 #include "upipe-gl/upipe_glx_sink.h"
 #include "upipe-gl/uprobe_gl_sink.h"
 #include "upipe-gl/uprobe_gl_sink_cube.h"
-#ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
+#ifdef HAVE_ALSA
 #include "upipe-alsa/upipe_alsa_sink.h"
-#elif defined(UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H)
+#elif defined(HAVE_AUDIOTOOLBOX)
 #include "upipe-osx/upipe_osx_audioqueue_sink.h"
 #endif
 
@@ -482,7 +483,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     uprobe_throw(uprobe_main, NULL, UPROBE_FREEZE_UPUMP_MGR);
 
     struct upipe *sink;
-#ifdef UPIPE_HAVE_ALSA_ASOUNDLIB_H
+#ifdef HAVE_ALSA
     struct upipe_mgr *upipe_alsink_mgr = upipe_alsink_mgr_alloc();
     sink = upipe_void_alloc(upipe_alsink_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_main), UPROBE_LOG_VERBOSE,
@@ -490,7 +491,7 @@ static int catch_audio(struct uprobe *uprobe, struct upipe *upipe,
     assert(sink != NULL);
     upipe_mgr_release(upipe_alsink_mgr);
     upipe_attach_uclock(sink);
-#elif defined(UPIPE_HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H)
+#elif defined(HAVE_AUDIOTOOLBOX)
     struct upipe_mgr *upipe_osx_audioqueue_sink_mgr =
         upipe_osx_audioqueue_sink_mgr_alloc();
     sink = upipe_void_alloc(upipe_osx_audioqueue_sink_mgr,

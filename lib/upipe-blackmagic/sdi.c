@@ -5,6 +5,7 @@
 #include <bitstream/dvb/vbi.h>
 
 #include "sdi.h"
+#include "upipe/ubase.h"
 
 static const uint8_t reverse_tab[256] = {
     0x00,0x80,0x40,0xC0,0x20,0xA0,0x60,0xE0,0x10,0x90,0x50,0xD0,0x30,0xB0,0x70,0xF0,
@@ -118,7 +119,7 @@ void sdi_write_cdp(const uint8_t *src, size_t src_size,
 
 static inline uint32_t to_le32(uint32_t a)
 {
-#ifdef UPIPE_WORDS_BIGENDIAN
+#ifdef UBASE_BIGENDIAN
     return  ((a << 24) & 0xff000000 ) |
         ((a <<  8) & 0x00ff0000 ) |
         ((a >>  8) & 0x0000ff00 ) |
@@ -169,7 +170,7 @@ void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width)
     }
 }
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
 int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *sp)
 {
     uint8_t line_offset = dvbvbittx_get_line(&pic_data[DVBVBI_UNIT_HEADER_SIZE]);

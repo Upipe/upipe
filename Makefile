@@ -714,6 +714,19 @@ config-deps:
 config-env:
 	@$(foreach v,$(_config_env_vars),printf "%-15s: %s\n" $v '$($v)';)
 
+[a-z] = a b c d e f g h i j k l m n o p q r s t u v w x y z
+[A-Z] = A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+
+_tr = $(strip $(if $1,$(subst $(firstword $1),$(firstword $2),\
+  $(call _tr,$(wordlist 2,26,$1),$(wordlist 2,26,$2),$3)),$3))
+_toupper = $(call _tr,$([a-z]),$([A-Z]),$1)
+_toid = $(call _tr,- . /,_ _ _,$1)
+_have = $(sort $(foreach c,$(configs) $(_pkgs),\
+  $(if $(have_$c),$(call _toid,$(call _toupper,$c)))))
+
+print-config.h = CONFIG   $@
+cmd-config.h = for i in $(_have); do echo "\#define HAVE_$$i 1"; done > $@
+
 _distcleanfiles = config.mk config.log $(if $(_oot),Makefile) $(_makefiles)
 
 # --- dependencies -------------------------------------------------------------

@@ -174,7 +174,11 @@ static inline void uchain_init(struct uchain *uchain)
     uchain->next = uchain->prev = NULL;
 }
 
-#ifdef UPIPE_WORDS_BIGENDIAN
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define UBASE_BIGENDIAN
+#endif
+
+#ifdef UBASE_BIGENDIAN
 /** @This allows to define a 32-bit unsigned integer with 4 letters. */     \
 #   define UBASE_FOURCC(a, b, c, d)                                         \
         (((uint32_t)d) | (((uint32_t)c) << 8) | (((uint32_t)b) << 16) |     \

@@ -6,7 +6,7 @@ version      = 0.5
 
 cflags       = -O2 -g $(warn) $(warn_c)
 cxxflags     = -O2 -g $(warn) $(warn_cxx)
-cppflags     = -Iinclude -I$(top_srcdir)/include
+cppflags     = -I$(top_builddir) -Iinclude -I$(top_srcdir)/include
 ldflags      = $(if $(or $(have_apple),$(have_san)),,-Wl,--no-undefined)
 
 warn         = -Wall \
@@ -48,9 +48,6 @@ SED ?= sed
 
 configs += atomic
 atomic-assert = __ATOMIC_SEQ_CST
-
-configs += bigendian
-bigendian-assert = __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 
 configs += eventfd
 eventfd-includes = sys/eventfd.h
@@ -94,25 +91,7 @@ includesubdir = $(notdir $(patsubst %/,%,$(dir $1)))
 genfiles = config.h include/upipe/config.h
 
 config.h:
-	$(call cmd,gen){ \
-	  $(if $(have_alsa),echo "#define HAVE_ALSA_ASOUNDLIB_H 1";) \
-	  $(if $(have_atomic),echo "#define HAVE_ATOMIC_OPS 1";) \
-	  $(if $(have_audiotoolbox),echo "#define HAVE_AUDIOTOOLBOX_AUDIOTOOLBOX_H 1";) \
-	  $(if $(have_bearssl),echo "#define HAVE_BEARSSL_H 1";) \
-	  $(if $(have_bigendian),echo "#define WORDS_BIGENDIAN 1";) \
-	  $(if $(have_bitstream),echo "#define HAVE_BITSTREAM_COMMON_H 1";) \
-	  $(if $(have_eventfd),echo "#define HAVE_EVENTFD 1";) \
-	  $(if $(have_features.h),echo "#define HAVE_FEATURES_H 1";) \
-	  $(if $(have_libgcrypt),echo "#define HAVE_GCRYPT_H 1";) \
-	  $(if $(have_libtasn1),echo "#define HAVE_LIBTASN1_H 1";) \
-	  $(if $(have_net/if.h),echo "#define HAVE_NET_IF_H 1";) \
-	  $(if $(have_openssl),echo "#define HAVE_OPENSSL_SSL_H 1";) \
-	  $(if $(have_pipe),echo "#define HAVE_PIPE 1";) \
-	  $(if $(have_semaphore),echo "#define HAVE_SEMAPHORE_H 1";) \
-	  $(if $(have_unistd.h),echo "#define HAVE_UNISTD_H 1";) \
-	  $(if $(have_x86asm),echo "#define HAVE_X86ASM 1";) \
-	  $(if $(have_zvbi-0.2),echo "#define HAVE_LIBZVBI_H 1";) \
-	} > $@
+	$(call cmd,config.h)
 
 # --- coding-style checks ------------------------------------------------------
 

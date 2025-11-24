@@ -28,6 +28,7 @@
  * @short Upipe internal helper functions for udp modules
  */
 
+#include "config.h"
 #include "upipe/upipe.h"
 
 #include <stdlib.h>
@@ -41,7 +42,7 @@
 #include <netdb.h>
 #include <errno.h>
 
-#ifdef UPIPE_HAVE_NET_IF_H
+#ifdef HAVE_NET_IF_H
 #include <net/if.h>
 #endif
 #include "upipe_udp.h"

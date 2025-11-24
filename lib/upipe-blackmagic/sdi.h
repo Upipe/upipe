@@ -1,8 +1,8 @@
 #ifndef SDI_H_
 #define SDI_H_
-#include "upipe/config.h"
+#include "config.h"
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
 #include <libzvbi.h>
 #endif
 
@@ -33,7 +33,7 @@ void sdi_write_cdp(const uint8_t *src, size_t src_size,
 void sdi_encode_v210_sd(uint32_t *dst, uint8_t *src, int width);
 void sdi_encode_v210(uint32_t *dst, uint16_t *src, int width);
 
-#ifdef UPIPE_HAVE_LIBZVBI_H
+#ifdef HAVE_ZVBI_0_2
 int sdi_encode_ttx_sd(uint8_t *buf, const uint8_t *pic_data, vbi_sampling_par *sp);
 #endif
 void sdi_encode_ttx(uint16_t *buf, int packets, const uint8_t **packet, uint16_t *ctr);

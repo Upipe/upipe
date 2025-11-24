@@ -30,7 +30,7 @@
 #include <ctype.h>
 #include <syslog.h>
 
-#include "upipe/config.h"
+#include "config.h"
 #include "upipe/upipe_dump.h"
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_helper_uprobe.h"
@@ -81,10 +81,10 @@
 #include "upipe-pthread/uprobe_pthread_upump_mgr.h"
 #include "upipe-pthread/upipe_pthread_transfer.h"
 #include "upipe-pthread/umutex_pthread.h"
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
 #include "upipe-openssl/uprobe_https_openssl.h"
 #endif
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
 #include "upipe-bearssl/uprobe_https_bearssl.h"
 #endif
 
@@ -1287,10 +1287,10 @@ enum opt {
     OPT_DELAY,
     OPT_QUIT_TIMEOUT,
     OPT_USER_AGENT,
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     OPT_USE_BEARSSL,
 #endif
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     OPT_USE_OPENSSL,
 #endif
 };
@@ -1323,10 +1323,10 @@ static struct option options[] = {
     { "delay", required_argument, NULL, OPT_DELAY },
     { "quit-timeout", required_argument, NULL, OPT_QUIT_TIMEOUT },
     { "user-agent", required_argument, NULL, OPT_USER_AGENT },
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     { "use-bearssl", no_argument, NULL, OPT_USE_BEARSSL },
 #endif
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     { "use-openssl", no_argument, NULL, OPT_USE_OPENSSL },
 #endif
     { 0, 0, 0, 0 },
@@ -1369,11 +1369,11 @@ int main(int argc, char **argv)
     enum upipe_ts_conformance conformance = UPIPE_TS_CONFORMANCE_AUTO;
     bool no_stdin = false;
 
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     bool use_bearssl = true;
 #endif
 
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     bool use_openssl = true;
 #endif
 
@@ -1482,19 +1482,19 @@ int main(int argc, char **argv)
         case OPT_MISSING_ARG:
             return usage(argv[0], "missing argument");
 
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
         case OPT_USE_BEARSSL:
             use_bearssl = true;
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
             use_openssl = false;
 #endif
             break;
 #endif
 
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
         case OPT_USE_OPENSSL:
             use_openssl = true;
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
             use_bearssl = false;
 #endif
             break;
@@ -1793,12 +1793,12 @@ int main(int argc, char **argv)
     uprobe_release(main_probe);
     main_probe = &probe_src;
 
-#ifdef UPIPE_HAVE_OPENSSL_SSL_H
+#ifdef HAVE_OPENSSL
     if (use_openssl)
         main_probe = uprobe_https_openssl_alloc(main_probe);
 #endif
 
-#ifdef UPIPE_HAVE_BEARSSL_H
+#ifdef HAVE_BEARSSL
     if (use_bearssl)
         main_probe = uprobe_https_bearssl_alloc(main_probe);
 #endif
