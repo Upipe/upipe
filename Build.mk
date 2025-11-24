@@ -106,6 +106,7 @@ config.h:
 	  $(if $(have_libgcrypt),echo "#define HAVE_GCRYPT_H 1";) \
 	  $(if $(have_libtasn1),echo "#define HAVE_LIBTASN1_H 1";) \
 	  $(if $(have_net/if.h),echo "#define HAVE_NET_IF_H 1";) \
+	  $(if $(have_openssl),echo "#define HAVE_OPENSSL_SSL_H 1";) \
 	  $(if $(have_pipe),echo "#define HAVE_PIPE 1";) \
 	  $(if $(have_semaphore),echo "#define HAVE_SEMAPHORE_H 1";) \
 	  $(if $(have_unistd.h),echo "#define HAVE_UNISTD_H 1";) \
