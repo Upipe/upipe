@@ -7,7 +7,7 @@ require "upipe-modules"
 require "upipe-ts"
 require "upipe-framers"
 
-local UPROBE_LOG_LEVEL = UPROBE_LOG_INFO
+local UPROBE_LOG_LEVEL = 'UPROBE_LOG_INFO'
 
 if #arg ~= 1 then
     io.stderr:write("Usage: ", arg[0], " <filename>\n")
@@ -46,10 +46,7 @@ end
 
 -- pipes
 local src = upipe.fsrc():new(pfx("src") .. probe)
-if not ubase_check(src:set_uri(file)) then
-    io.stderr:write("invalid file\n")
-    os.exit(1)
-end
+src.uri = file
 
 local sink = count_mgr:new(pfx("count") .. probe)
 
@@ -58,10 +55,10 @@ ts_demux_mgr.autof_mgr = upipe.autof()
 
 src.output = ts_demux_mgr:new(
     pfx("ts demux") ..
-    uprobe.selflow(UPROBE_SELFLOW_VOID, "auto",
-        uprobe.selflow(UPROBE_SELFLOW_PIC, "auto",
+    uprobe.selflow('UPROBE_SELFLOW_VOID', "auto",
+        uprobe.selflow('UPROBE_SELFLOW_PIC', "auto",
             uprobe {
-                new_flow_def = function (probe, pipe, flow_def)
+                need_output = function (probe, pipe, flow_def)
                     pipe.output = sink
                 end } ..
             probe) ..

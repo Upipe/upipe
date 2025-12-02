@@ -6,7 +6,7 @@ local upipe = require "upipe"
 require "upump-ev"
 require "upipe-modules"
 
-local UPROBE_LOG_LEVEL = UPROBE_LOG_INFO
+local UPROBE_LOG_LEVEL = 'UPROBE_LOG_INFO'
 
 if #arg ~= 2 then
     io.stderr:write("Usage: ", arg[0], " <input> <output>\n")
@@ -50,7 +50,7 @@ local upipe_xor_mgr = upipe {
     control = {
         set_flow_def = function (pipe, flow_def)
             if not ubase_check(flow_def:flow_match_def("block.")) then
-                return "invalid"
+                return 'invalid'
             end
             pipe:helper_store_flow_def(flow_def:dup())
         end
@@ -70,7 +70,7 @@ local xor = upipe_xor_mgr:new(pfx "xor")
 local sink = upipe.fsink():new(pfx "sink")
 
 src.uri = input
-ubase_assert(sink:fsink_set_path(output, "UPIPE_FSINK_OVERWRITE"))
+ubase_assert(sink:fsink_set_path(output, 'UPIPE_FSINK_OVERWRITE'))
 src.output = xor .. sink
 
 -- main loop
