@@ -146,8 +146,9 @@ static struct ubuf *ubuf_pic_mem_alloc(struct ubuf_mgr *mgr,
 
     size_t hmsize = hsize / pic_mgr->common_mgr.macropixel;
     size_t buffer_size = 0;
-    size_t plane_sizes[pic_mgr->common_mgr.nb_planes];
-    size_t strides[pic_mgr->common_mgr.nb_planes];
+    /* nb_planes can be zero and VLA must be greater than zero */
+    size_t plane_sizes[pic_mgr->common_mgr.nb_planes + 1];
+    size_t strides[pic_mgr->common_mgr.nb_planes + 1];
     for (uint8_t plane = 0; plane < pic_mgr->common_mgr.nb_planes; plane++) {
         size_t align = 0;
         if (pic_mgr->align &&
