@@ -635,7 +635,8 @@ static int upipe_ts_pmtd_parse_descs(struct upipe *upipe,
     const uint8_t *desc;
     int j = 0;
 
-    uint8_t descl_copy[desclength];
+    /* desclength can be zero and VLA must be greater than zero */
+    uint8_t descl_copy[desclength + 1];
     uint16_t copy_len = 0;
 
     /* cast needed because biTStream expects an uint8_t * (but doesn't write
