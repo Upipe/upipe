@@ -172,8 +172,8 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
     ubuf_sound_write_int32_t(ubuf, 0, -1, &out_data, 1);
 
     /* Pa, Pb, Pc, Pd */
-    out_data[0] = (S337_PREAMBLE_A1 << 24) | (S337_PREAMBLE_A2 << 16);
-    out_data[1] = (S337_PREAMBLE_B1 << 24) | (S337_PREAMBLE_B2 << 16);
+    out_data[0] = ((uint32_t)S337_PREAMBLE_A1 << 24) | (S337_PREAMBLE_A2 << 16);
+    out_data[1] = ((uint32_t)S337_PREAMBLE_B1 << 24) | (S337_PREAMBLE_B2 << 16);
     out_data[2] = (S337_TYPE_A52 << 16) | (S337_MODE_16 << 21) |
         (S337_TYPE_A52_REP_RATE_FLAG << 24);
     out_data[3] = ((block_size * 8) & 0xffff) << 16;
@@ -200,7 +200,7 @@ static bool upipe_s337_encaps_handle(struct upipe *upipe, struct uref *uref,
         }
 
         for (int i = 0; i < size/2; i++)
-            out_data[4 + offset/2 + i] = (buf[2*i + 0] << 24) | (buf[2*i + 1] << 16);
+            out_data[4 + offset/2 + i] = ((uint32_t)(buf[2*i + 0]) << 24) | (buf[2*i + 1] << 16);
         if (size & 1)
             tmp = buf[size-1];
 
