@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 Open Broadcast Systems Ltd
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Rafaël Carré
  *
@@ -263,11 +264,7 @@ static void upipe_ts_emmd_parse_descs(struct upipe *upipe,
                                       struct uref *flow_def,
                                       const uint8_t *descl, uint16_t desclength)
 {
-    const uint8_t *desc;
-    int j = 0;
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+    descl_each_desc(descl, desclength, desc) {
         bool copy = false;
         switch (desc_get_tag(desc)) {
             default:
@@ -296,16 +293,12 @@ static void upipe_ts_emmd_parse_sd_descs(struct upipe *upipe,
                                       const uint8_t *descl, uint16_t desclength)
 {
     struct upipe_ts_emmd *upipe_ts_emmd = upipe_ts_emmd_from_upipe(upipe);
-    const uint8_t *desc;
-    int j = 0;
 
     bool prevent_descrambled_forward = false;
     bool prevent_decoded_forward = false;
     bool insert_watermark = false;
 
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+    descl_each_desc(descl, desclength, desc) {
         bool copy = false;
         bool valid = true;
         uint16_t length = desc_get_length(desc);
@@ -1078,11 +1071,7 @@ static void upipe_ts_emmd_ecm_parse_descs(struct upipe *upipe,
                                       struct uref *flow_def,
                                       const uint8_t *descl, uint16_t desclength)
 {
-    const uint8_t *desc;
-    int j = 0;
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+    descl_each_desc(descl, desclength, desc) {
         bool copy = false;
         switch (desc_get_tag(desc)) {
             default:
