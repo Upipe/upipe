@@ -745,9 +745,13 @@ static struct uref *alloc_raw_audio_def(struct upipe *upipe,
     if (unlikely(codecpar->bits_per_coded_sample % 8))
         return NULL;
 
-    const char *def = upipe_av_to_flow_def(codecpar->codec_id);
-    if (unlikely(def == NULL))
+    const AVCodecDescriptor *desc = avcodec_descriptor_get(codecpar->codec_id);
+    if (unlikely(desc == NULL))
         return NULL;
+
+    const char *def = desc->name;
+    if (!ubase_ncmp(def, "pcm_"))
+        def += 4;
 
     struct uref *flow_def =
         uref_sound_flow_alloc_def(uref_mgr, def,
@@ -775,11 +779,8 @@ static struct uref *alloc_audio_def(struct upipe *upipe,
                                     struct uref_mgr *uref_mgr,
                                     AVCodecParameters *codecpar)
 {
-    const char *def = upipe_av_to_flow_def(codecpar->codec_id);
-    if (unlikely(def == NULL))
-        return NULL;
-
-    struct uref *flow_def = uref_block_flow_alloc_def_va(uref_mgr, "%s", def);
+    struct uref *flow_def = uref_block_flow_alloc_def_va(
+        uref_mgr, "%s.sound.", upipe_av_to_flow_def_codec(codecpar->codec_id));
     if (unlikely(flow_def == NULL))
         return NULL;
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
@@ -829,11 +830,8 @@ static struct uref *alloc_video_def(struct upipe *upipe,
                                     AVCodecParameters *codecpar,
                                     AVStream *stream)
 {
-    const char *def = upipe_av_to_flow_def(codecpar->codec_id);
-    if (unlikely(def == NULL))
-        return NULL;
-
-    struct uref *flow_def = uref_block_flow_alloc_def_va(uref_mgr, "%s", def);
+    struct uref *flow_def = uref_block_flow_alloc_def_va(
+        uref_mgr, "%s.pic.", upipe_av_to_flow_def_codec(codecpar->codec_id));
     if (unlikely(flow_def == NULL))
         return NULL;
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))

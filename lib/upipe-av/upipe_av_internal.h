@@ -112,12 +112,19 @@ static inline void upipe_av_deal_abort(struct upump *upump)
     udeal_abort(&upipe_av_deal, upump);
 }
 
-/** @This allows to convert from avcodec ID to flow definition.
+/** @This allows to convert from avcodec ID to flow definition codec.
  *
  * @param id avcodec ID
- * @return flow definition, or NULL if not found
+ * @return flow definition codec, or "unknown" if not found
  */
-const char *upipe_av_to_flow_def(enum AVCodecID id);
+const char *upipe_av_to_flow_def_codec(enum AVCodecID id);
+
+/** @This allows to convert from avcodec ID to flow definition type.
+ *
+ * @param id avcodec ID
+ * @return flow definition type
+ */
+const char *upipe_av_to_flow_def_type(enum AVCodecID id);
 
 /** @This allows to convert to avcodec ID from flow definition.
  *

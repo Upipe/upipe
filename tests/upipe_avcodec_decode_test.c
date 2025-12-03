@@ -87,7 +87,6 @@ struct thread {
     struct upipe *avcdec;
     struct upipe *audiodec;
     const char *codec_def;
-    const char *audio_def;
     struct upump *fetchav_pump;
 
     int count;
@@ -403,11 +402,9 @@ int main (int argc, char **argv)
     assert(videoStream != -1);
 
     // set codec def and test _context()/_release()
-    mainthread.codec_def = upipe_av_to_flow_def(
-                    mainthread.avfctx->streams[videoStream]->codecpar->codec_id);
-    printf("Codec flow def: %s\n", mainthread.codec_def);
-    struct uref *flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s",
-                                                        mainthread.codec_def);
+    struct uref *flowdef = uref_block_flow_alloc_def_va(
+        uref_mgr, "%s.pic.", upipe_av_to_flow_def_codec(
+            mainthread.avfctx->streams[videoStream]->codecpar->codec_id));
     // build avcodec pipe
     struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
     assert(upipe_avcdec_mgr);
@@ -444,9 +441,9 @@ int main (int argc, char **argv)
     // audiodec pipe
     mainthread.audiodec = NULL;
     if (audioStream >= 0) {
-        mainthread.audio_def = upipe_av_to_flow_def(
-                        mainthread.avfctx->streams[audioStream]->codecpar->codec_id);
-        flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s", mainthread.audio_def),
+        flowdef = uref_block_flow_alloc_def_va(
+            uref_mgr, "%s.sound.", upipe_av_to_flow_def_codec(
+                mainthread.avfctx->streams[audioStream]->codecpar->codec_id)),
         mainthread.audiodec = upipe_void_alloc(upipe_avcdec_mgr,
                 uprobe_upump_mgr_alloc(
                     uprobe_pfx_alloc(uprobe_use(logger),
@@ -480,10 +477,9 @@ int main (int argc, char **argv)
                 }
             }
             assert(thread[i].videoStream != -1);
-            thread[i].codec_def = upipe_av_to_flow_def(
-                            thread[i].avfctx->streams[videoStream]->codecpar->codec_id);
-            flowdef = uref_block_flow_alloc_def_va(uref_mgr, "%s",
-                                                   mainthread.codec_def);
+            flowdef = uref_block_flow_alloc_def_va(
+                uref_mgr, "%s.pic.", upipe_av_to_flow_def_codec(
+                    thread[i].avfctx->streams[videoStream]->codecpar->codec_id));
 
             thread[i].avcdec = upipe_void_alloc(upipe_avcdec_mgr,
                 uprobe_upump_mgr_alloc(
@@ -494,7 +490,6 @@ int main (int argc, char **argv)
             uref_free(flowdef);
             ubase_assert(upipe_set_output(thread[i].avcdec, nullpipe));
 
-            thread[i].audio_def = NULL;
             thread[i].audiodec = NULL;
         }
 

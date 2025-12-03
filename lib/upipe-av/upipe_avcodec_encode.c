@@ -1246,9 +1246,10 @@ static void upipe_avcenc_build_flow_def_attr(struct upipe *upipe)
         return;
     }
 
-    const char *codec_def = upipe_av_to_flow_def(codec->id);
-    UBASE_FATAL(upipe, uref_flow_set_def_va(flow_def_attr, PREFIX_FLOW "%s",
-                                      codec_def));
+    UBASE_FATAL(upipe, uref_flow_set_def_va(
+            flow_def_attr, PREFIX_FLOW "%s.%s",
+            upipe_av_to_flow_def_codec(codec->id),
+            upipe_av_to_flow_def_type(codec->id)))
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def_attr))
 
     /* Find out if flow def attributes have changed. */
@@ -2144,10 +2145,9 @@ static int _upipe_avcenc_mgr_set_flow_def_from_name(struct uref *flow_def,
     const AVCodec *codec = avcodec_find_encoder_by_name(name);
     if (codec == NULL)
         return UBASE_ERR_INVALID;
-    const char *def = upipe_av_to_flow_def(codec->id);
-    if (def == NULL)
-        return UBASE_ERR_INVALID;
-    return uref_flow_set_def(flow_def, def);
+    return uref_flow_set_def_va(flow_def, "%s.%s",
+                                upipe_av_to_flow_def_codec(codec->id),
+                                upipe_av_to_flow_def_type(codec->id));
 }
 
 /** @This processes control commands on a avcenc manager.

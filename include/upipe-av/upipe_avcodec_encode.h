@@ -73,7 +73,7 @@ struct upipe_mgr *upipe_avcenc_mgr_alloc(void);
 enum upipe_avcenc_mgr_command {
     UPIPE_AVCENC_MGR_SENTINEL = UPIPE_MGR_CONTROL_LOCAL,
 
-    /** sets the flow definition from code name (struct uref *, const char *) */
+    /** sets the flow definition from codec name (struct uref *, const char *) */
     UPIPE_AVCENC_MGR_SET_FLOW_DEF_FROM_NAME
 };
 
