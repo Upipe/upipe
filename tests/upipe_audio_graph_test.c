@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -183,8 +184,8 @@ int main(int argc, char **argv)
     for (int i = 0; i < HIST; i++) {
         uref = uref_alloc(uref_mgr);
         assert(uref);
-        ubase_assert(uref_amax_set_amplitude(uref, 0.8 / i, 0));
-        ubase_assert(uref_amax_set_amplitude(uref, 0.6 / i, 1));
+        ubase_assert(uref_amax_set_amplitude(uref, 0.8 / (i + 1), 0));
+        ubase_assert(uref_amax_set_amplitude(uref, 0.6 / (i + 1), 1));
         /* Now send uref */
         upipe_input(agraph, uref, NULL);
         assert(got_uref);
