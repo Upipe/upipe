@@ -1632,12 +1632,9 @@ static void upipe_ts_catd_parse_bissca_descs(struct upipe *upipe,
                                       struct uref *flow_def,
                                       const uint8_t *descl, uint16_t desclength)
 {
-    const uint8_t *desc;
-    int j = 0;
     uint8_t esid_n = 0;
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+
+    descl_each_desc(descl, desclength, desc) {
         bool valid = true;
         uint16_t length;
         switch (desc_get_tag(desc)) {

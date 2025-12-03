@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2025 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -284,12 +285,7 @@ static void upipe_ts_pmtd_parse_es_descs(struct upipe *upipe,
                                          const uint8_t *descl,
                                          uint16_t desclength)
 {
-    const uint8_t *desc;
-    int j = 0;
-
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+    descl_each_desc(descl, desclength, desc) {
         bool valid = true;
         bool copy = false;
         switch (desc_get_tag(desc)) {
@@ -632,16 +628,11 @@ static int upipe_ts_pmtd_parse_descs(struct upipe *upipe,
                                      const uint8_t *descl,
                                      uint16_t desclength)
 {
-    const uint8_t *desc;
-    int j = 0;
-
     /* desclength can be zero and VLA must be greater than zero */
     uint8_t descl_copy[desclength + 1];
     uint16_t copy_len = 0;
 
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+    descl_each_desc(descl, desclength, desc) {
         bool valid = true;
         bool copy = true;
         uint8_t desc_len = desc_get_length(desc);

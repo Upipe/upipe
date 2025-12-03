@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2015 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2025 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -130,12 +130,7 @@ static void upipe_ts_scte35d_parse_descs(struct upipe *upipe, struct uref *uref,
                                          const uint8_t *descl,
                                          uint16_t desclength)
 {
-    const uint8_t *desc;
-    unsigned j = 0;
-
-    /* cast needed because biTStream expects an uint8_t * (but doesn't write
-     * to it */
-    while ((desc = descl_get_desc((uint8_t *)descl, desclength, j++)) != NULL) {
+    descl_each_desc(descl, desclength, desc) {
         UBASE_FATAL(upipe, uref_ts_flow_add_descriptor(uref,
                     desc, desc_get_length(desc) + DESC_HEADER_SIZE));
     }
