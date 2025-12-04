@@ -806,6 +806,8 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
             uref_h265_flow_set_profile(flow_def, upipe_h265f->profile_idc))
     UBASE_FATAL(upipe,
             uref_h265_flow_set_level(flow_def, upipe_h265f->level_idc))
+    UBASE_FATAL(upipe,
+            uref_h265_flow_set_profile_compatibility(flow_def, upipe_h265f->profile_compatibility))
 
     uint64_t max_octetrate, max_bs;
     uint32_t max_luma_ps;
