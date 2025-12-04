@@ -41,7 +41,7 @@ UREF_ATTR_VOID(h265_flow, tier, "h265.tier", tier)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile, "h265.profile", profile)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile_space, "h265.profilespace",
         profile space)
-UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile_compability, "h265.profilecomp",
+UREF_ATTR_UNSIGNED(h265_flow, profile_compatibility, "h265.profilecomp",
         profile compatibility)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, level, "h265.level", level)
 
