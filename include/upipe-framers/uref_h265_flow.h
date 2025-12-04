@@ -43,6 +43,8 @@ UREF_ATTR_SMALL_UNSIGNED(h265_flow, profile_space, "h265.profilespace",
         profile space)
 UREF_ATTR_UNSIGNED(h265_flow, profile_compatibility, "h265.profilecomp",
         profile compatibility)
+UREF_ATTR_UNSIGNED(h265_flow, profile_constraint, "h265.profileconstraint",
+        profile constraint)
 UREF_ATTR_SMALL_UNSIGNED(h265_flow, level, "h265.level", level)
 
 #ifdef __cplusplus
