@@ -677,6 +677,7 @@ _alldirs = $(if $(filter-out ./,$(dir $1)),\
   $(call _alldirs,$(patsubst %/,%,$(dir $1))) $(dir $1))
 
 _makefiles = $(addsuffix Makefile,$(sort $(foreach d,$(_dirs),$(call _alldirs,$d))))
+_ld_path = $(subst $() ,:,$(addprefix $(CURDIR)/,$(sort $(dir $(_lib-targets)))))
 
 configure: config config.mk $(_makefiles)
 ifdef _oot
@@ -686,6 +687,12 @@ ifdef _oot
 	  echo "all:;@\$$(MAKE) $(_npd) -f $$M \$$(MAKECMDGOALS)"; \
 	  echo "\$$(filter-out all,\$$(MAKECMDGOALS)): all"; } > Makefile
 endif
+	@{ echo '#!/bin/sh'; \
+	   echo export LD_LIBRARY_PATH=\"$(_ld_path):\$$LD_LIBRARY_PATH\"; \
+	   echo export DYLD_LIBRARY_PATH=\"$(_ld_path):\$$DYLD_LIBRARY_PATH\"; \
+	   echo 'exec "$$@"'; \
+	} > run
+	@$(CHMOD) +x run
 
 $(_makefiles):
 	@$(MKDIR) -p $(@D)
@@ -727,7 +734,7 @@ _have = $(sort $(foreach c,$(configs) $(_pkgs),\
 print-config.h = CONFIG   $@
 cmd-config.h = for i in $(_have); do echo "\#define HAVE_$$i 1"; done > $@
 
-_distcleanfiles = config.mk config.log $(if $(_oot),Makefile) $(_makefiles)
+_distcleanfiles = config.mk config.log $(if $(_oot),Makefile) $(_makefiles) run
 
 # --- dependencies -------------------------------------------------------------
 
