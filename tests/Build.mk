@@ -19,6 +19,10 @@ distfiles = valgrind_wrapper.sh valgrind.supp \
 tests += ubits_test
 ubits_test-src = ubits_test.c
 
+tests += ubuf_av_sound_test
+ubuf_av_sound_test-src = ubuf_av_sound_test.c
+ubuf_av_sound_test-libs = libupipe libupipe_av libavutil
+
 tests += ubuf_block_mem_test
 ubuf_block_mem_test-src = ubuf_block_mem_test.c
 ubuf_block_mem_test-libs = libupipe

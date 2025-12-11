@@ -741,10 +741,20 @@ static int ubuf_sound_av_resize(struct ubuf *ubuf, int offset, int new_size)
     else if (offset + new_size > size)
         return UBASE_ERR_INVALID;
 
-    av_samples_copy(frame->extended_data, frame->extended_data,
-                    0, offset, new_size, frame->ch_layout.nb_channels,
-                    frame->format);
+    int planar = av_sample_fmt_is_planar(frame->format);
+    int channels = frame->ch_layout.nb_channels;
+    int planes = planar ? channels : 1;
+
+    for (int i = 0; i < FFMIN(planes, AV_NUM_DATA_POINTERS); i++)
+        frame->extended_data[i] = frame->data[i] =
+            frame->data[i] + offset * sample_size;
+
+    for (int i = 0; i < frame->nb_extended_buf; i++)
+        frame->extended_data[i + AV_NUM_DATA_POINTERS] += offset * sample_size;
+
     frame->nb_samples = new_size;
+    av_samples_get_buffer_size(&frame->linesize[0], channels,
+                               frame->nb_samples, frame->format, 0);
 
     return UBASE_ERR_NONE;
 }
