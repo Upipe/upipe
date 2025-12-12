@@ -571,7 +571,7 @@ $(_tests:%=check-%): check-%: % \
 	 export DYLD_LIBRARY_PATH="$(_LD_LIBRARY_PATH):$$DYLD_LIBRARY_PATH"; \
 	 export _DYLD_LIBRARY_PATH="$$DYLD_LIBRARY_PATH"; \
 	 export DYLD_INSERT_LIBRARIES="$(LD_INSERT_LIBRARIES)"; \
-	 $(if $(_log-env),export $(_log-env);) \
+	 $(if $(strip $(_log-env)),export $(_log-env);) \
 	cd $(*D) && if $(_log-compiler) $(_log-flags) \
 	  $(_<P) $($*-args) >$(*F).log 2>&1; \
 	  then status=$$?; res=PASS; color=$(c_green); \
@@ -651,7 +651,7 @@ define _san
     cxxflags += $$(if $$(have_$1),$$(_$1_flags))
   endif
   ldflags += $$(if $$(have_$1),$(firstword $(_$1_flags)))
-  have_san += $$(have_$1)
+  have_san := $$(or $$(have_san),$$(have_$1))
   ld_preload_san += $$(if $$(have_$1),$$$$($(CC) -print-file-name=lib$1.so))
 endef
 
