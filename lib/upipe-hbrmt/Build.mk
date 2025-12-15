@@ -1,6 +1,7 @@
 lib-targets = libupipe_hbrmt
 
 libupipe_hbrmt-desc = HBRMT (High Bit Rate Media Transport) modules
+libupipe_hbrmt-so-version = 1.0.0
 
 libupipe_hbrmt-includes = \
     upipe_pack10bit.h \

@@ -1,6 +1,7 @@
 lib-targets = libupipe_gl
 
 libupipe_gl-desc = OpenGL module
+libupipe_gl-so-version = 1.0.0
 
 libupipe_gl-includes = \
     upipe_gl_sink_common.h \

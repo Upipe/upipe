@@ -1,6 +1,7 @@
 lib-targets = libupipe_framers
 
 libupipe_framers-desc = framers
+libupipe_framers-so-version = 1.0.0
 
 libupipe_framers-includes = \
     upipe_a52_framer.h \

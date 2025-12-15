@@ -1,6 +1,7 @@
 lib-targets = libupipe_pthread
 
 libupipe_pthread-desc = pthread modules
+libupipe_pthread-so-version = 1.0.0
 
 libupipe_pthread-includes = \
     umutex_pthread.h \

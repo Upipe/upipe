@@ -1,6 +1,7 @@
 lib-targets = libupipe_blackmagic
 
 libupipe_blackmagic-desc = Blackmagic Decklink modules
+libupipe_blackmagic-so-version = 1.0.0
 
 libupipe_blackmagic-includes = \
     ubuf_pic_blackmagic.h \

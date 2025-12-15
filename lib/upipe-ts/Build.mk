@@ -1,6 +1,7 @@
 lib-targets = libupipe_ts
 
 libupipe_ts-desc = MPEG-2 transport stream modules
+libupipe_ts-so-version = 1.0.0
 
 libupipe_ts-includes = \
     upipe_rtp_fec.h \

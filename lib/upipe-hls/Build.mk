@@ -1,6 +1,7 @@
 lib-targets = libupipe_hls
 
 libupipe_hls-desc = HLS modules
+libupipe_hls-so-version = 1.0.0
 
 libupipe_hls-includes = \
     upipe_hls.h \

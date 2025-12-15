@@ -1,6 +1,7 @@
 lib-targets = libupipe_v210
 
 libupipe_v210-desc = v210 interface module
+libupipe_v210-so-version = 1.0.0
 
 libupipe_v210-includes = \
     upipe_v210dec.h \

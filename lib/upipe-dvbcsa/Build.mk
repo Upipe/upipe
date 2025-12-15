@@ -5,6 +5,7 @@ libdvbcsa-ldlibs = -ldvbcsa
 lib-targets = libupipe_dvbcsa
 
 libupipe_dvbcsa-desc = libdvbcsa interface module
+libupipe_dvbcsa-so-version = 1.0.0
 
 libupipe_dvbcsa-includes = \
     upipe_dvbcsa_common.h \

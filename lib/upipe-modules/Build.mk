@@ -1,6 +1,7 @@
 lib-targets = libupipe_modules
 
 libupipe_modules-desc = base modules
+libupipe_modules-so-version = 1.0.0
 
 libupipe_modules-includes = \
     upipe_aes_decrypt.h \

@@ -1,6 +1,7 @@
 lib-targets = libupipe_av
 
 libupipe_av-desc = FFmpeg modules
+libupipe_av-so-version = 1.0.0
 
 libupipe_av-includes = \
     ubuf_av.h \

@@ -1,6 +1,7 @@
 lib-targets = libupipe_openssl
 
 libupipe_openssl-desc = OpenSSL TLS modules
+libupipe_openssl-so-version = 1.0.0
 
 libupipe_openssl-src = \
     https_source_hook_openssl.c \

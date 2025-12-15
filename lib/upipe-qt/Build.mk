@@ -1,6 +1,7 @@
 lib-targets = libupipe_qt
 
 libupipe_qt-desc = QtWebKit modules
+libupipe_qt-so-version = 1.0.0
 libupipe_qt-includes = upipe_qt_html.h
 libupipe_qt-src = upipe_qt_html.cpp thumbnail.cpp thumbnail.h
 libupipe_qt-gen = moc_thumbnail.cpp

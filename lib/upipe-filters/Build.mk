@@ -1,6 +1,7 @@
 lib-targets = libupipe_filters
 
 libupipe_filters-desc = filters
+libupipe_filters-so-version = 1.0.0
 
 libupipe_filters-includes = \
     upipe_audio_bar.h \

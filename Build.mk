@@ -2,7 +2,7 @@
 
 name         = upipe
 description  = Upipe multimedia framework
-version      = 0.5
+version      = 1.0
 
 cflags       = -O2 -g $(warn) $(warn_c)
 cxxflags     = -O2 -g $(warn) $(warn_cxx)

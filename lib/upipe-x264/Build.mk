@@ -1,6 +1,7 @@
 lib-targets = libupipe_x264
 
 libupipe_x264-desc = x264 interface module
+libupipe_x264-so-version = 1.0.0
 libupipe_x264-includes = upipe_x264.h
 libupipe_x264-src = upipe_x264.c
 libupipe_x264-libs = libupipe libupipe_framers x264 bitstream
