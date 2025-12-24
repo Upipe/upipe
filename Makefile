@@ -204,7 +204,7 @@ define _have_lib
     $(if $(have_shared),, \
     $$(foreach l,$$($1-libs) $$($1-opt-libs),$$(_cxx_$$l))))
   ldflags_$(notdir $1) = $$(call _uniq,-L$(patsubst %/,%,$(dir $1)) \
-    $(if $(have_shared),$$(_rpath_$(notdir $1)), \
+    $(if $(have_shared),$$(_rpath_$(notdir $1):%/=%), \
     $$(foreach l,$$($1-libs) $$($1-opt-libs),$$(ldflags_$$l)) $$($1-ldflags)))
   ldlibs_$(notdir $1) = $$(call _uniq,-l$(patsubst lib%,%,$(notdir $1)) \
     $(if $(have_shared),, \
