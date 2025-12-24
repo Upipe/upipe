@@ -257,21 +257,22 @@ uclock = setmetatable({ }, {
 local upipe_getters = require "upipe-getters"
 local uref_getters = require "uref-getters"
 
-local function create_getter(f, t)
-    return function (self, arg)
-        if arg ~= nil then return f(self, arg) end
-        local arg_p = ffi.new(t .. "[1]")
-        local ret = f(self, arg_p)
-        if not C.ubase_check(ret) then
-            return nil, ret
-        end
-        return arg_p[0]
-    end
-end
-
 local function getter(getters, f, key)
-    if not getters[key] then return f end
-    return create_getter(f, getters[key])
+    local t = getters[key]
+    if not t then return f end
+    if type(t) == "string" then
+        local arg_p = ffi.new(t .. "[1]")
+        t = function (self, arg)
+            if arg ~= nil then return f(self, arg) end
+            local ret = f(self, arg_p)
+            if not C.ubase_check(ret) then
+                return nil, ret
+            end
+            return arg_p[0]
+        end
+        getters[key] = t
+    end
+    return t
 end
 
 local function fourcc(n1, n2, n3, n4)
