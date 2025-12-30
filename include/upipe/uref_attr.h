@@ -1017,6 +1017,17 @@ static inline int uref_##group##_get_##attr(struct uref *uref, bool *p)     \
 {                                                                           \
     return uref_attr_get_bool(uref, p, UDICT_TYPE_BOOL, name);              \
 }                                                                           \
+/** @This checks if the desc attribute of a uref is set and true.           \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true is the attribute is set and true                            \
+ */                                                                         \
+static inline bool uref_##group##_check_##attr(struct uref *uref)           \
+{                                                                           \
+    bool v = false;                                                         \
+    int ret = uref_##group##_get_##attr(uref, &v);                          \
+    return ubase_check(ret) && v == true;                                   \
+}                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -1083,6 +1094,17 @@ static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
 static inline int uref_##group##_get_##attr(struct uref *uref, bool *p)     \
 {                                                                           \
     return uref_attr_get_bool(uref, p, type, NULL);                         \
+}                                                                           \
+/** @This checks if the desc attribute of a uref is set and true.           \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return true is the attribute is set and true                            \
+ */                                                                         \
+static inline bool uref_##group##_check_##attr(struct uref *uref)           \
+{                                                                           \
+    bool v = false;                                                         \
+    int ret = uref_##group##_get_##attr(uref, &v);                          \
+    return ubase_check(ret) && v == true;                                   \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \

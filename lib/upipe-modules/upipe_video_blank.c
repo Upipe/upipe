@@ -254,10 +254,8 @@ static bool upipe_vblk_try_output(struct upipe *upipe,
     uref_attach_ubuf(uref, ubuf);
     if (upipe_vblk->pic_attr)
         uref_attr_import(uref, upipe_vblk->pic_attr);
-    if (ubase_check(uref_pic_get_progressive(upipe_vblk->flow_def)))
-        uref_pic_set_progressive(uref);
-    else if (ubase_check(uref_pic_get_tff(upipe_vblk->flow_def)))
-        uref_pic_set_tff(uref);
+    uref_pic_copy_progressive(uref, upipe_vblk->flow_def);
+    uref_pic_copy_tff(uref, upipe_vblk->flow_def);
 
     upipe_vblk_output(upipe, uref, upump_p);
     return true;

@@ -399,7 +399,7 @@ static int upipe_x264_open(struct upipe *upipe, struct uref *uref)
     int ret;
 
     uref_pic_size(uref, &width, &height, NULL);
-    bool tff = ubase_check(uref_pic_get_tff(uref));
+    bool tff = uref_pic_check_tff(uref);
 
     params->rc.psz_stat_out = NULL;
     params->rc.psz_stat_in = NULL;
@@ -431,7 +431,7 @@ static int upipe_x264_open(struct upipe *upipe, struct uref *uref)
     params->i_height = height;
     params->b_tff = tff;
     params->b_interlaced =
-        !ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input));
+        !uref_pic_check_progressive(upipe_x264->flow_def_input);
 
     const char *content;
     if (ubase_check(uref_pic_flow_get_video_format(
@@ -703,7 +703,7 @@ static int upipe_x264_update(struct upipe *upipe, struct uref *uref)
     int ret = UBASE_ERR_NONE;
 
     uref_pic_size(uref, &width, &height, NULL);
-    bool tff = ubase_check(uref_pic_get_tff(uref));
+    bool tff = uref_pic_check_tff(uref);
 
     if (upipe_x264->encoder) {
 #ifdef HAVE_X264_MPEG2
@@ -880,8 +880,8 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         }
 
 #ifdef HAVE_X264_MPEG2
-        if (!ubase_check(uref_pic_get_progressive(uref)))
-            pic.b_tff = ubase_check(uref_pic_get_tff(uref));
+        if (!uref_pic_check_progressive(uref))
+            pic.b_tff = uref_pic_check_tff(uref);
 #endif
 
         /* map */

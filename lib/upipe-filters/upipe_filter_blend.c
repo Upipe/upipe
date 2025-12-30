@@ -247,7 +247,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
 
     // Attach new ubuf and output frame
     uref_attach_ubuf(uref, ubuf_deint);
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     uref_pic_delete_tff(uref);
 
     upipe_filter_blend_output(upipe, uref, upump_p);
@@ -327,7 +327,7 @@ static int upipe_filter_blend_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    UBASE_RETURN(uref_pic_set_progressive(flow_def_dup))
+    UBASE_RETURN(uref_pic_set_progressive(flow_def_dup, true))
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }

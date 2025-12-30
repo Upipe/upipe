@@ -309,8 +309,7 @@ static int build_video_flow_def(struct uref *flow_def,
     bool interlaced_frame = frame->flags & AV_FRAME_FLAG_INTERLACED;
 #endif
 
-    if (!interlaced_frame)
-        UBASE_RETURN(uref_pic_set_progressive(flow_def))
+    UBASE_RETURN(uref_pic_set_progressive(flow_def, !interlaced_frame))
     if (color_range == AVCOL_RANGE_JPEG)
         UBASE_RETURN(uref_pic_flow_set_full_range(flow_def))
 
@@ -577,10 +576,9 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
             bool top_field_first = frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST;
 #endif
 
-            if (!interlaced_frame)
-                UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
-            else if (top_field_first)
-                UBASE_ERROR(upipe, uref_pic_set_tff(uref))
+            UBASE_ERROR(upipe, uref_pic_set_progressive(uref, !interlaced_frame));
+            if (interlaced_frame)
+                UBASE_ERROR(upipe, uref_pic_set_tff(uref, top_field_first))
 
             if (key_frame)
                 UBASE_ERROR(upipe, uref_pic_set_key(uref))
@@ -1975,10 +1973,10 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
             bool top_field_first = frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST;
 #endif
 
-            if (!interlaced_frame)
-                UBASE_ERROR(upipe, uref_pic_set_progressive(uref))
-            else if (top_field_first)
-                UBASE_ERROR(upipe, uref_pic_set_tff(uref))
+            UBASE_ERROR(upipe,
+                        uref_pic_set_progressive(uref, !interlaced_frame))
+            if (interlaced_frame)
+                UBASE_ERROR(upipe, uref_pic_set_tff(uref, top_field_first))
 
             if (key_frame)
                 UBASE_ERROR(upipe, uref_pic_set_key(uref))
