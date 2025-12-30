@@ -35,6 +35,7 @@ libupipe_modules-includes = \
     upipe_htons.h \
     upipe_http_source.h \
     upipe_idem.h \
+    upipe_interlace.h \
     upipe_m3u_reader.h \
     upipe_match_attr.h \
     upipe_multicat_probe.h \
@@ -120,6 +121,7 @@ libupipe_modules-src = \
     upipe_htons.c \
     upipe_http_source.c \
     upipe_idem.c \
+    upipe_interlace.c \
     upipe_m3u_reader.c \
     upipe_match_attr.c \
     upipe_multicat_probe.c \
