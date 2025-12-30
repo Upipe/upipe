@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -34,10 +35,10 @@ UREF_ATTR_UNSIGNED_SH(pic, lpadding, UDICT_TYPE_PIC_LPADDING, left padding)
 UREF_ATTR_UNSIGNED_SH(pic, rpadding, UDICT_TYPE_PIC_RPADDING, right padding)
 UREF_ATTR_UNSIGNED_SH(pic, tpadding, UDICT_TYPE_PIC_TPADDING, top padding)
 UREF_ATTR_UNSIGNED_SH(pic, bpadding, UDICT_TYPE_PIC_BPADDING, bottom padding)
-UREF_ATTR_VOID_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
+UREF_ATTR_BOOL_SH(pic, progressive, UDICT_TYPE_PIC_PROGRESSIVE, progressive)
 UREF_ATTR_VOID_SH(pic, tf, UDICT_TYPE_PIC_TF, top field present)
 UREF_ATTR_VOID_SH(pic, bf, UDICT_TYPE_PIC_BF, bottom field present)
-UREF_ATTR_VOID_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
+UREF_ATTR_BOOL_SH(pic, tff, UDICT_TYPE_PIC_TFF, top field first)
 UREF_ATTR_SMALL_UNSIGNED_SH(pic, afd, UDICT_TYPE_PIC_AFD, active format description)
 UREF_ATTR_OPAQUE_SH(pic, cea_708, UDICT_TYPE_PIC_CEA_708, cea-708 captions)
 UREF_ATTR_OPAQUE_SH(pic, bar_data, UDICT_TYPE_PIC_BAR_DATA, afd bar data)

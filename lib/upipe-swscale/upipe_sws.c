@@ -169,7 +169,7 @@ static bool upipe_sws_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    int progressive = ubase_check(uref_pic_get_progressive(uref)) ? 1 : 0;
+    int progressive = ubase_check(uref_pic_check_progressive(uref)) ? 1 : 0;
     if (unlikely(!progressive && input_vsize % 2)) {
         upipe_warn(upipe, "interlaced picture has odd vertical size");
         progressive = 1;

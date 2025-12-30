@@ -248,7 +248,7 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
         UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 2, 1, 1, "u8"))
         UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 2, 1, 1, "v8"))
         UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 1, 1, 1, "a8"))
-        UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(uref, true))
 
         upipe_audiobar->hsize = upipe_audiobar->vsize =
             upipe_audiobar->sep_width = upipe_audiobar->pad_width = UINT64_MAX;

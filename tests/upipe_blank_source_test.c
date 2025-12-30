@@ -116,7 +116,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
         uref_free(flow);
 
         struct uref *uref = uref_alloc(uref_mgr);
-        uref_pic_set_progressive(uref);
+        uref_pic_set_progressive(uref, true);
         upipe_input(blksrc, uref, NULL);
     }
 
