@@ -353,8 +353,8 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
     BMDFieldDominance field = mode->GetFieldDominance();
     switch (field) {
         case bmdLowerFieldFirst:
-            uref_pic_delete_tff(flow_def);
-            uref_pic_delete_progressive(flow_def);
+            UBASE_RETURN(uref_pic_set_tff(flow_def, false));
+            UBASE_RETURN(uref_pic_set_progressive(flow_def, false));
             upipe_bmd_src->tff = false;
             upipe_bmd_src->progressive = false;
             break;
@@ -362,15 +362,15 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
         case bmdUnknownFieldDominance:
             /* sensible defaults */
         case bmdUpperFieldFirst:
-            UBASE_RETURN(uref_pic_set_tff(flow_def));
-            uref_pic_delete_progressive(flow_def);
+            UBASE_RETURN(uref_pic_set_tff(flow_def, true));
+            UBASE_RETURN(uref_pic_set_progressive(flow_def, false));
             upipe_bmd_src->tff = true;
             upipe_bmd_src->progressive = false;
             break;
         case bmdProgressiveFrame:
         case bmdProgressiveSegmentedFrame:
             uref_pic_delete_tff(flow_def);
-            UBASE_RETURN(uref_pic_set_progressive(flow_def));
+            UBASE_RETURN(uref_pic_set_progressive(flow_def, true));
             upipe_bmd_src->tff = false;
             upipe_bmd_src->progressive = true;
             break;
@@ -530,10 +530,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             uref_clock_set_dts_pts_delay(uref, 0);
             uref_clock_set_duration(uref, FrameDuration);
 
-            if (upipe_bmd_src->progressive)
-                uref_pic_set_progressive(uref);
-            else if (upipe_bmd_src->tff)
-                uref_pic_set_tff(uref);
+            uref_pic_set_progressive(uref, upipe_bmd_src->progressive);
+            if (!upipe_bmd_src->progressive)
+                uref_pic_set_tff(uref, upipe_bmd_src->tff);
 
             if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);
