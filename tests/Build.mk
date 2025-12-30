@@ -240,6 +240,10 @@ upipe_http_src_test-src = upipe_http_src_test.c
 upipe_http_src_test-libs = libupipe libupipe_modules libupump_ev
 upipe_http_src_test-opt-libs = libupipe_bearssl libupipe_openssl
 
+tests += upipe_interlace_test
+upipe_interlace_test-src = upipe_interlace_test.c
+upipe_interlace_test-libs = libupipe libupipe_modules
+
 tests += upipe_m3u_reader_test.sh
 upipe_m3u_reader_test.sh-deps = upipe_m3u_reader_test
 
