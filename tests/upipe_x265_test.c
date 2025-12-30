@@ -219,7 +219,7 @@ int main(int argc, char **argv)
     ubase_assert(uref_pic_flow_set_vsize(flow_def, HEIGHT));
     struct urational fps = { .num = 25, .den = 1 };
     ubase_assert(uref_pic_flow_set_fps(flow_def, fps));
-    ubase_assert(uref_pic_set_progressive(flow_def));
+    ubase_assert(uref_pic_set_progressive(flow_def, true));
 
     /* x265 pipe */
     struct upipe *x265 = upipe_void_alloc(upipe_x265_mgr,
