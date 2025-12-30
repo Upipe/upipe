@@ -1225,7 +1225,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         if (field_seq_flag)
             frame_rate.den *= 2;
         else
-            uref_pic_set_progressive(flow_def);
+            uref_pic_set_progressive(flow_def, true);
 
         urational_simplify(&frame_rate);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
@@ -2082,7 +2082,7 @@ static int upipe_h265f_prepare_au(struct upipe *upipe, struct uref *uref)
 
     switch (upipe_h265f->pic_struct) {
         case H265SEI_STRUCT_FRAME:
-            UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, true))
             duration *= 2;
             break;
         case H265SEI_STRUCT_TOP:
@@ -2098,7 +2098,7 @@ static int upipe_h265f_prepare_au(struct upipe *upipe, struct uref *uref)
         case H265SEI_STRUCT_TOP_BOT:
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref, true))
             duration *= 2;
             break;
         case H265SEI_STRUCT_BOT_TOP:
@@ -2109,7 +2109,7 @@ static int upipe_h265f_prepare_au(struct upipe *upipe, struct uref *uref)
         case H265SEI_STRUCT_TOP_BOT_TOP:
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref, true))
             duration *= 3;
             break;
         case H265SEI_STRUCT_BOT_TOP_BOT:
