@@ -137,6 +137,9 @@ struct upipe_h265f {
     /** active picture parameter set, or -1 */
     int active_pps;
 
+    /** alternative transfer characteristics */
+    int preferred_transfer_characteristics;
+
     /* parsing results - headers */
     /** VPS profile space */
     uint8_t profile_space;
@@ -335,6 +338,9 @@ static struct upipe *upipe_h265f_alloc(struct upipe_mgr *mgr,
     for (i = 0; i < H265PPS_ID_MAX; i++)
         upipe_h265f->pps[i] = NULL;
     upipe_h265f->active_pps = -1;
+
+    /* 2 is NULL, see transfer_characteristics in uref_pic_flow.c */
+    upipe_h265f->preferred_transfer_characteristics = 2;
 
     upipe_h265f->acquired = false;
     upipe_throw_ready(upipe);
@@ -1269,6 +1275,12 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     else if (unlikely(!ubase_check(err)))
         upipe_throw_fatal(upipe, err);
 
+    if (upipe_h265f->preferred_transfer_characteristics != 2) {
+        if (transfer_characteristics != upipe_h265f->preferred_transfer_characteristics)
+            transfer_characteristics = upipe_h265f->preferred_transfer_characteristics;
+        upipe_h265f->preferred_transfer_characteristics = 2;
+    }
+
     err = uref_pic_flow_set_transfer_characteristics_val(
         flow_def, transfer_characteristics);
     if (unlikely(err == UBASE_ERR_UNHANDLED))
@@ -1503,6 +1515,24 @@ static int upipe_h265f_handle_sei_buffering_period(struct upipe *upipe,
 }
 
 /** @internal @This handles the supplemental enhancement information called
+ * alternative transfer characteristics.
+ *
+ * @param upipe description structure of the pipe
+ * @param s block stream parsing structure
+ * @return an error code
+ */
+static int upipe_h265f_handle_sei_alternative_transfer_characteristics(struct upipe *upipe,
+                                             struct ubuf_block_stream *s)
+{
+    struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
+
+    upipe_h26xf_stream_fill_bits(s, 8);
+    upipe_h265f->preferred_transfer_characteristics = ubuf_block_stream_show_bits(s, 8);
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This handles the supplemental enhancement information called
  * picture timing.
  *
  * @param upipe description structure of the pipe
@@ -1547,6 +1577,7 @@ static int upipe_h265f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
 
     switch (type) {
         case H265SEI_BUFFERING_PERIOD:
+        case H265SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
         case H265SEI_PIC_TIMING: {
             struct upipe_h26xf_stream f;
             upipe_h26xf_stream_init(&f);
@@ -1567,6 +1598,9 @@ static int upipe_h265f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
                     break;
                 case H265SEI_PIC_TIMING:
                     err = upipe_h265f_handle_sei_pic_timing(upipe, s);
+                    break;
+                case H265SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+                    err = upipe_h265f_handle_sei_alternative_transfer_characteristics(upipe, s);
                     break;
                 default:
                     break;
