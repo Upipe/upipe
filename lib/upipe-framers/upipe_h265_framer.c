@@ -1286,9 +1286,11 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     else if (unlikely(!ubase_check(err)))
         upipe_throw_fatal(upipe, err);
 
-    if (transfer_characteristics != upipe_h265f->preferred_transfer_characteristics)
-        transfer_characteristics = upipe_h265f->preferred_transfer_characteristics;
-    upipe_h265f->preferred_transfer_characteristics = 2;
+    if (upipe_h265f->preferred_transfer_characteristics != 2) {
+        if (transfer_characteristics != upipe_h265f->preferred_transfer_characteristics)
+            transfer_characteristics = upipe_h265f->preferred_transfer_characteristics;
+        upipe_h265f->preferred_transfer_characteristics = 2;
+    }
 
     err = uref_pic_flow_set_transfer_characteristics_val(
         flow_def, transfer_characteristics);
