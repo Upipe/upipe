@@ -1,6 +1,7 @@
 lib-targets = libupipe
 
 libupipe-desc = core library
+libupipe-so-version = 1.0.0
 
 libupipe-gen-includes = config.h
 
