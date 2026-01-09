@@ -16,7 +16,6 @@ subdirs = \
     upipe-hbrmt \
     upipe-hls \
     upipe-modules \
-    upipe-nacl \
     upipe-netmap \
     upipe-openssl \
     upipe-osx \
