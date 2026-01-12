@@ -20,7 +20,6 @@ subdirs = \
     upipe-openssl \
     upipe-osx \
     upipe-pthread \
-    upipe-qt \
     upipe-speexdsp \
     upipe-swresample \
     upipe-swscale \

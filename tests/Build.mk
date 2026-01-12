@@ -286,10 +286,6 @@ tests += upipe_probe_uref_test
 upipe_probe_uref_test-src = upipe_probe_uref_test.c
 upipe_probe_uref_test-libs = libupipe libupipe_modules
 
-tests += upipe_qt_html_test
-upipe_qt_html_test-src = upipe_qt_html_test.c
-upipe_qt_html_test-libs = libupipe libupipe_pthread libupipe_qt libupump_ev
-
 tests += upipe_queue_test
 upipe_queue_test-src = upipe_queue_test.c
 upipe_queue_test-libs = libupipe libupipe_modules libupump_ev
