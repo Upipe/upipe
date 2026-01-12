@@ -20,7 +20,6 @@ fi
 # valgrind suppressions
 SUPPRESSIONS="--suppressions=$srcdir/valgrind.supp"
 if [ "$UNAME" = "Darwin" ]; then
-    SUPPRESSIONS="$SUPPRESSIONS --suppressions=$srcdir/valgrind_osx.supp"
     export DYLD_LIBRARY_PATH="$_DYLD_LIBRARY_PATH"
 fi
 
