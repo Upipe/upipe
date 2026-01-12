@@ -10,9 +10,6 @@ Makefile
 /doc/html
 /doc/dependencies.png
 
-# Qt
-/lib/upipe-qt/moc_thumbnail.cpp
-
 # pkg-config
 *.pc
 
