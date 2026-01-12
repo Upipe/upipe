@@ -279,7 +279,7 @@ static int upipe_audio_copy_set_flow_def_real(struct upipe *upipe,
  * @param upipe description structure of the pipe
  * @param size number of samples to extract
  * @param dst destination planes buffer
- * @param planes number of destionation planes
+ * @param planes number of destination planes
  */
 static void upipe_audio_copy_extract(struct upipe *upipe,
                                      size_t size,
