@@ -47,12 +47,12 @@ struct uprobe_dejitter {
     /** number of deviations to average */
     unsigned int deviation_divider;
 
-    /** number of references received for offset calculaton */
+    /** number of references received for offset calculation */
     unsigned int offset_count;
     /** offset between stream clock and system clock */
     double offset;
 
-    /** number of references received for deviation calculaton */
+    /** number of references received for deviation calculation */
     unsigned int deviation_count;
     /** average absolute deviation */
     double deviation;

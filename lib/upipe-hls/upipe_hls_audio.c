@@ -49,7 +49,7 @@
 #include "upipe/uref_block.h"
 #include "upipe/uref_m3u_master.h"
 
-/** @internal @This enumatates the possible guess for playlist type. */
+/** @internal @This enumerates the possible guess for playlist type. */
 enum upipe_hls_audio_guess {
     /** no guess */
     UPIPE_HLS_AUDIO_GUESS_NONE,

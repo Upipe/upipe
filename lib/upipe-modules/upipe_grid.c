@@ -74,7 +74,7 @@ struct upipe_grid {
     struct uclock *uclock;
     /** uclock request */
     struct urequest uclock_request;
-    /** grid max rentention */
+    /** grid max retention */
     uint64_t max_retention;
 };
 
@@ -138,7 +138,7 @@ UPIPE_HELPER_FLOW_DEF(upipe_grid_in, flow_def, flow_attr);
 UPIPE_HELPER_UPUMP_MGR(upipe_grid_in, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_grid_in, upump, upump_mgr);
 
-/** @internal @This enumatates the grid output inner pipe events. */
+/** @internal @This enumerates the grid output inner pipe events. */
 enum uprobe_grid_out_event {
     /** sentinel */
     UPROBE_GRID_OUT_SENTINEL = UPROBE_LOCAL,
