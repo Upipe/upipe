@@ -53,7 +53,6 @@ jobs:
           - name: macos-15-arm64-xcode
             os: macos-15
             compiler: xcode
-            luajit: false
 
     steps:
       - name: Set up env
