@@ -18,7 +18,7 @@ local is_number = {
 }
 
 local function va_start(va_list)
-    if ffi.arch == "x64" or ffi.arch == "arm64" then
+    if ffi.arch == "x64" or (ffi.arch == "arm64" and ffi.os ~= "OSX") then
         return va_list
     end
     return va_list_p(va_list)
