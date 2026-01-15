@@ -1,0 +1,47 @@
+debug: [null 0] throw ready event
+debug: [null 0] throw provide request type uref mgr
+debug: [null 0] throw provide request type ubuf mgr
+debug: [null 1] throw ready event
+debug: [null 1] throw provide request type uref mgr
+debug: [null 1] throw provide request type ubuf mgr
+debug: [null 2] throw ready event
+debug: [null 2] throw provide request type uref mgr
+debug: [null 2] throw provide request type ubuf mgr
+debug: [null 3] throw ready event
+debug: [null 3] throw provide request type uref mgr
+debug: [null 3] throw provide request type ubuf mgr
+debug: [null 3] freed 0 packets
+debug: [null 3] throw dead event
+debug: [null 4] throw ready event
+debug: [null 4] throw provide request type uref mgr
+debug: [null 4] throw provide request type ubuf mgr
+debug: [null 5] throw ready event
+debug: [null 5] throw provide request type uref mgr
+debug: [null 5] throw provide request type ubuf mgr
+debug: [null 6] throw ready event
+debug: [null 6] throw provide request type uref mgr
+debug: [null 6] throw provide request type ubuf mgr
+notice: [probe_uref 6] packet size 18
+debug: [null 6] accepted flow def
+notice: [probe_uref 4] packet size 18
+debug: [null 4] accepted flow def
+notice: [probe_uref 2] packet size 18
+debug: [null 2] accepted flow def
+notice: [probe_uref 0] packet size 18
+debug: [null 0] accepted flow def
+notice: [probe_uref 6] packet size 31
+notice: [probe_uref 4] packet size 31
+notice: [probe_uref 2] packet size 31
+notice: [probe_uref 0] packet size 31
+debug: [null 0] freed 2 packets
+debug: [null 0] throw dead event
+debug: [null 1] freed 0 packets
+debug: [null 1] throw dead event
+debug: [null 2] freed 2 packets
+debug: [null 2] throw dead event
+debug: [null 4] freed 2 packets
+debug: [null 4] throw dead event
+debug: [null 5] freed 0 packets
+debug: [null 5] throw dead event
+debug: [null 6] freed 2 packets
+debug: [null 6] throw dead event
