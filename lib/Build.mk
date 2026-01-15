@@ -19,6 +19,7 @@ subdirs = \
     upipe-netmap \
     upipe-openssl \
     upipe-osx \
+    upipe-pcap \
     upipe-pthread \
     upipe-speexdsp \
     upipe-swresample \
