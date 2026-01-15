@@ -70,6 +70,10 @@ multicatudp-src = multicatudp.c
 multicatudp-deps = upipe_fsink
 multicatudp-libs = libupipe libupipe_modules libupipe_pthread libupump_ev
 
+noinst-targets += pcap
+pcap-src = pcap.c
+pcap-libs = libupipe libupipe_modules libupipe_pcap libupump_ev
+
 noinst-targets += rist_rx
 rist_rx-src = rist_rx.c
 rist_rx-deps = upipe_udpsink upipe_rtpfb
