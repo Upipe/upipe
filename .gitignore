@@ -2,6 +2,9 @@
 /config.log
 /config.h
 /include/upipe/config.h
+Makefile
+!/Makefile
+/run
 
 # mkdoc
 /doc/html
