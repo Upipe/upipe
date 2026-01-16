@@ -128,11 +128,13 @@ upipe_auto_source_test-opt-libs = libupipe_bearssl libupipe_openssl
 
 test-targets += upipe_avcodec_decode_test
 upipe_avcodec_decode_test-src = upipe_avcodec_decode_test.c
+upipe_avcodec_decode_test-deps = upipe_avcdec
 upipe_avcodec_decode_test-libs = libupipe libupipe_modules libupipe_av \
                                  libupump_ev libavformat libavcodec pthread
 
 tests += upipe_avcodec_test
 upipe_avcodec_test-src = upipe_avcodec_test.c
+upipe_avcodec_test-deps = upipe_avcdec
 upipe_avcodec_test-libs = libupipe libupipe_modules libupipe_av libupump_ev \
                           pthread
 
