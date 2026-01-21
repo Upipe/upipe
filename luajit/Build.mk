@@ -210,10 +210,14 @@ $(modules-cdef): %.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs \
 lua_path := $(abspath $(builddir)/?.lua);$(abspath $(srcdir)/?.lua)
 test.ts := $(abspath $(top_srcdir)/tests/upipe_ts_test.ts)
 
+_LD_PRELOAD = $(if $(have_apple),DYLD_INSERT_LIBRARIES,LD_PRELOAD)
+
 log-compiler-lua = $(LUAJIT)
 log-env-lua = $(log-env) LUA_PATH="$(lua_path)" \
-  $(if $(ld_preload_san),LD_PRELOAD="$(strip $(ld_preload_san))") \
-  $(if $(have_asan),ASAN_OPTIONS="detect_odr_violation=0")
+  $(if $(ld_preload_san),\
+    $(_LD_PRELOAD)="$(subst $() ,:,$(sort $(ld_preload_san)))") \
+  $(if $(have_asan),ASAN_OPTIONS="detect_odr_violation=0") \
+  $(if $(and $(have_apple),$(have_asan)),MallocNanoZone=0)
 
 tests += check.lua
 check.lua-args = $(enabled-modules)
