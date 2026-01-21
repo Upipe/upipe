@@ -1,6 +1,6 @@
 # ------------------------------------------------------------------------------
 #  Generic build system for GNU Make
-#  Copyright (C) 2022-2025 Clément Vasseur <clement.vasseur@gmail.com>
+#  Copyright (C) 2022-2026 Clément Vasseur <clement.vasseur@gmail.com>
 #  SPDX-License-Identifier: MIT
 # ------------------------------------------------------------------------------
 
@@ -185,7 +185,7 @@ $(_lib-targets:=.pc): %.pc:
 
 # --- config checks ------------------------------------------------------------
 
-configs += static static-pic $(if $(strip $(_lib-targets)),shared apple)
+configs += apple static static-pic $(if $(strip $(_lib-targets)),shared)
 shared-ldflags = -shared
 apple-assert = __APPLE__
 static-pic-disabled = y
@@ -565,12 +565,11 @@ _log-env = $(if $(log-compiler$(_ext)),$(log-env$(_ext)),$(log-env))
 _LD_LIBRARY_PATH = $(subst $() ,:,$(foreach d,\
   $(sort $(dir $(_lib-targets))),$(call _rel,$(*D))$d))
 
+_DY = $(if $(have_apple),DY)
+
 $(_tests:%=check-%): check-%: % \
   $(filter-out $(_disabled),$(_targets)) | $(dir $(_tests))
-	@export LD_LIBRARY_PATH="$(_LD_LIBRARY_PATH):$$LD_LIBRARY_PATH"; \
-	 export DYLD_LIBRARY_PATH="$(_LD_LIBRARY_PATH):$$DYLD_LIBRARY_PATH"; \
-	 export _DYLD_LIBRARY_PATH="$$DYLD_LIBRARY_PATH"; \
-	 export DYLD_INSERT_LIBRARIES="$(LD_INSERT_LIBRARIES)"; \
+	@export $(_DY)LD_LIBRARY_PATH="$(_LD_LIBRARY_PATH):$$$(_DY)LD_LIBRARY_PATH"; \
 	 $(if $(strip $(_log-env)),export $(_log-env);) \
 	cd $(*D) && if $(_log-compiler) $(_log-flags) \
 	  $(_<P) $($*-args) >$(*F).log 2>&1; \
@@ -652,7 +651,9 @@ define _san
   endif
   ldflags += $$(if $$(have_$1),$(firstword $(_$1_flags)))
   have_san := $$(or $$(have_san),$$(have_$1))
-  ld_preload_san += $$(if $$(have_$1),$$$$($(CC) -print-file-name=lib$1.so))
+  ld_preload_san += $$(if $$(have_$1),$(filter /%,\
+    $(shell $(CC) -print-file-name=lib$1.$(_so)) \
+    $(shell $(CC) -print-file-name=libclang_rt.$1_osx_dynamic.dylib)))
 endef
 
 $(foreach san,asan lsan tsan ubsan,$(eval $(call _san,$(san))))
@@ -688,8 +689,7 @@ ifdef _oot
 	  echo "\$$(filter-out all,\$$(MAKECMDGOALS)): all"; } > Makefile
 endif
 	@{ echo '#!/bin/sh'; \
-	   echo export LD_LIBRARY_PATH=\"$(_ld_path):\$$LD_LIBRARY_PATH\"; \
-	   echo export DYLD_LIBRARY_PATH=\"$(_ld_path):\$$DYLD_LIBRARY_PATH\"; \
+	   echo export $(_DY)LD_LIBRARY_PATH=\"$(_ld_path):\$$$(_DY)LD_LIBRARY_PATH\"; \
 	   echo 'exec "$$@"'; \
 	} > run
 	@$(CHMOD) +x run

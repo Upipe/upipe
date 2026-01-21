@@ -2,7 +2,8 @@ log-compiler := $(abspath $(srcdir)/valgrind_wrapper.sh)
 log-flags := $(abspath $(srcdir))
 
 log-env = $(if $(have_san),DISABLE_VALGRIND=1) \
-          $(if $(have_ubsan),UBSAN_OPTIONS="print_stacktrace=1")
+          $(if $(have_ubsan),UBSAN_OPTIONS="print_stacktrace=1") \
+          $(if $(have_apple),_DYLD_LIBRARY_PATH=$(_LD_LIBRARY_PATH))
 
 distfiles = valgrind_wrapper.sh valgrind.supp \
             udict_inline_test.txt \

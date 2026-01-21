@@ -143,7 +143,7 @@ jobs:
           set-env CFLAGS "-Wno-error=deprecated-declarations -fsanitize=undefined -fsanitize=address -fsanitize-address-use-after-scope -fsanitize-recover=all -fno-omit-frame-pointer -fno-optimize-sibling-calls -I$BREW_PREFIX/include"
           set-env LDFLAGS "-fsanitize=undefined -fsanitize=address -L$BREW_PREFIX/lib"
           set-env DISABLE_VALGRIND "1"
-          set-env LD_INSERT_LIBRARIES "$(clang -print-search-dirs | sed -n 's/^libraries: =//p')/lib/darwin/libclang_rt.asan_osx_dynamic.dylib"
+          set-env ld_preload_san "$(clang --print-file-name libclang_rt.asan_osx_dynamic.dylib)"
           set-env UBSAN_OPTIONS "print_stacktrace=1"
           set-env LLVM_DWARFDUMP "dwarfdump"
 
