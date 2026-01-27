@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -2187,6 +2188,25 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
 {                                                                           \
     return uref_attr_copy_rational(uref, uref_src, UDICT_TYPE_RATIONAL,     \
                                    name);                                   \
+}                                                                           \
+/** @This compares the desc attribute in two urefs.                         \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int                                                           \
+uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
+{                                                                           \
+    struct urational v1, v2;                                                \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return !ubase_check(err1) ? -1 : 1;                                 \
+    int64_t ret = urational_cmp(&v1, &v2);                                  \
+    return ret == 0 ? 0 : (ret < 0) ? -1 : 1;                               \
 }
 
 /* @This allows to define accessors for a shorthand rational attribute.
@@ -2238,6 +2258,25 @@ static inline int uref_##group##_copy_##attr(struct uref *uref,             \
                                              struct uref *uref_src)         \
 {                                                                           \
     return uref_attr_copy_rational(uref, uref_src, type, NULL);             \
+}                                                                           \
+/** @This compares the desc attribute in two urefs.                         \
+ *                                                                          \
+ * @param uref1 pointer to the first uref                                   \
+ * @param uref2 pointer to the second uref                                  \
+ * @return 0 if both attributes are absent or identical                     \
+ */                                                                         \
+static inline int                                                           \
+uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
+{                                                                           \
+    struct urational v1, v2;                                                \
+    int err1 = uref_##group##_get_##attr(uref1, &v1);                       \
+    int err2 = uref_##group##_get_##attr(uref2, &v2);                       \
+    if (!ubase_check(err1) && !ubase_check(err2))                           \
+        return 0;                                                           \
+    if (!ubase_check(err1) || !ubase_check(err2))                           \
+        return !ubase_check(err1) ? -1 : 1;                                 \
+    int64_t ret = urational_cmp(&v1, &v2);                                  \
+    return ret == 0 ? 0 : (ret < 0) ? -1 : 1;                               \
 }
 
 /* @This allows to define accessors for a rational attribute, with a name

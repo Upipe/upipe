@@ -395,7 +395,7 @@ static inline int64_t urational_cmp(const struct urational *urational1,
     if (!urational1->den && !urational2->den)
         return 0;
     if (!urational1->den || !urational2->den)
-        return INT64_MIN;
+        return !urational1->den ? INT64_MIN : INT64_MAX;
     return urational1->num * (int64_t)urational2->den -
            urational2->num * (int64_t)urational1->den;
 }
