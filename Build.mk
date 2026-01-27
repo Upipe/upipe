@@ -163,3 +163,27 @@ check-tests:
 	  fi; \
 	done; \
 	test -z "$$ret"
+
+check-licenses:
+	@for file in $$(find $(top_srcdir) \
+	  -path $(top_srcdir)/lib/upipe-blackmagic/include -prune -o \
+	  -path $(top_srcdir)/lib/upipe-modules/http-parser -prune -o \
+	  -path $(top_srcdir)/tests/checkasm -prune -o \
+	  \( -name '*.c' -o -name '*.h' -o -name '*.cpp' \) -print); do \
+	  if ! grep -q SPDX-License-Identifier: "$$file"; then \
+	    echo "$${file#./}: missing SPDX-License-Identifier"; \
+	    ret=1; \
+	  fi; \
+	done; \
+	test -z "$$ret"
+
+show-licenses:
+	@for lib in $$(find $(top_srcdir)/lib -maxdepth 1 -mindepth 1 -type d); do \
+	  echo -n "$${lib##*/}:"; \
+	  { find "$(top_srcdir)/include/$${lib##*/}" -name '*.h'; \
+	    find "$$lib" -name '*.c' -o -name '*.h' -o -name '*.cpp'; } | \
+	  while read file; do \
+	    sed -n 's/ \* SPDX-License-Identifier: //p' "$$file"; \
+	  done | sort -u | while read id; do echo -n " $$id"; done; \
+	  echo; \
+	done
