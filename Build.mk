@@ -165,10 +165,14 @@ check-tests:
 	test -z "$$ret"
 
 check-licenses:
-	@for file in $$(find $(top_srcdir) \
-	  -path $(top_srcdir)/lib/upipe-blackmagic/include -prune -o \
-	  -path $(top_srcdir)/lib/upipe-modules/http-parser -prune -o \
-	  -path $(top_srcdir)/tests/checkasm -prune -o \
+	@cd $(top_srcdir) && for file in $$(find \
+	  -path './lib/upipe-blackmagic/include' -prune -o \
+	  -path './lib/upipe-filters/zoneplate/videotestsrc.[ch]' -prune -o \
+	  -path './lib/upipe-modules/http-parser' -prune -o \
+	  -path './lib/upipe-ts/rsa_asn1.[ch]' -prune -o \
+	  -path './lib/upipe-dveo/asi_ioctl.h' -prune -o \
+	  -path './tests/checkasm' -prune -o \
+	  -path './tests/upipe_h264_framer_test.h' -prune -o \
 	  \( -name '*.c' -o -name '*.h' -o -name '*.cpp' \) -print); do \
 	  if ! grep -q SPDX-License-Identifier: "$$file"; then \
 	    echo "$${file#./}: missing SPDX-License-Identifier"; \

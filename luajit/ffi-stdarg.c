@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2016-2018 OpenHeadend S.A.R.L.
+ *
+ * Authors: Clément Vasseur
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <stdarg.h>
 #include <string.h>
 #include <stdint.h>

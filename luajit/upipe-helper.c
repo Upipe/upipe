@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2016-2019 OpenHeadend S.A.R.L.
+ * Copyright (C) 2021-2025 EasyTools S.A.S.
+ *
+ * Authors: Clément Vasseur
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_output.h"
