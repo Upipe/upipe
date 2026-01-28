@@ -1,7 +1,9 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
+ *          Arnaud de Turckheim
  *
  * SPDX-License-Identifier: MIT
  */
@@ -22,8 +24,8 @@ extern "C" {
 #include "upipe/uref_attr.h"
 #include "upipe/upipe.h"
 
-/** @This declares six functions dealing with the management of flow definitions
- * in linear pipes.
+/** @This declares functions dealing with the management of flow definitions in
+ * linear pipes.
  *
  * You must add two members to your private upipe structure, for instance:
  * @code
@@ -62,6 +64,12 @@ extern "C" {
  * @end code
  * Called when new flow definition attributes are calculated (for instance on
  * a new global header). Returns the new flow definition of the pipe.
+ *
+ * @item @code
+ *  bool upipe_foo_check_flow_def_input(struct upipe *upipe,
+ *                                      struct uref *flow_def_input)
+ * @end code
+ * Checks a new input flow definitions atributes packet against the stored one.
  *
  * @item @code
  *  struct uref *upipe_foo_store_flow_def_input(struct upipe *upipe,
@@ -155,6 +163,21 @@ static UBASE_UNUSED inline struct uref *                                    \
         uref_free(s->FLOW_DEF_ATTR);                                        \
     s->FLOW_DEF_ATTR = flow_def_attr;                                       \
     return STRUCTURE##_make_flow_def(upipe);                                \
+}                                                                           \
+/** @internal @This checks a flow definition attributes packet against the  \
+ * stored input flow def attributes uref.                                   \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param flow_def_attr new flow def attributes packet                      \
+ * @return false if the flow def attributes packets are different           \
+ */                                                                         \
+static UBASE_UNUSED bool                                                    \
+    STRUCTURE##_check_flow_def_input(struct upipe *upipe,                   \
+                                    struct uref *flow_def_attr)             \
+{                                                                           \
+    struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
+    return s->FLOW_DEF_INPUT != NULL &&                                     \
+           !udict_cmp(s->FLOW_DEF_INPUT->udict, flow_def_attr->udict);      \
 }                                                                           \
 /** @internal @This stores a flow def input uref, and returns the new flow  \
  * definition.                                                              \
