@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -386,14 +386,14 @@ UREF_PIC_FLOW_FORMAT(monowhite, 1, { 1, 1, 1, "Y1", 1 });
  * From libavutil/pixfmt.h:
  * packed RGB 8:8:8, 32bpp, RGBXRGBX...  X=unused/undefined
  */
-UREF_PIC_FLOW_FORMAT(rgb0, 1, { 1, 1, 1, "r8g8b808", 32 });
+UREF_PIC_FLOW_FORMAT(rgb0, 1, { 1, 1, 4, "r8g8b808", 32 });
 
 /** @This is the description of the 0rgb format.
  *
  * from libavutil/pixfmt.h:
  * packed RGB 8:8:8, 32bpp, XRGBXRGB... X=unused/undefined
  */
-UREF_PIC_FLOW_FORMAT(0rgb, 1, { 1, 1, 1, "08r8g8b8", 32 });
+UREF_PIC_FLOW_FORMAT(0rgb, 1, { 1, 1, 4, "08r8g8b8", 32 });
 
 /** This is the description of the rgb565 format. */
 UREF_PIC_FLOW_FORMAT(rgb565, 1, { 1, 1, 2, "r5g6b5", 16 });
@@ -402,7 +402,7 @@ UREF_PIC_FLOW_FORMAT(rgb565, 1, { 1, 1, 2, "r5g6b5", 16 });
 UREF_PIC_FLOW_FORMAT(rgb24, 1, { 1, 1, 3, "r8g8b8", 24 });
 
 /** @This is the description of the bgr format. */
-UREF_PIC_FLOW_FORMAT(bgr24, 1, { 1, 1, 3, "b8g8e8", 24 });
+UREF_PIC_FLOW_FORMAT(bgr24, 1, { 1, 1, 3, "b8g8r8", 24 });
 
 /** @This is the description of the argb format. */
 UREF_PIC_FLOW_FORMAT(argb, 1, { 1, 1, 4, "a8r8g8b8", 32 });
