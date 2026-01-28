@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2021 EasyTools S.A.S.
+ *
+ * Authors: Clément Vasseur
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #undef NDEBUG
 
 #include "upipe/upump.h"
