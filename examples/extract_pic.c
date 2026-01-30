@@ -153,7 +153,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_UNHANDLED;
     }
     wanted_hsize = (hsize * sar.num / sar.den / 2) * 2;
-    progressive = ubase_check(uref_pic_get_progressive(flow_def));
+    progressive = ubase_check(uref_pic_check_progressive(flow_def));
 
     /* supported format of the jpeg encoder */
     const struct uref_pic_flow_format *supported_formats[] = {
@@ -173,7 +173,7 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
     struct uref *flow_def2 = uref_dup(flow_def);
     upipe_use(upipe);
 
-    uref_pic_set_progressive(flow_def2);
+    uref_pic_set_progressive(flow_def2, true);
     uref_pic_flow_set_hsize(flow_def2, wanted_hsize);
     if (!supported)
         uref_pic_flow_set_format(flow_def2,

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -79,10 +80,10 @@ static const struct inline_shorthand inline_shorthands[] = {
     { "p.bpadding", UDICT_TYPE_UNSIGNED },
     { "p.sar", UDICT_TYPE_RATIONAL },
     { "p.overscan", UDICT_TYPE_BOOL },
-    { "p.progressive", UDICT_TYPE_VOID },
+    { "p.progressive", UDICT_TYPE_BOOL },
     { "p.tf", UDICT_TYPE_VOID },
     { "p.bf", UDICT_TYPE_VOID },
-    { "p.tff", UDICT_TYPE_VOID },
+    { "p.tff", UDICT_TYPE_BOOL },
     { "p.afd", UDICT_TYPE_SMALL_UNSIGNED },
     { "p.cea_708", UDICT_TYPE_OPAQUE },
     { "p.bar_data", UDICT_TYPE_OPAQUE },

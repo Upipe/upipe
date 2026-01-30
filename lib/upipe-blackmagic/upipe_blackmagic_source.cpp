@@ -360,7 +360,7 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
         case bmdUnknownFieldDominance:
             /* sensible defaults */
         case bmdUpperFieldFirst:
-            UBASE_RETURN(uref_pic_set_tff(flow_def));
+            UBASE_RETURN(uref_pic_set_tff(flow_def, true));
             uref_pic_delete_progressive(flow_def);
             upipe_bmd_src->tff = true;
             upipe_bmd_src->progressive = false;
@@ -368,7 +368,7 @@ static int upipe_bmd_src_build_video(struct upipe *upipe,
         case bmdProgressiveFrame:
         case bmdProgressiveSegmentedFrame:
             uref_pic_delete_tff(flow_def);
-            UBASE_RETURN(uref_pic_set_progressive(flow_def));
+            UBASE_RETURN(uref_pic_set_progressive(flow_def, true));
             upipe_bmd_src->tff = false;
             upipe_bmd_src->progressive = true;
             break;
@@ -529,9 +529,9 @@ HRESULT DeckLinkCaptureDelegate::VideoInputFrameArrived(
             uref_clock_set_duration(uref, FrameDuration);
 
             if (upipe_bmd_src->progressive)
-                uref_pic_set_progressive(uref);
+                uref_pic_set_progressive(uref, true);
             else if (upipe_bmd_src->tff)
-                uref_pic_set_tff(uref);
+                uref_pic_set_tff(uref, true);
 
             if (!uqueue_push(&upipe_bmd_src->uqueue, uref))
                 uref_free(uref);

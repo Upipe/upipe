@@ -423,7 +423,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     params->i_width = width;
     params->i_height = height;
     params->b_interlaced =
-        !ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input));
+        !ubase_check(uref_pic_check_progressive(upipe_x264->flow_def_input));
 
     const char *content;
     int ret;
