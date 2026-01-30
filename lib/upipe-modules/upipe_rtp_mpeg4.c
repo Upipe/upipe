@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <stdlib.h>
 
 #include "upipe/upipe.h"

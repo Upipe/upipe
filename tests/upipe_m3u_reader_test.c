@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2015-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2023-2024 EasyTools
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #undef NDEBUG
 
 #include "upipe/ubase.h"

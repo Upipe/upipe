@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2020 EasyTools
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #undef NDEBUG
 
 #include "upipe/uuri.h"

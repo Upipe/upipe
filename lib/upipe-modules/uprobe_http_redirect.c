@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2015 OpenHeadend S.A.R.L.
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "upipe/uprobe.h"
 #include "upipe/uprobe_helper_alloc.h"
 #include "upipe-modules/upipe_http_source.h"

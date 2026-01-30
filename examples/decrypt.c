@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2016-2017 OpenHeadend S.A.R.L.
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
