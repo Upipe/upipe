@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2020-2024 EasyTools
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #undef NDEBUG
 
 #include "config.h"

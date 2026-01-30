@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2016 OpenHeadend S.A.R.L.
+ *
+ * Authors: Arnaud de Turckheim
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #include "upipe/ustring.h"
 #include "upipe/uclock.h"
 
