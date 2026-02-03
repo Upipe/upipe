@@ -92,6 +92,9 @@ struct upipe_audiobar {
     /** inferred padding at end of line */
     uint64_t pad_width;
 
+    /** 10 bit output */
+    bool tenbit;
+
     /** public upipe structure */
     struct upipe upipe;
 };
@@ -172,17 +175,60 @@ static double iec_scale(double dB)
 
 /** @internal @This copies pixels to the destination picture.
  *
+ * @param dst array of destination chromas (planar YUV422P10LE)
+ * @param strides array of strides for each chroma
+ * @param hsubs array of hsubs of each chroma
+ * @param vsubs array of vsubs of each chroma
+ * @param color 16-bit color code
+ * @param row row number
+ * @param col column number
+ * @param w size of the copy
+ */
+static void copy_color10(uint8_t **dst, const size_t *strides,
+                       const uint8_t *hsubs, const uint8_t *vsubs, const uint16_t *color,
+                       unsigned row, unsigned col, unsigned w)
+{
+    for (int i = 0; i < 3; i++) {
+        if (dst[i] == NULL)
+            continue;
+
+        uint16_t *d = (uint16_t*)&dst[i][(row / vsubs[i]) * strides[i]];
+
+        unsigned offset = col / hsubs[i];
+        unsigned count = w / hsubs[i];
+        for (unsigned j = 0; j < count; j++) {
+            d[offset + j] = color[i] << 2;
+        }
+    }
+
+    if (dst[3] != NULL)
+        memset(&dst[3][(row / vsubs[3]) * strides[3] + col / hsubs[3]],
+                color[3], w / hsubs[3]); // a8
+
+    if (dst[4] != NULL) { // u10v10l
+        uint16_t *d = (uint16_t*)&dst[4][(row / vsubs[4]) * strides[4] +
+            2 * col / hsubs[4]];
+
+        for (int i = 0; i < w / hsubs[4]; i++) {
+            d[i * 2] = color[1];
+            d[i * 2 + 1] = color[2];
+        }
+    }
+}
+
+/** @internal @This copies pixels to the destination picture.
+ *
  * @param dst array of destination chromas (planar YUV422)
  * @param strides array of strides for each chroma
  * @param hsubs array of hsubs of each chroma
  * @param vsubs array of vsubs of each chroma
  * @param color 32-bit color code
  * @param row row number
- * @param col colon number
+ * @param col column number
  * @param w size of the copy
  */
-static void copy_color(uint8_t **dst, size_t *strides,
-                       uint8_t *hsubs, uint8_t *vsubs, const uint8_t *color,
+static void copy_color8(uint8_t **dst, const size_t *strides,
+                       const uint8_t *hsubs, const uint8_t *vsubs, const uint16_t *color,
                        unsigned row, unsigned col, unsigned w)
 {
     if (dst[0] != NULL)
@@ -229,12 +275,19 @@ static void upipe_audiobar_input(struct upipe *upipe, struct uref *uref,
                                        upipe_audiobar->vsize);
     uref_attach_ubuf(uref, ubuf);
 
-    static const char *chroma[] = { "y8", "u8", "v8", "a8", "u8v8" };
-#define NR_CHROMA UBASE_ARRAY_SIZE(chroma)
+    static const char *chroma8[] = { "y8", "u8", "v8", "a8", "u8v8" };
+    static const char *chroma10[] = { "y10l", "u10l", "v10l", "a8", "u10v10l" };
+#define NR_CHROMA UBASE_ARRAY_SIZE(chroma8)
     uint8_t *dst[NR_CHROMA];
     size_t strides[NR_CHROMA];
     uint8_t hsubs[NR_CHROMA];
     uint8_t vsubs[NR_CHROMA];
+
+    const char **chroma = upipe_audiobar->tenbit ? chroma10 : chroma8;
+    void (*copy_color)(uint8_t **dst, const size_t *strides,
+            const uint8_t *hsubs, const uint8_t *vsubs, const uint16_t *color,
+            unsigned row, unsigned col, unsigned w) = upipe_audiobar->tenbit ? copy_color10 : copy_color8;
+
     for (int i = 0; i < NR_CHROMA; i++) {
         if (unlikely(!ubase_check(uref_pic_plane_write(uref, chroma[i],
                             0, 0, -1, -1, &dst[i])) ||
@@ -248,11 +301,11 @@ static void upipe_audiobar_input(struct upipe *upipe, struct uref *uref,
     uint64_t h = upipe_audiobar->vsize;
     const int hred = h - (iec_scale(-8.) * h);
     const int hyellow = h - (iec_scale(-18.) * h);
-    uint8_t transparent[4] = { 0x10, 0x80, 0x80, 0 };
-    uint8_t black[4] = { 0x10, 0x80, 0x80, alpha };
-    uint8_t red[2][4] = { { 76, 85, 0xff, alpha }, { 37, 106, 191, alpha } };
-    uint8_t green[2][4] = { { 150, 44, 21, alpha }, { 74, 85, 74, alpha } };
-    uint8_t yellow[2][4] = { { 226, 1, 148, alpha }, { 112, 64, 138, alpha } };
+    uint16_t transparent[4] = { 0x10, 0x80, 0x80, 0 };
+    uint16_t black[4] = { 0x10, 0x80, 0x80, alpha };
+    uint16_t red[2][4] = { { 76, 85, 0xff, alpha }, { 37, 106, 191, alpha } };
+    uint16_t green[2][4] = { { 150, 44, 21, alpha }, { 74, 85, 74, alpha } };
+    uint16_t yellow[2][4] = { { 226, 1, 148, alpha }, { 112, 64, 138, alpha } };
 
     uint64_t pts = 0;
     if (unlikely(!ubase_check(uref_clock_get_pts_prog(uref, &pts)))) {
@@ -284,7 +337,7 @@ static void upipe_audiobar_input(struct upipe *upipe, struct uref *uref,
         for (int row = 0; row < h; row++) {
             bool bright = row > hmax;
 
-            const uint8_t *color = row < hred ? red[!bright] :
+            const uint16_t *color = row < hred ? red[!bright] :
                                    row < hyellow ? yellow[!bright] :
                                    green[!bright];
 
@@ -344,6 +397,26 @@ static int upipe_audiobar_check_ubuf_mgr(struct upipe *upipe,
     struct upipe_audiobar *upipe_audiobar = upipe_audiobar_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_NONE;
+
+    if (!ubase_check(uref_pic_flow_find_chroma(flow_format, "a8", NULL))) {
+        upipe_err(upipe, "Missing alpha plane");
+        return UBASE_ERR_INVALID;
+    }
+
+    if (!ubase_check(uref_pic_flow_find_chroma(flow_format, "y8", NULL))
+            || ((!ubase_check(uref_pic_flow_find_chroma(flow_format, "u8", NULL))
+                    || !ubase_check(uref_pic_flow_find_chroma(flow_format, "v8", NULL)))
+                && !ubase_check(uref_pic_flow_find_chroma(flow_format, "u8v8", NULL)))) {
+        if (!ubase_check(uref_pic_flow_find_chroma(flow_format, "y10l", NULL))
+                || ((!ubase_check(uref_pic_flow_find_chroma(flow_format, "u10l", NULL)))
+                && !ubase_check(uref_pic_flow_find_chroma(flow_format, "u10v10l", NULL)))) {
+            upipe_err(upipe, "Unknown pixel format");
+            uref_dump(flow_format, upipe->uprobe);
+            return UBASE_ERR_INVALID;
+        }
+        upipe_audiobar->tenbit = true;
+    } else
+        upipe_audiobar->tenbit = false;
 
     upipe_audiobar_store_flow_def(upipe, flow_format);
     UBASE_RETURN(uref_pic_flow_get_hsize(flow_format, &upipe_audiobar->hsize))
