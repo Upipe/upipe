@@ -440,15 +440,9 @@ static inline bool uprobe_plumber(int event, va_list args,
  * @param signature extended event signature to check
  * @return true if the event is the expected extended event, false otherwise
  */
-static inline bool uprobe_check_extended(int event, va_list args,
-                                         int expected_event, uint32_t signature)
-{
-    if (event == expected_event && ubase_get_signature(args) == signature) {
-        va_arg(args, unsigned int);
-        return true;
-    }
-    return false;
-}
+#define uprobe_check_extended(event, args, expected_event, signature)      \
+    (event == expected_event && ubase_get_signature(args) == signature &&  \
+     UBASE_SIGNATURE_SKIP(args))
 
 #ifdef __cplusplus
 }

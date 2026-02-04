@@ -316,13 +316,19 @@ do {                                                                        \
 /** @This checks that the first argument is equal to the given signature.
  *
  * @param args va_list of arguments
- * @param signature unsigned int representing the signature of a module
+ * @param signature fourcc representing the signature of a module
  */
 #define UBASE_SIGNATURE_CHECK(args, signature)                              \
 {                                                                           \
-    if (va_arg(args, unsigned int) != signature)                            \
+    if (va_arg(args, uint32_t) != signature)                                \
         return UBASE_ERR_UNHANDLED;                                         \
 }
+
+/** @This skips the signature in the argument list.
+ *
+ * @param args va_list of arguments
+ */
+#define UBASE_SIGNATURE_SKIP(args) (va_arg(args, uint32_t), true)
 
 /** @This returns #UBASE_ERR_ALLOC if the variable is NULL.
  *
