@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -1016,6 +1017,18 @@ static inline int uref_##group##_get_##attr(struct uref *uref, bool *p)     \
 {                                                                           \
     return uref_attr_get_bool(uref, p, UDICT_TYPE_BOOL, name);              \
 }                                                                           \
+/** @This checks if the desc attribute of a uref is set and true.           \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_check_##attr(struct uref *uref)            \
+{                                                                           \
+    bool v = false;                                                         \
+    int ret = uref_##group##_get_##attr(uref, &v);                          \
+    return ubase_check(ret) ?                                               \
+        (v == true ? UBASE_ERR_NONE : UBASE_ERR_INVALID) : ret;             \
+}                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \
  * @param uref pointer to the uref                                          \
@@ -1082,6 +1095,18 @@ static inline int uref_##group##_cmp_##attr(struct uref *uref1,             \
 static inline int uref_##group##_get_##attr(struct uref *uref, bool *p)     \
 {                                                                           \
     return uref_attr_get_bool(uref, p, type, NULL);                         \
+}                                                                           \
+/** @This checks if the desc attribute of a uref is set and true.           \
+ *                                                                          \
+ * @param uref pointer to the uref                                          \
+ * @return an error code                                                    \
+ */                                                                         \
+static inline int uref_##group##_check_##attr(struct uref *uref)            \
+{                                                                           \
+    bool v = false;                                                         \
+    int ret = uref_##group##_get_##attr(uref, &v);                          \
+    return ubase_check(ret) ?                                               \
+        (v == true ? UBASE_ERR_NONE : UBASE_ERR_INVALID) : ret;             \
 }                                                                           \
 /** @This sets the desc attribute of a uref.                                \
  *                                                                          \

@@ -1223,7 +1223,7 @@ uint32_t upipe_bmd_mode_from_flow_def(struct upipe *upipe, struct uref *flow_def
         return bmdModeUnknown;
     }
 
-    bool interlaced = !ubase_check(uref_pic_get_progressive(flow_def));
+    bool interlaced = !ubase_check(uref_pic_check_progressive(flow_def));
 
     upipe_notice_va(upipe, "%" PRIu64"x%" PRIu64" %" PRId64"/%" PRIu64" interlaced %d",
             hsize, vsize, fps.num, fps.den, interlaced);
