@@ -18,7 +18,6 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_flow.h"
-#include "upipe/upipe_helper_input.h"
 #include "upipe/upipe_helper_output.h"
 #include "upipe/upipe_helper_ubuf_mgr.h"
 #include "upipe/upipe_helper_flow_format.h"
@@ -39,9 +38,6 @@
 /** default alpha channel */
 #define DEFAULT_ALPHA 0x60
 
-/** @hidden */
-static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
-                                  struct upump **upump_p);
 /** @hidden */
 static int upipe_audiobar_check_flow_format(struct upipe *upipe,
                                             struct uref *flow_format);
@@ -83,15 +79,6 @@ struct upipe_audiobar {
     /* peak date */
     uint64_t peak_date[255];
 
-    /** temporary uref storage (used during urequest) */
-    struct uchain urefs;
-    /** nb urefs in storage */
-    unsigned int nb_urefs;
-    /** max urefs in storage */
-    unsigned int max_urefs;
-    /** list of blockers (used during urequest) */
-    struct uchain blockers;
-
     /** number of input channels */
     uint8_t channels;
     /** requested width */
@@ -112,8 +99,6 @@ struct upipe_audiobar {
 UPIPE_HELPER_UPIPE(upipe_audiobar, upipe, UPIPE_AUDIO_BAR_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_audiobar, urefcount, upipe_audiobar_free)
 UPIPE_HELPER_FLOW(upipe_audiobar, OUTPUT_FLOW_DEF)
-UPIPE_HELPER_INPUT(upipe_audiobar, urefs, nb_urefs, max_urefs, blockers,
-                   upipe_audiobar_handle)
 UPIPE_HELPER_OUTPUT(upipe_audiobar, output, flow_def, output_state, request_list)
 UPIPE_HELPER_FLOW_FORMAT(upipe_audiobar, request,
                          upipe_audiobar_check_flow_format,
@@ -144,7 +129,6 @@ static struct upipe *upipe_audiobar_alloc(struct upipe_mgr *mgr,
 
     struct upipe_audiobar *upipe_audiobar = upipe_audiobar_from_upipe(upipe);
     upipe_audiobar_init_urefcount(upipe);
-    upipe_audiobar_init_input(upipe);
     upipe_audiobar_init_output(upipe);
     upipe_audiobar_init_ubuf_mgr(upipe);
     upipe_audiobar_init_flow_format(upipe);
@@ -230,37 +214,15 @@ static void copy_color(uint8_t **dst, size_t *strides,
  * @param upump_p reference to pump that generated the buffer
  * @return true if the packet was handled
  */
-static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
+static void upipe_audiobar_input(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p)
 {
     struct upipe_audiobar *upipe_audiobar = upipe_audiobar_from_upipe(upipe);
-    const char *def;
-    if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        UBASE_FATAL(upipe,
-                uref_sound_flow_get_channels(uref, &upipe_audiobar->channels))
-        uref_sound_flow_clear_format(uref);
-        UBASE_FATAL(upipe,
-                uref_attr_import(uref, upipe_audiobar->flow_def_config))
-        uref_pic_flow_clear_format(uref);
-        UBASE_FATAL(upipe, uref_pic_flow_set_planes(uref, 0))
-        UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(uref, 1))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 1, 1, 1, "y8"))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 2, 1, 1, "u8"))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 2, 1, 1, "v8"))
-        UBASE_FATAL(upipe, uref_pic_flow_add_plane(uref, 1, 1, 1, "a8"))
-        UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
 
-        upipe_audiobar->hsize = upipe_audiobar->vsize =
-            upipe_audiobar->sep_width = upipe_audiobar->pad_width = UINT64_MAX;
-        upipe_audiobar_require_flow_format(upipe, uref);
-        return true;
+    if (unlikely(!upipe_audiobar->ubuf_mgr || upipe_audiobar->hsize == UINT64_MAX)) {
+        uref_free(uref);
+        return;
     }
-
-    if (!upipe_audiobar->ubuf_mgr)
-        return false;
-
-    if (unlikely(upipe_audiobar->hsize == UINT64_MAX))
-        return false;
 
     struct ubuf *ubuf = ubuf_pic_alloc(upipe_audiobar->ubuf_mgr,
                                        upipe_audiobar->hsize,
@@ -353,28 +315,6 @@ static bool upipe_audiobar_handle(struct upipe *upipe, struct uref *uref,
     for (int i = 0; i < NR_CHROMA; i++)
         ubuf_pic_plane_unmap(ubuf, chroma[i], 0, 0, -1, -1);
     upipe_audiobar_output(upipe, uref, upump_p);
-    return true;
-}
-
-/** @internal @This inputs data.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
- */
-static void upipe_audiobar_input(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p)
-{
-    if (!upipe_audiobar_check_input(upipe)) {
-        upipe_audiobar_hold_input(upipe, uref);
-        upipe_audiobar_block_input(upipe, upump_p);
-    } else if (!upipe_audiobar_handle(upipe, uref, upump_p)) {
-        upipe_audiobar_hold_input(upipe, uref);
-        upipe_audiobar_block_input(upipe, upump_p);
-        /* Increment upipe refcount to avoid disappearing before all packets
-         * have been sent. */
-        upipe_use(upipe);
-    }
 }
 
 /** @internal @This provides a flow_format request.
@@ -425,14 +365,7 @@ static int upipe_audiobar_check_ubuf_mgr(struct upipe *upipe,
             upipe_audiobar->chan_width, upipe_audiobar->sep_width,
             upipe_audiobar->pad_width);
 
-    bool was_buffered = !upipe_audiobar_check_input(upipe);
-    upipe_audiobar_output_input(upipe);
-    upipe_audiobar_unblock_input(upipe);
-    if (was_buffered && upipe_audiobar_check_input(upipe)) {
-        /* All packets have been output, release again the pipe that has been
-         * used in @ref upipe_audiobar_input. */
-        upipe_release(upipe);
-    }
+
     return UBASE_ERR_NONE;
 }
 
@@ -445,6 +378,7 @@ static int upipe_audiobar_check_ubuf_mgr(struct upipe *upipe,
 static int upipe_audiobar_set_flow_def(struct upipe *upipe,
                                        struct uref *flow_def)
 {
+    struct upipe_audiobar *upipe_audiobar = upipe_audiobar_from_upipe(upipe);
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
     uref_dump(flow_def, upipe->uprobe);
@@ -452,10 +386,32 @@ static int upipe_audiobar_set_flow_def(struct upipe *upipe,
     uint8_t channels;
     UBASE_RETURN(uref_sound_flow_get_channels(flow_def, &channels))
 
-    struct uref *flow_def_dup;
-    if (unlikely((flow_def_dup = uref_dup(flow_def)) == NULL))
-        return UBASE_ERR_ALLOC;
-    upipe_input(upipe, flow_def_dup, NULL);
+    const char *def;
+    if (unlikely(ubase_check(uref_flow_get_def(flow_def, &def)))) {
+        flow_def = uref_dup(flow_def);
+        if (flow_def == NULL)
+            return UBASE_ERR_ALLOC;
+
+        UBASE_FATAL(upipe,
+                uref_sound_flow_get_channels(flow_def, &upipe_audiobar->channels))
+        uref_sound_flow_clear_format(flow_def);
+        UBASE_FATAL(upipe,
+                uref_attr_import(flow_def, upipe_audiobar->flow_def_config))
+        uref_pic_flow_clear_format(flow_def);
+        UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
+        UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 2, 1, 1, "u8"))
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 2, 1, 1, "v8"))
+        UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "a8"))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def))
+        uref_dump(flow_def, upipe->uprobe);
+        upipe_audiobar->hsize = upipe_audiobar->vsize =
+            upipe_audiobar->sep_width = upipe_audiobar->pad_width = UINT64_MAX;
+
+        upipe_audiobar_require_flow_format(upipe, flow_def);
+    }
+
     return UBASE_ERR_NONE;
 }
 
@@ -548,7 +504,6 @@ static void upipe_audiobar_free(struct upipe *upipe)
     upipe_audiobar_clean_flow_format(upipe);
     upipe_audiobar_clean_ubuf_mgr(upipe);
     upipe_audiobar_clean_output(upipe);
-    upipe_audiobar_clean_input(upipe);
     upipe_audiobar_clean_urefcount(upipe);
     upipe_audiobar_free_flow(upipe);
 }
