@@ -7,6 +7,8 @@ log-env = $(if $(have_san),DISABLE_VALGRIND=1) \
 
 distfiles = valgrind_wrapper.sh valgrind.supp \
             udict_inline_test.txt \
+            upipe_pcap_src_test.pcap \
+            upipe_pcap_src_test.txt \
             upipe_ts_test.ts \
             uprobe_prefix_test.txt \
             uprobe_stdio_test.txt \
@@ -278,6 +280,13 @@ upipe_null_test-libs = libupipe libupipe_modules
 tests += upipe_pack10_test
 upipe_pack10_test-src = upipe_pack10_test.c
 upipe_pack10_test-libs = libupipe libupipe_hbrmt
+
+tests += upipe_pcap_src_test.sh
+upipe_pcap_src_test.sh-deps = upipe_pcap_src_test
+
+test-targets += upipe_pcap_src_test
+upipe_pcap_src_test-src = upipe_pcap_src_test.c
+upipe_pcap_src_test-libs = libupipe libupump_ev libupipe_modules libupipe_pcap
 
 tests += upipe_play_test
 upipe_play_test-src = upipe_play_test.c
