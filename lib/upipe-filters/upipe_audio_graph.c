@@ -244,7 +244,7 @@ static bool upipe_agraph_handle(struct upipe *upipe, struct uref *uref,
                 uref_attr_import(uref, upipe_agraph->flow_def_config))
         uref_pic_flow_clear_format(uref);
         UBASE_FATAL(upipe, uref_pic_flow_set_yuv420p(uref));
-        UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(uref, true))
 
         upipe_agraph->hsize = upipe_agraph->vsize =
             upipe_agraph->sep_width = upipe_agraph->pad_width = UINT64_MAX;
@@ -371,7 +371,7 @@ static bool upipe_agraph_handle(struct upipe *upipe, struct uref *uref,
         if (dst[i])
             ubuf_pic_plane_unmap(ubuf, chroma[i], 0, 0, -1, -1);
 
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     upipe_agraph_output(upipe, uref, upump_p);
     return true;
 }

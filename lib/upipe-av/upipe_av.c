@@ -122,18 +122,18 @@ int upipe_av_set_frame_properties(struct upipe *upipe,
 {
 #if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
     frame->key_frame = ubase_check(uref_pic_get_key(uref));
-    frame->interlaced_frame = !ubase_check(uref_pic_get_progressive(uref));
-    frame->top_field_first = ubase_check(uref_pic_get_tff(uref));
+    frame->interlaced_frame = !ubase_check(uref_pic_check_progressive(uref));
+    frame->top_field_first = ubase_check(uref_pic_check_tff(uref));
 #else
     if (ubase_check(uref_pic_get_key(uref)))
         frame->flags |= AV_FRAME_FLAG_KEY;
     else
         frame->flags &= ~AV_FRAME_FLAG_KEY;
-    if (!ubase_check(uref_pic_get_progressive(uref)))
+    if (!ubase_check(uref_pic_check_progressive(uref)))
         frame->flags |= AV_FRAME_FLAG_INTERLACED;
     else
         frame->flags &= ~AV_FRAME_FLAG_INTERLACED;
-    if (ubase_check(uref_pic_get_tff(uref)))
+    if (ubase_check(uref_pic_check_tff(uref)))
         frame->flags |= AV_FRAME_FLAG_TOP_FIELD_FIRST;
     else
         frame->flags &= ~AV_FRAME_FLAG_TOP_FIELD_FIRST;

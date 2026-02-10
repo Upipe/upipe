@@ -152,7 +152,7 @@ static void setup_sub(struct upipe *sub, struct uref_mgr *uref_mgr,
 
     struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, SUBSIZE, SUBSIZE);
     assert(uref != NULL);
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     fill_in(uref, "y8", val);
     fill_in(uref, "u8", val);
     fill_in(uref, "v8", val);
@@ -312,7 +312,7 @@ int main(int argc, char **argv)
     struct uref *uref;
     uref = uref_pic_alloc(uref_mgr, pic_mgr, BGSIZE, BGSIZE);
     assert(uref != NULL);
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     fill_in(uref, "y8", 0);
     fill_in(uref, "u8", 0);
     fill_in(uref, "v8", 0);
@@ -343,7 +343,7 @@ int main(int argc, char **argv)
 
     uref = uref_pic_alloc(uref_mgr, pic_mgr, BGSIZE, BGSIZE);
     assert(uref != NULL);
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     fill_in(uref, "y8", 0);
     fill_in(uref, "u8", 0);
     fill_in(uref, "v8", 0);
