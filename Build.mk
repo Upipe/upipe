@@ -178,21 +178,21 @@ check-tests:
 	test -z "$$ret"
 
 check-licenses:
-	@cd $(top_srcdir) && for file in $$(find \
-	  -path './lib/upipe-blackmagic/include' -prune -o \
-	  -path './lib/upipe-filters/zoneplate/videotestsrc.[ch]' -prune -o \
-	  -path './lib/upipe-modules/http-parser' -prune -o \
-	  -path './lib/upipe-ts/rsa_asn1.[ch]' -prune -o \
-	  -path './lib/upipe-dveo/asi_ioctl.h' -prune -o \
-	  -path './tests/checkasm' -prune -o \
-	  -path './tests/upipe_h264_framer_test.h' -prune -o \
-	  \( -name '*.c' -o -name '*.h' -o -name '*.cpp' \) -print); do \
-	  if ! grep -q SPDX-License-Identifier: "$$file"; then \
-	    echo "$${file#./}: missing SPDX-License-Identifier"; \
-	    ret=1; \
-	  fi; \
-	done; \
-	test -z "$$ret"
+	@check_attr() { \
+	  git check-attr $$2 "$$1" | grep -q ": $$3$$"; \
+	}; \
+	git ls-files -- :$(top_srcdir)/*.[ch] :$(top_srcdir)/*.cpp | \
+	  while read file; do \
+	    check_attr "$$file" check-license unset && continue; \
+	    if ! grep -q SPDX-License-Identifier: "$$file"; then \
+	      echo "$${file#./}: missing SPDX-License-Identifier"; \
+	      ret=1; \
+	    elif ! grep -q Copyright "$$file"; then \
+	      echo "$${file#./}: missing Copyright"; \
+	      ret=1; \
+	    fi; \
+	    test -z "$$ret"; \
+	  done
 
 show-licenses:
 	@for lib in $$(find $(top_srcdir)/lib -maxdepth 1 -mindepth 1 -type d); do \

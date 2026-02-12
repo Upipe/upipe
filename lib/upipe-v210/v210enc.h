@@ -1,3 +1,11 @@
+/*
+ * V210 encoder
+ *
+ * Copyright (c) 2015 Open Broadcast Systems Ltd
+ *
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ */
+
 #ifndef _V210ENC_H_
 /** @hidden */
 #define _V210ENC_H_
