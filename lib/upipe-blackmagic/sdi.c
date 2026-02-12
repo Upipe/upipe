@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2014-2016 Open Broadcast Systems Ltd.
+ *
+ * Authors: Kieran Kunhya
+ *          Rafaël Carré
+ *
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ */
+
 #include <stdbool.h>
 #include <string.h>
 

@@ -233,6 +233,9 @@ jobs:
           BUILD_COLORS: always
         run: make check-headers
 
+      - name: Check licenses
+        run: make check-licenses
+
       - name: Check tests
         env:
           BUILD_COLORS: always

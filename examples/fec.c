@@ -1,4 +1,11 @@
-/* GPL */
+/*
+ * Copyright (C) 2015-2017 Open Broadcast Systems Ltd
+ *
+ * Authors: Kieran Kunhya
+ *          Rafaël Carré
+ *
+ * SPDX-License-Identifier: MIT
+ */
 
 /** @file
  * @short receives RTP FEC stream
