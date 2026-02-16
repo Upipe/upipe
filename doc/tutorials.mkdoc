@@ -154,13 +154,13 @@ static int avcdec_catch(struct uprobe *uprobe, struct upipe *upipe,
         return UBASE_ERR_UNHANDLED;
     }
     wanted_hsize = (hsize * sar.num / sar.den / 2) * 2;
-    progressive = ubase_check(uref_pic_get_progressive(flow_def));
+    progressive = ubase_check(uref_pic_check_progressive(flow_def));
 
     struct uref *flow_def2 = uref_dup(flow_def);
     upipe_use(upipe);
 
     if (!progressive) {
-        uref_pic_set_progressive(flow_def2);
+        uref_pic_set_progressive(flow_def2, true);
         struct upipe *deint = upipe_void_alloc_output(upipe,
                 upipe_filter_blend_mgr,
                 uprobe_pfx_alloc(uprobe_use(logger),

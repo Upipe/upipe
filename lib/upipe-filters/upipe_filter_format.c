@@ -374,8 +374,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             surface_type_out = "";
 
         bool need_deint = ffmt_mgr->deint_mgr &&
-            !ubase_check(uref_pic_get_progressive(flow_def)) &&
-            ubase_check(uref_pic_get_progressive(flow_def_dup));
+            !ubase_check(uref_pic_check_progressive(flow_def)) &&
+            ubase_check(uref_pic_check_progressive(flow_def_dup));
         bool need_scale =
             uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
             uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);

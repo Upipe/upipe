@@ -427,8 +427,8 @@ static int upipe_videocont_switch_format(struct upipe *upipe,
     } else {
         uref_pic_flow_delete_overscan(out_flow);
     }
-    if (likely(ubase_check(uref_pic_get_progressive(in_flow)))) {
-        uref_pic_set_progressive(out_flow);
+    if (likely(ubase_check(uref_pic_check_progressive(in_flow)))) {
+        uref_pic_set_progressive(out_flow, true);
     } else {
         uref_pic_delete_progressive(out_flow);
     }

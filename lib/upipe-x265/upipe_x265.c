@@ -401,7 +401,7 @@ static void apply_params(struct upipe *upipe, x265_param *params)
     params->internalCsp = upipe_x265->color_space;
 
     params->interlaceMode =
-        !ubase_check(uref_pic_get_progressive(flow_def));
+        !ubase_check(uref_pic_check_progressive(flow_def));
 
     upipe_x265_set_option(upipe, params, "range",
                           ubase_check(uref_pic_flow_get_full_range(flow_def)) ?

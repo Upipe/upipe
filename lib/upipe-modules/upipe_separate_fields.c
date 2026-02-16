@@ -85,7 +85,7 @@ static int upipe_separate_fields_set_flow_def(struct upipe *upipe,
     ctx->field_duration = UCLOCK_FREQ * fps.den / fps.num;
     UBASE_RETURN(uref_pic_flow_set_fps(flow_def_dup, fps));
     UBASE_RETURN(uref_pic_flow_set_vsize(flow_def_dup, height));
-    if (ubase_check(uref_pic_get_progressive(flow_def_dup)))
+    if (ubase_check(uref_pic_check_progressive(flow_def_dup)))
         UBASE_RETURN(uref_pic_delete_progressive(flow_def_dup));
 
     upipe_separate_fields_store_flow_def(upipe, flow_def_dup);
@@ -152,8 +152,8 @@ static void upipe_separate_fields_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    bool has_progressive_attr = ubase_check(uref_pic_get_progressive(uref));
-    bool has_tff_attr         = ubase_check(uref_pic_get_tff(uref));
+    bool has_progressive_attr = ubase_check(uref_pic_check_progressive(uref));
+    bool has_tff_attr         = ubase_check(uref_pic_check_tff(uref));
 
     if (has_progressive_attr)
         upipe_warn(upipe, "picture marked as progressive, separating fields anyway");

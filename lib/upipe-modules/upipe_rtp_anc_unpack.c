@@ -179,7 +179,7 @@ static bool upipe_rtp_anc_unpack_handle(struct upipe *upipe, struct uref *uref,
 
     switch (f) {
     case RFC_8331_F_PROGRESSIVE:
-        uref_pic_set_progressive(uref);
+        uref_pic_set_progressive(uref, true);
         break;
     case RFC_8331_F_FIELD_1:
         uref_pic_set_tf(uref);

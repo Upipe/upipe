@@ -1,8 +1,10 @@
 /*
  * Copyright (C) 2011 VLC authors and VideoLAN
  * Copyright (C) 2013-2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Benjamin Cohen
+ *          Arnaud de Turckheim
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
@@ -68,6 +70,9 @@ struct upipe_filter_blend {
     /** list of blockers (used during udeal) */
     struct uchain blockers;
 
+    /** bypass? */
+    bool bypass;
+
     /** public structure */
     struct upipe upipe;
 };
@@ -103,7 +108,12 @@ static struct upipe *upipe_filter_blend_alloc(struct upipe_mgr *mgr,
     upipe_filter_blend_init_ubuf_mgr(upipe);
     upipe_filter_blend_init_output(upipe);
     upipe_filter_blend_init_input(upipe);
+    struct upipe_filter_blend *upipe_filter_blend =
+        upipe_filter_blend_from_upipe(upipe);
+    upipe_filter_blend->bypass = false;
+
     upipe_throw_ready(upipe);
+
     return upipe;
 }
 
@@ -195,8 +205,21 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_filter_blend *upipe_filter_blend = upipe_filter_blend_from_upipe(upipe);
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        upipe_filter_blend_store_flow_def(upipe, NULL);
-        upipe_filter_blend_require_ubuf_mgr(upipe, uref);
+        upipe_filter_blend->bypass =
+            ubase_check(uref_pic_check_progressive(uref));
+        if (!upipe_filter_blend->bypass) {
+            uref_pic_set_progressive(uref, true);
+            uref_pic_delete_tff(uref);
+            upipe_filter_blend_store_flow_def(upipe, NULL);
+            upipe_filter_blend_require_ubuf_mgr(upipe, uref);
+        } else {
+            upipe_filter_blend_store_flow_def(upipe, uref);
+        }
+        return true;
+    }
+
+    if (upipe_filter_blend->bypass) {
+        upipe_filter_blend_output(upipe, uref, upump_p);
         return true;
     }
 
@@ -247,7 +270,7 @@ static bool upipe_filter_blend_handle(struct upipe *upipe, struct uref *uref,
 
     // Attach new ubuf and output frame
     uref_attach_ubuf(uref, ubuf_deint);
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     uref_pic_delete_tff(uref);
 
     upipe_filter_blend_output(upipe, uref, upump_p);
@@ -327,7 +350,6 @@ static int upipe_filter_blend_set_flow_def(struct upipe *upipe,
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
-    UBASE_RETURN(uref_pic_set_progressive(flow_def_dup))
     upipe_input(upipe, flow_def_dup, NULL);
     return UBASE_ERR_NONE;
 }
