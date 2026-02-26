@@ -26,7 +26,9 @@ libupipe_filters-src = \
     upipe_filter_format.c \
     upipe_opus_encaps.c \
     upipe_zoneplate.c \
-    upipe_zoneplate_source.c \
+    upipe_zoneplate_source.c
+
+libupipe_filters-src-private = \
     zoneplate/videotestsrc.c \
     zoneplate/videotestsrc.h
 

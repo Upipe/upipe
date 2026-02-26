@@ -85,10 +85,6 @@ libupipe_modules-includes = \
     uref_http_flow.h
 
 libupipe_modules-src = \
-    http-parser/http_parser.c \
-    http-parser/http_parser.h \
-    http_source_hook.c \
-    http_source_hook.h \
     upipe_aes_decrypt.c \
     upipe_aggregate.c \
     upipe_audio_blank.c \
@@ -156,8 +152,6 @@ libupipe_modules-src = \
     upipe_time_limit.c \
     upipe_transfer.c \
     upipe_trickplay.c \
-    upipe_udp.c \
-    upipe_udp.h \
     upipe_udp_source.c \
     upipe_video_blank.c \
     upipe_videocont.c \
@@ -165,6 +159,14 @@ libupipe_modules-src = \
     upipe_worker.c \
     uprobe_blit_prepare.c \
     uprobe_http_redirect.c
+
+libupipe_modules-src-private = \
+    http-parser/http_parser.c \
+    http-parser/http_parser.h \
+    http_source_hook.c \
+    http_source_hook.h \
+    upipe_udp.c \
+    upipe_udp.h
 
 have_upipe_fsink          = $(have_writev)
 have_upipe_udpsink        = $(have_writev)

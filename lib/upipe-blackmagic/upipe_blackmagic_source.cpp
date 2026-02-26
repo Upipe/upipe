@@ -45,6 +45,8 @@
 #include <string.h>
 #include <assert.h>
 
+UBASE_PRAGMA_GCC(visibility push(hidden))
+
 #include "include/DeckLinkAPI.h"
 
 /** uqueue length */
@@ -1421,6 +1423,8 @@ static struct upipe_mgr upipe_bmd_src_mgr = {
     /* .upipe_mgr_control = */ NULL
 };
 }
+
+UBASE_PRAGMA_GCC(visibility pop)
 
 /** @This returns the management structure for all bmd source pipes.
  *
