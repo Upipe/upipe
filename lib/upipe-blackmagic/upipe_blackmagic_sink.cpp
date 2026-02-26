@@ -51,6 +51,8 @@
 
 #include <bitstream/dvb/vbi.h>
 
+UBASE_PRAGMA_GCC(visibility push(hidden))
+
 #include "include/DeckLinkAPI.h"
 
 extern "C" {
@@ -2143,6 +2145,8 @@ static struct upipe_mgr upipe_bmd_sink_mgr = {
 
     /* .upipe_mgr_control = */ NULL
 };
+
+UBASE_PRAGMA_GCC(visibility pop)
 
 /** @This returns the management structure for bmd_sink pipes
  *

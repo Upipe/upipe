@@ -7,7 +7,8 @@ version      = 1.0
 cflags       = -O2 -g $(warn) $(warn_c)
 cxxflags     = -O2 -g $(warn) $(warn_cxx)
 cppflags     = -I$(top_builddir) -Iinclude -I$(top_srcdir)/include
-ldflags      = $(if $(or $(have_apple),$(have_san)),,-Wl,--no-undefined)
+ldflags      = $(if $(or $(have_apple),$(have_san)),,-Wl,--no-undefined) \
+               $(if $(have_apple),,-Wl,--exclude-libs,ALL)
 
 warn         = -Wall \
                -Wextra \
@@ -45,6 +46,7 @@ subdirs      = lib examples tests x86 luajit doc
 # --- config checks ------------------------------------------------------------
 
 SED ?= sed
+NM ?= $(CROSS)nm
 
 configs += atomic
 atomic-assert = __ATOMIC_SEQ_CST
@@ -191,3 +193,12 @@ show-licenses:
 	  done | sort -u | while read id; do echo -n " $$id"; done; \
 	  echo; \
 	done
+
+symbols_allow = ubuf uclock ucookie udict umem umutex upipe uprobe upump uref ustring uuri
+
+check-symbols:
+	@cd $(top_builddir) && \
+	if $(NM) -ACPDU $$(find . -name *.$(_so).* ! -type l) | \
+	  grep -v ': \($(subst $() ,\|,$(symbols_allow))\|\)_'; then \
+	  exit 1; \
+	fi

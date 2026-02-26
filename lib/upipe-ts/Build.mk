@@ -96,7 +96,10 @@ libupipe_ts-includes += \
     $(if $(have_ts-crypt),upipe_ts_emm_decoder.h)
 
 libupipe_ts-src += \
-    $(if $(have_ts-crypt),rsa_asn1.c rsa_asn1.h upipe_ts_emm_decoder.c)
+    $(if $(have_ts-crypt),upipe_ts_emm_decoder.c)
+
+libupipe_ts-src-private += \
+    $(if $(have_ts-crypt),rsa_asn1.c rsa_asn1.h)
 
 libupipe_ts-libs = libupipe libupipe_modules bitstream
 libupipe_ts-opt-libs = libiconv $(if $(have_ts-crypt),libgcrypt libtasn1)

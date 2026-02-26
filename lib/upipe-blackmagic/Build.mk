@@ -10,6 +10,12 @@ libupipe_blackmagic-includes = \
     upipe_blackmagic_source.h
 
 libupipe_blackmagic-src = \
+    ubuf_pic_blackmagic.cpp \
+    ubuf_sound_blackmagic.cpp \
+    upipe_blackmagic_extract_vanc.cpp \
+    upipe_blackmagic_source.cpp
+
+libupipe_blackmagic-src-private = \
     include/DeckLinkAPI.h \
     include/DeckLinkAPIConfiguration.h \
     include/DeckLinkAPIDeckControl.h \
@@ -18,11 +24,7 @@ libupipe_blackmagic-src = \
     include/DeckLinkAPIModes.h \
     include/DeckLinkAPITypes.h \
     include/DeckLinkAPIVersion.h \
-    include/LinuxCOM.h \
-    ubuf_pic_blackmagic.cpp \
-    ubuf_sound_blackmagic.cpp \
-    upipe_blackmagic_extract_vanc.cpp \
-    upipe_blackmagic_source.cpp
+    include/LinuxCOM.h
 
 have_upipe_bmd_sink = $(have_bitstream)
 
@@ -30,7 +32,10 @@ libupipe_blackmagic-includes += \
     $(if $(have_upipe_bmd_sink),upipe_blackmagic_sink.h)
 
 libupipe_blackmagic-src += \
-    $(if $(have_upipe_bmd_sink),sdi.c sdi.h upipe_blackmagic_sink.cpp)
+    $(if $(have_upipe_bmd_sink),upipe_blackmagic_sink.cpp)
+
+libupipe_blackmagic-src-private += \
+    $(if $(have_upipe_bmd_sink),sdi.c sdi.h)
 
 libupipe_blackmagic-cxxflags = \
     -Wno-missing-declarations \

@@ -97,7 +97,7 @@ endif
 
 _F = distfiles depfiles cleanfiles cleandirs genfiles
 _T = $(addsuffix -targets,bin lib data dist noinst test) tests
-_attrs_p = includes gen-includes src gen
+_attrs_p = includes gen-includes src src-private gen
 _attrs = cppflags cflags cxxflags nasmflags ldflags ldlibs libs opt-libs \
          deps desc dest opt args version so-version dir
 
@@ -105,6 +105,7 @@ define _redef
   _$1 += $3$2
   $(foreach a,$(_attrs),$$(eval $3$2-$a = $$(value $2-$a)))
   $(foreach a,$(_attrs_p),$$(eval $3$2-$a = $$$$(addprefix $3,$$(value $2-$a))))
+  $3$2-src += $$($3$2-src-private)
 endef
 
 define _subdir
@@ -120,7 +121,7 @@ endef
 srcdir = $(top_srcdir)/$(builddir)
 $(eval $(call _subdir))
 
-_test-targets += $(foreach t,$(_tests),$(if $($t-src),$t))
+_test-targets += $(foreach t,$(_tests),$(if $(strip $($t-src)),$t))
 _inst-targets := $(_bin-targets) $(_lib-targets) $(_data-targets) $(_dist-targets)
 _bin-targets  += $(_noinst-targets) $(_test-targets)
 _targets      := $(_inst-targets) $(_noinst-targets) $(_test-targets)
@@ -314,7 +315,7 @@ $(foreach t,$(_lib-targets),\
 $(foreach t,$(_lib-targets),$(eval $(call _lib-ext,$t): _target = $t))
 $(foreach t,$(_lib-targets),$(eval $t: $(call _lib-ext,$t)))
 $(foreach t,$(_targets),$(if $($t-gen), \
-  $(eval $(if $($t-src),$(call _tsubst,$t,.o),$t): $($t-gen))))
+  $(eval $(if $(strip $($t-src)),$(call _tsubst,$t,.o),$t): $($t-gen))))
 $(foreach t,$(_lib-targets),$(if $($t-gen), \
   $(eval $(call _tsubst,$t,.o): $($t-gen)) \
   $(eval $(call _tsubst,$t,-pic.o): $($t-gen))))
@@ -322,6 +323,14 @@ $(foreach t,$(_lib-targets),$(if $($t-gen-includes), \
   $(eval $(call _tsubst,$t,.o): $($t-gen-includes$(includes-transform))) \
   $(eval $(call _tsubst,$t,-pic.o): $($t-gen-includes$(includes-transform)))))
 $(if $(_genfiles),$(_out_o): $(_genfiles))
+
+_visibility_hidden = $(if $(filter %.$2,$($1-src-private)), \
+  $(eval $(patsubst %.$2,%-pic.o,$(filter %.$2,$($1-src-private))): \
+    $3 += $(strip $(call $4,-fvisibility=hidden))))
+
+$(foreach t,$(_lib-targets), \
+  $(call _visibility_hidden,$t,c,CFLAGS,try_cc) \
+  $(call _visibility_hidden,$t,cpp,CXXFLAGS,try_cxx))
 
 # --- flags --------------------------------------------------------------------
 

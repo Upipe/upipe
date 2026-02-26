@@ -43,9 +43,9 @@
 #   define O_CLOEXEC 0
 #endif
 
-const char dev_fmt[] = "/dev/asirx%u";
-const char sys_fmt[] = "/sys/class/asi/asirx%u/%s";
-const char dvbm_sys_fmt[] = "/sys/class/dvbm/%u/%s";
+static const char dev_fmt[] = "/dev/asirx%u";
+static const char sys_fmt[] = "/sys/class/asi/asirx%u/%s";
+static const char dvbm_sys_fmt[] = "/sys/class/dvbm/%u/%s";
 
 /** default size of buffers when unspecified, extra 8-byte timestamp on capture */
 #define BYPASS_MODE           (1)
