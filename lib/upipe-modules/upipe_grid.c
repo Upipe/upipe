@@ -753,6 +753,9 @@ static int upipe_grid_out_import_format(struct upipe *upipe,
         uref_pic_flow_copy_colour_primaries(out_flow, in_flow);
         uref_pic_flow_copy_transfer_characteristics(out_flow, in_flow);
         uref_pic_flow_copy_matrix_coefficients(out_flow, in_flow);
+        uref_pic_flow_copy_max_cll(out_flow, in_flow);
+        uref_pic_flow_copy_max_fall(out_flow, in_flow);
+        uref_pic_flow_copy_mdcv(out_flow, in_flow);
         uref_pic_copy_lpadding(out_flow, in_flow);
         uref_pic_copy_rpadding(out_flow, in_flow);
         uref_pic_copy_tpadding(out_flow, in_flow);
