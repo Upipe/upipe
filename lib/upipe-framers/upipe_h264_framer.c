@@ -731,7 +731,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         vsize = map_height * 16 * 2;
         ubuf_block_stream_skip_bits(s, 1); /* mb_adaptive_frame_field */
     } else {
-        UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def, true))
         vsize = map_height * 16;
     }
     ubuf_block_stream_skip_bits(s, 1); /* direct8x8_inference */
@@ -1841,7 +1841,7 @@ static int upipe_h264f_prepare_au(struct upipe *upipe, struct uref *uref)
 
     switch (upipe_h264f->pic_struct) {
         case H264SEI_STRUCT_FRAME:
-            UBASE_RETURN(uref_pic_set_progressive(uref))
+            UBASE_RETURN(uref_pic_set_progressive(uref, true))
             duration *= 2;
             break;
         case H264SEI_STRUCT_TOP:
@@ -1853,7 +1853,7 @@ static int upipe_h264f_prepare_au(struct upipe *upipe, struct uref *uref)
         case H264SEI_STRUCT_TOP_BOT:
             UBASE_RETURN(uref_pic_set_tf(uref))
             UBASE_RETURN(uref_pic_set_bf(uref))
-            UBASE_RETURN(uref_pic_set_tff(uref))
+            UBASE_RETURN(uref_pic_set_tff(uref, true))
             duration *= 2;
             break;
         case H264SEI_STRUCT_BOT_TOP:
@@ -1864,7 +1864,7 @@ static int upipe_h264f_prepare_au(struct upipe *upipe, struct uref *uref)
         case H264SEI_STRUCT_TOP_BOT_TOP:
             UBASE_RETURN(uref_pic_set_tf(uref))
             UBASE_RETURN(uref_pic_set_bf(uref))
-            UBASE_RETURN(uref_pic_set_tff(uref))
+            UBASE_RETURN(uref_pic_set_tff(uref, true))
             duration *= 3;
             break;
         case H264SEI_STRUCT_BOT_TOP_BOT:

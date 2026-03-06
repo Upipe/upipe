@@ -455,8 +455,7 @@ static bool upipe_mpgvf_parse_sequence(struct upipe *upipe)
                         UCLOCK_FREQ * frame_rate.den / frame_rate.num))
     UBASE_FATAL(upipe, uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
     upipe_mpgvf->progressive_sequence = progressive;
-    if (progressive)
-        UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def))
+    UBASE_FATAL(upipe, uref_pic_set_progressive(flow_def, progressive))
     UBASE_FATAL(upipe, uref_pic_flow_set_macropixel(flow_def, 1))
     UBASE_FATAL(upipe, uref_pic_flow_set_planes(flow_def, 0))
     UBASE_FATAL(upipe, uref_pic_flow_add_plane(flow_def, 1, 1, 1, "y8"))
@@ -861,15 +860,13 @@ static bool upipe_mpgvf_parse_picture(struct upipe *upipe, struct uref *uref,
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
         if (structure & MP2VPICX_BOTTOM_FIELD)
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-        if (tff)
-            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
-        if (progressive)
-            UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+        UBASE_FATAL(upipe, uref_pic_set_tff(uref, tff))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(uref, progressive))
     } else {
         upipe_mpgvf->field_number = 0;
         UBASE_FATAL(upipe, uref_pic_set_tf(uref))
         UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-        UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(uref, true))
     }
 
     UBASE_FATAL(upipe, uref_clock_set_duration(uref, *duration_p))

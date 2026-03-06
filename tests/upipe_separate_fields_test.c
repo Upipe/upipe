@@ -278,7 +278,7 @@ int main(int argc, char **argv)
     ubase_assert(uref_pic_flow_add_plane(flow, 1, 1, 1, "y8"));
     ubase_assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "u8"));
     ubase_assert(uref_pic_flow_add_plane(flow, 2, 2, 1, "v8"));
-    ubase_assert(uref_pic_set_tff(flow));
+    ubase_assert(uref_pic_set_tff(flow, true));
     ubase_assert(uref_pic_flow_set_hsize(flow, WIDTH));
     ubase_assert(uref_pic_flow_set_vsize(flow, HEIGHT));
     ubase_assert(uref_pic_flow_set_fps(flow, fps));

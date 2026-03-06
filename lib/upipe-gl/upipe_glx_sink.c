@@ -500,7 +500,7 @@ static int upipe_glx_sink_provide_flow_format(struct upipe *upipe,
         uref_pic_flow_add_plane(flow_format, 1, 1, 2, "r5g6b5");
     else
         uref_pic_flow_add_plane(flow_format, 1, 1, 3, "r8g8b8");
-    uref_pic_set_progressive(flow_format);
+    uref_pic_set_progressive(flow_format, true);
     uref_pic_flow_delete_colour_primaries(flow_format);
     uref_pic_flow_delete_transfer_characteristics(flow_format);
     uref_pic_flow_delete_matrix_coefficients(flow_format);
