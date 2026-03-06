@@ -69,7 +69,7 @@ extern "C" {
  *  bool upipe_foo_check_flow_def_input(struct upipe *upipe,
  *                                      struct uref *flow_def_input)
  * @end code
- * Checks a new input flow definitions atributes packet against the stored one.
+ * Checks a new input flow definitions attributes packet against the stored one.
  *
  * @item @code
  *  struct uref *upipe_foo_store_flow_def_input(struct upipe *upipe,
