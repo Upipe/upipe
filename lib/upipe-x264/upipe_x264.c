@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Benjamin Cohen
  *
@@ -856,6 +857,11 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
                 }
             }
         }
+
+#ifdef HAVE_X264_MPEG2
+        if (!ubase_check(uref_pic_get_progressive(uref)))
+            pic.b_tff = ubase_check(uref_pic_get_tff(uref));
+#endif
 
         /* map */
         static const char *chromas_planar[] = {"y8", "u8", "v8"};
