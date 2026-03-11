@@ -387,14 +387,20 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
 /** @internal @This opens x264 encoder.
  *
  * @param upipe description structure of the pipe
- * @param width image width
- * @param height image height
+ * @param uref new image to encode
+ * @return an error code
  */
-static bool upipe_x264_open(struct upipe *upipe, int width, int height)
+static int upipe_x264_open(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     struct urational fps = {0, 0};
     x264_param_t *params = &upipe_x264->params;
+    size_t width = 0, height = 0;
+    int ret;
+
+    uref_pic_size(uref, &width, &height, NULL);
+    bool tff = ubase_check(uref_pic_get_tff(uref));
+
     params->rc.psz_stat_out = NULL;
     params->rc.psz_stat_in = NULL;
 
@@ -423,11 +429,11 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     params->i_csp = upipe_x264->chroma_subsampling;
     params->i_width = width;
     params->i_height = height;
+    params->b_tff = tff;
     params->b_interlaced =
         !ubase_check(uref_pic_get_progressive(upipe_x264->flow_def_input));
 
     const char *content;
-    int ret;
     if (ubase_check(uref_pic_flow_get_video_format(
                     upipe_x264->flow_def_input, &content)) &&
         (ret = x264_param_parse(&upipe_x264->params, "videoformat",
@@ -455,13 +461,14 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
 
     /* reconfigure encoder with new parameters and return */
     if (unlikely(upipe_x264->encoder)) {
-        if (!ubase_check(_upipe_x264_reconfigure(upipe)))
-            return false;
+        ret = _upipe_x264_reconfigure(upipe);
+        if (!ubase_check(ret))
+            return ret;
     } else {
         /* open encoder */
         upipe_x264->encoder = x264_encoder_open(params);
         if (unlikely(!upipe_x264->encoder))
-            return false;
+            return UBASE_ERR_EXTERNAL;
     }
 
     /* sync pipe parameters with internal copy */
@@ -471,17 +478,21 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     struct uref *flow_def_attr = upipe_x264_alloc_flow_def_attr(upipe);
     if (unlikely(flow_def_attr == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+        return UBASE_ERR_ALLOC;
     }
 
     const char *def = OUT_FLOW;
     if (upipe_x264_mpeg2_enabled(upipe)) {
         def = OUT_FLOW_MPEG2;
     }
-    if (unlikely(!ubase_check(uref_flow_set_def(flow_def_attr, def)))) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return false;
+
+    ret = uref_flow_set_def(flow_def_attr, def);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(flow_def_attr);
+        upipe_throw_fatal(upipe, ret);
+        return ret;
     }
+
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def_attr))
 
     /* set octetrate for CBR streams */
@@ -604,7 +615,7 @@ static bool upipe_x264_open(struct upipe *upipe, int width, int height)
     } else
         uref_free(flow_def_attr);
 
-    return true;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This closes x264 encoder.
@@ -676,31 +687,58 @@ static void upipe_x264_build_flow_def(struct upipe *upipe)
     upipe_x264_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This checks incoming pic against cached parameters.
+/** @internal @This checks incoming pic against cached parameters and
+ * reconfigure encoder if needed.
  *
  * @param upipe description structure of the pipe
- * @param width image width
- * @param height image height
- * @return true if parameters update needed
+ * @param uref new image to encode
+ * @return an error code
  */
-static inline bool upipe_x264_need_update(struct upipe *upipe,
-                                          int width, int height)
+static int upipe_x264_update(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
+    size_t width = 0, height = 0;
+    bool need_update = true;
+    int ret = UBASE_ERR_NONE;
+
+    uref_pic_size(uref, &width, &height, NULL);
+    bool tff = ubase_check(uref_pic_get_tff(uref));
+
+    if (upipe_x264->encoder) {
 #ifdef HAVE_X264_MPEG2
-    if (upipe_x264_mpeg2_enabled(upipe))
-        return (params->i_width != width ||
-                params->i_height != height ||
-                params->i_csp != upipe_x264->chroma_subsampling ||
-                params->vui.i_aspect_ratio_information != upipe_x264->mpeg2_ar);
+        if (upipe_x264_mpeg2_enabled(upipe))
+            need_update =
+                (params->i_width != width || params->i_height != height ||
+                 params->i_csp != upipe_x264->chroma_subsampling ||
+                 params->vui.i_aspect_ratio_information !=
+                     upipe_x264->mpeg2_ar);
+        else
 #endif
-    return (params->i_width != width ||
-            params->i_height != height ||
-            params->i_csp != upipe_x264->chroma_subsampling ||
-            params->vui.i_sar_width != upipe_x264->sar.num ||
-            params->vui.i_sar_height != upipe_x264->sar.den ||
-            params->vui.i_overscan != upipe_x264->overscan);
+            need_update =
+                (params->i_width != width || params->i_height != height ||
+                 params->i_csp != upipe_x264->chroma_subsampling ||
+                 params->vui.i_sar_width != upipe_x264->sar.num ||
+                 params->vui.i_sar_height != upipe_x264->sar.den ||
+                 params->vui.i_overscan != upipe_x264->overscan ||
+                 params->b_tff != tff);
+
+        if (need_update)
+            upipe_notice_va(upipe,
+                            "Flow parameters changed, reconfiguring encoder "
+                            "(%d:%zu, %d:%zu, %s:%s, %d:%" PRId64 ", %d:%" PRIu64
+                            ", %d:%d)",
+                            params->i_width, width, params->i_height, height,
+                            params->b_tff ? "tff" : "bff", tff ? "tff" : "bff",
+                            params->vui.i_sar_width, upipe_x264->sar.num,
+                            params->vui.i_sar_height, upipe_x264->sar.den,
+                            params->vui.i_overscan, upipe_x264->overscan);
+    }
+
+    if (unlikely(need_update))
+        ret = upipe_x264_open(upipe, uref);
+
+    return ret;
 }
 
 /** @internal @This processes pictures.
@@ -770,14 +808,12 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    size_t width, height;
     x264_picture_t pic;
     x264_nal_t *nals;
     int i, nals_num, size = 0, header_size = 0;
     struct ubuf *ubuf_block;
     uint8_t *buf = NULL;
     x264_param_t curparams;
-    bool needopen = false;
     int ret = 0;
 
     /* init x264 picture */
@@ -786,26 +822,11 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
     if (likely(uref)) {
         pic.opaque = uref;
 
-        uref_pic_size(uref, &width, &height, NULL);
-
         /* open encoder if not already opened or if update needed */
-        if (unlikely(!upipe_x264->encoder)) {
-            needopen = true;
-        } else if (unlikely(upipe_x264_need_update(upipe, width, height))) {
-            x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
-            upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder (%d:%zu, %d:%zu, %d:%"PRId64", %d:%"PRIu64", %d:%d)",
-                params->i_width, width, params->i_height, height,
-                params->vui.i_sar_width, upipe_x264->sar.num,
-                params->vui.i_sar_height, upipe_x264->sar.den,
-                params->vui.i_overscan, upipe_x264->overscan);
-            needopen = true;
-        }
-        if (unlikely(needopen)) {
-            if (unlikely(!upipe_x264_open(upipe, width, height))) {
-                upipe_err(upipe, "Could not open encoder");
-                uref_free(uref);
-                return true;
-            }
+        if (unlikely(!ubase_check(upipe_x264_update(upipe, uref)))) {
+            upipe_err(upipe, "Could not open encoder");
+            uref_free(uref);
+            return true;
         }
         if (upipe_x264->flow_def_requested == NULL)
             return false;
