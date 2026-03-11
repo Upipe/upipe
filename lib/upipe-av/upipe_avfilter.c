@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2019-2025 EasyTools
+ * Copyright (C) 2019-2026 EasyTools
  *
  * Authors: Clément Vasseur
  *          Arnaud de Turckheim
@@ -545,7 +545,7 @@ upipe_avfilt_sub_frame_to_uref(struct upipe *upipe, AVFrame *frame)
     uint64_t pts_sys = UINT64_MAX;
     if (upipe_avfilt->last_input_pts_sys != UINT64_MAX &&
         upipe_avfilt->last_input_pts_prog != UINT64_MAX)
-        pts_sys = upipe_avfilt->last_input_pts_sys +
+        pts_sys = upipe_avfilt->last_input_pts_sys -
                   (upipe_avfilt->last_input_pts_prog - pts_prog);
     else if (upipe_avfilt_sub->pts_sys_offset == UINT64_MAX) {
         upipe_avfilt_sub->pts_sys_offset = upipe_avfilt_sub_now(upipe);
