@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -990,6 +991,10 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
         return UBASE_ERR_ALLOC;
     }
     uref_attach_ubuf(uref, ubuf);
+    uref_pic_delete_progressive(uref);
+    uref_pic_delete_tff(uref);
+    uref_pic_delete_tf(uref);
+    uref_pic_delete_bf(uref);
     uref_attr_import(uref, e->uref);
     uref_clock_delete_rate(uref);
     uref_clock_delete_duration(uref);
