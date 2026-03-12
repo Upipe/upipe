@@ -402,36 +402,13 @@ static int upipe_videocont_switch_format(struct upipe *upipe,
                                          struct uref *out_flow,
                                          struct uref *in_flow)
 {
-    uint64_t hsize, vsize;
-    struct urational sar;
     uref_pic_flow_clear_format(out_flow);
     uref_pic_flow_copy_format(out_flow, in_flow);
-    if (likely(ubase_check(uref_pic_flow_get_hsize(in_flow, &hsize)))) {
-        uref_pic_flow_set_hsize(out_flow, hsize);
-    } else {
-        uref_pic_flow_delete_hsize(out_flow);
-    }
-    if (likely(ubase_check(uref_pic_flow_get_vsize(in_flow, &vsize)))) {
-        uref_pic_flow_set_vsize(out_flow, vsize);
-    } else {
-        uref_pic_flow_delete_vsize(out_flow);
-    }
-    if (likely(ubase_check(uref_pic_flow_get_sar(in_flow, &sar)))) {
-        uref_pic_flow_set_sar(out_flow, sar);
-    } else {
-        uref_pic_flow_delete_sar(out_flow);
-    }
-    bool overscan;
-    if (likely(ubase_check(uref_pic_flow_get_overscan(in_flow, &overscan)))) {
-        uref_pic_flow_set_overscan(out_flow, overscan);
-    } else {
-        uref_pic_flow_delete_overscan(out_flow);
-    }
-    if (likely(ubase_check(uref_pic_get_progressive(in_flow)))) {
-        uref_pic_set_progressive(out_flow);
-    } else {
-        uref_pic_delete_progressive(out_flow);
-    }
+    uref_pic_flow_copy_hsize(out_flow, in_flow);
+    uref_pic_flow_copy_vsize(out_flow, in_flow);
+    uref_pic_flow_copy_sar(out_flow, in_flow);
+    uref_pic_flow_copy_overscan(out_flow, in_flow);
+    uref_pic_copy_progressive(out_flow, in_flow);
     return UBASE_ERR_NONE;
 }
 

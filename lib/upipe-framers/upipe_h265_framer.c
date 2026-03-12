@@ -1222,10 +1222,9 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
                     upipe_h265f->input_latency + upipe_h265f->duration * 2))
 
+        uref_pic_set_progressive(flow_def, !field_seq_flag);
         if (field_seq_flag)
             frame_rate.den *= 2;
-        else
-            uref_pic_set_progressive(flow_def);
 
         urational_simplify(&frame_rate);
         UBASE_FATAL(upipe, uref_pic_flow_set_fps(flow_def, frame_rate))
@@ -2082,39 +2081,47 @@ static int upipe_h265f_prepare_au(struct upipe *upipe, struct uref *uref)
 
     switch (upipe_h265f->pic_struct) {
         case H265SEI_STRUCT_FRAME:
-            UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, true))
             duration *= 2;
             break;
         case H265SEI_STRUCT_TOP:
         case H265SEI_STRUCT_TOP_PREV_BOT:
         case H265SEI_STRUCT_TOP_NEXT_BOT:
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, false))
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             break;
         case H265SEI_STRUCT_BOT:
         case H265SEI_STRUCT_BOT_PREV_TOP:
         case H265SEI_STRUCT_BOT_NEXT_TOP:
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, false))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
             break;
         case H265SEI_STRUCT_TOP_BOT:
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, false))
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref, true))
             duration *= 2;
             break;
         case H265SEI_STRUCT_BOT_TOP:
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, false))
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref, false))
             duration *= 2;
             break;
         case H265SEI_STRUCT_TOP_BOT_TOP:
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, false))
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
-            UBASE_FATAL(upipe, uref_pic_set_tff(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref, true))
             duration *= 3;
             break;
         case H265SEI_STRUCT_BOT_TOP_BOT:
+            UBASE_FATAL(upipe, uref_pic_set_progressive(uref, false))
             UBASE_FATAL(upipe, uref_pic_set_tf(uref))
             UBASE_FATAL(upipe, uref_pic_set_bf(uref))
+            UBASE_FATAL(upipe, uref_pic_set_tff(uref, false))
             duration *= 3;
             break;
         case H265SEI_STRUCT_DOUBLE:
