@@ -1110,7 +1110,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                 !ubase_check(uref_pic_flow_set_bgra(flow_def_attr)) ||
 #endif
                 !ubase_check(uref_flow_set_def(flow_def_attr, UREF_PIC_SUB_FLOW_DEF)) ||
-                !ubase_check(uref_pic_set_progressive(flow_def_attr)) ||
+                !ubase_check(uref_pic_set_progressive(flow_def_attr, true)) ||
                 !ubase_check(uref_pic_flow_set_full_range(flow_def_attr))))
         {
             uref_free(flow_def_attr);
@@ -1191,7 +1191,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         return;
     }
 
-    uref_pic_set_progressive(uref);
+    uref_pic_set_progressive(uref, true);
     ubuf_pic_clear(ubuf, 0, 0, -1, -1, 1);
 
     uref_attach_ubuf(uref, ubuf);
@@ -1352,9 +1352,9 @@ static void upipe_avcdec_output_pic(struct upipe *upipe, struct upump **upump_p)
     UBASE_FATAL(upipe, uref_pic_set_tf(uref))
     UBASE_FATAL(upipe, uref_pic_set_bf(uref))
     if (!interlaced_frame)
-        UBASE_FATAL(upipe, uref_pic_set_progressive(uref))
+        UBASE_FATAL(upipe, uref_pic_set_progressive(uref, true))
     else if (top_field_first)
-        UBASE_FATAL(upipe, uref_pic_set_tff(uref))
+        UBASE_FATAL(upipe, uref_pic_set_tff(uref, true))
 
     uint64_t duration = 0;
     AVRational uclock_time_base = av_make_q(1, UCLOCK_FREQ);
