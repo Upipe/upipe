@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -49,6 +50,18 @@ static inline int upipe_grid_set_max_retention(struct upipe *upipe,
                          UPIPE_GRID_SIGNATURE, max_retention);
 }
 
+
+/** @This enumerates the grid input control commands. */
+enum upipe_grid_in_command {
+    /** sentinel */
+    UPIPE_GRID_IN_SENTINEL = UPIPE_CONTROL_LOCAL,
+
+    /** get the internal latency in frames (unsigned *) */
+    UPIPE_GRID_IN_GET_FRAME_LATENCY,
+    /** set the internal latency in frames (unsigned) */
+    UPIPE_GRID_IN_SET_FRAME_LATENCY,
+};
+
 /** @This allocates a new grid input.
  *
  * @param upipe description structure of the pipe
@@ -57,6 +70,32 @@ static inline int upipe_grid_set_max_retention(struct upipe *upipe,
  */
 struct upipe *upipe_grid_alloc_input(struct upipe *upipe,
                                      struct uprobe *uprobe);
+
+/** @This gets the configured internal latency in frames
+ *
+ * @param upipe description structure of the pipe
+ * @param nb filled with the number of frames added as latency
+ * @return an error code
+ */
+static inline int upipe_grid_in_get_frame_latency(struct upipe *upipe,
+                                                  unsigned *nb)
+{
+    return upipe_control(upipe, UPIPE_GRID_IN_GET_FRAME_LATENCY,
+                         UPIPE_GRID_IN_SIGNATURE, nb);
+}
+
+/** @This sets the internal latency in frames
+ *
+ * @param upipe description structure of the pipe
+ * @param nb number of frames to add as latency
+ * @return an error code
+ */
+static inline int upipe_grid_in_set_frame_latency(struct upipe *upipe,
+                                                  unsigned nb)
+{
+    return upipe_control(upipe, UPIPE_GRID_IN_SET_FRAME_LATENCY,
+                         UPIPE_GRID_IN_SIGNATURE, nb);
+}
 
 /** @This enumerates the grid output control commands. */
 enum upipe_grid_out_command {
