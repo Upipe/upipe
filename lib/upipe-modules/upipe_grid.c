@@ -96,6 +96,8 @@ struct upipe_grid_in {
     uint64_t last_duration;
     /** input latency */
     uint64_t latency;
+    /** number of frame latency to add to input latency */
+    unsigned latency_frames;
     /** next update diff */
     uint64_t next_update;
     /** last update print */
@@ -238,6 +240,7 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     ulist_init(&upipe_grid_in->urefs);
     upipe_grid_in->last_pts = 0;
     upipe_grid_in->latency = 0;
+    upipe_grid_in->latency_frames = 0;
     upipe_grid_in->next_update = 0;
     upipe_grid_in->last_update_print = 0;
     upipe_grid_in->max_buffer = INT64_MIN;
@@ -513,8 +516,8 @@ static void upipe_grid_in_input(struct upipe *upipe,
                                 struct uref *uref,
                                 struct upump **upump_p)
 {
-    struct upipe_grid_in *upipe_grid_in =
-        upipe_grid_in_from_upipe(upipe);
+    struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
+    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
 
     /* handle flow format */
     if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
@@ -550,12 +553,42 @@ static void upipe_grid_in_input(struct upipe *upipe,
 
     /* apply input latency */
     pts += upipe_grid_in->latency;
+    if (upipe_grid_in->latency_frames) {
+        struct uref *flow_def = upipe_grid_in->current_flow_def;
+        struct urational fps = { 0, 0 };
+        uint64_t rate = 0;
+        uint64_t samples = 0;
+        uint64_t latency = 0;
+
+        /* add configured internal latency */
+        if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) && fps.num) {
+            latency =
+                upipe_grid_in->latency_frames * fps.den * UCLOCK_FREQ / fps.num;
+        } else if (ubase_check(uref_sound_flow_get_rate(flow_def, &rate)) &&
+                   uref_sound_flow_get_samples(flow_def, &samples) && rate) {
+            latency =
+                upipe_grid_in->latency_frames * samples * UCLOCK_FREQ / rate;
+        }
+        pts += latency;
+    }
     uref_clock_set_pts_sys(uref, pts);
 
     if (pts <= upipe_grid_in->last_pts) {
         upipe_warn(upipe, "PTS is in the past");
         uref_free(uref);
         return;
+    }
+
+    uint64_t now = UINT64_MAX;
+    upipe_grid_uclock_now(upipe_grid_to_upipe(upipe_grid), &now);
+    if (now != UINT64_MAX) {
+        if (pts < now)
+            upipe_warn_va(upipe, "input is %.2f ms late, %.2f ms",
+                          (now - pts) * 1000. / UCLOCK_FREQ,
+                          upipe_grid_in->latency * 1000. / UCLOCK_FREQ);
+        else
+            upipe_verbose_va(upipe, "input is %.2f ms early",
+                             (pts - now) * 1000. / UCLOCK_FREQ);
     }
 
     uint64_t duration = 0;
@@ -613,6 +646,35 @@ static int upipe_grid_in_get_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This gets the configured internal latency in frames
+ *
+ * @param upipe description structure of the pipe
+ * @param nb filled with the number of frames added as latency
+ * @return an error code
+ */
+static int upipe_grid_in_get_latency_frames_real(struct upipe *upipe,
+                                                 unsigned *nb)
+{
+    struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
+    if (nb)
+        *nb = upipe_grid_in->latency_frames;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This sets the internal latency in frames
+ *
+ * @param upipe description structure of the pipe
+ * @param nb number of frames to add as latency
+ * @return an error code
+ */
+static int upipe_grid_in_set_latency_frames_real(struct upipe *upipe,
+                                                 unsigned nb)
+{
+    struct upipe_grid_in *upipe_grid_in = upipe_grid_in_from_upipe(upipe);
+    upipe_grid_in->latency_frames = nb;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles grid input controls.
  *
  * @param upipe input pipe description
@@ -638,6 +700,17 @@ static int upipe_grid_in_control_real(struct upipe *upipe,
         case UPIPE_GET_FLOW_DEF: {
             struct uref **flow_def_p = va_arg(args, struct uref **);
             return upipe_grid_in_get_flow_def(upipe, flow_def_p);
+        }
+
+        case UPIPE_GRID_IN_GET_LATENCY_FRAMES: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GRID_IN_SIGNATURE);
+            unsigned *nb = va_arg(args, unsigned *);
+            return upipe_grid_in_get_latency_frames_real(upipe, nb);
+        }
+        case UPIPE_GRID_IN_SET_LATENCY_FRAMES: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_GRID_IN_SIGNATURE);
+            unsigned nb = va_arg(args, unsigned);
+            return upipe_grid_in_set_latency_frames_real(upipe, nb);
         }
     }
 
