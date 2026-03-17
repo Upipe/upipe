@@ -86,7 +86,7 @@ struct upipe_avfilt_sub {
     const char *name;
     /** avfilter buffer source */
     AVFilterContext *buffer_ctx;
-   /** reference to hardware frames context for input filters */
+    /** reference to hardware frames context for input filters */
     AVBufferRef *hw_frames_ctx;
     /** system clock offset */
     uint64_t pts_sys_offset;
@@ -697,27 +697,28 @@ static void upipe_avfilt_sub_flush_cb(struct upump *upump)
  *
  * @param upipe description structure of the pipe or sub pipe
  * @param flow_def input flow definition to build filter from
+ * @param name filter name
+ * @param hw_frames_ctx hardware context for input frames
  * @param buffer_ctx filled with the AVFilter context on success
  * @return an error code
  */
-static int build_input_filter(struct upipe *upipe, struct uref *flow_def,
+static int build_input_filter(struct upipe *upipe,
+                              struct uref *flow_def,
+                              const char *name,
+                              AVBufferRef *hw_frames_ctx,
                               AVFilterContext **buffer_ctx)
 {
-    struct upipe_avfilt *upipe_avfilt = NULL;
-    struct upipe_avfilt_sub *upipe_avfilt_sub = NULL;
-    const char *name = "input";
+    struct upipe_avfilt *upipe_avfilt;
 
-    if (!upipe || !upipe->mgr || !flow_def) {
+    if (!upipe || !upipe->mgr || !flow_def)
         return UBASE_ERR_INVALID;
-    } else if (upipe->mgr->signature == UPIPE_AVFILT_SIGNATURE) {
+
+    if (upipe->mgr->signature == UPIPE_AVFILT_SIGNATURE)
         upipe_avfilt = upipe_avfilt_from_upipe(upipe);
-    } else if (upipe->mgr->signature == UPIPE_AVFILT_SUB_SIGNATURE) {
-        upipe_avfilt_sub = upipe_avfilt_sub_from_upipe(upipe);
+    else if (upipe->mgr->signature == UPIPE_AVFILT_SUB_SIGNATURE)
         upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
-        name = upipe_avfilt_sub->name;
-    } else {
+    else
         return UBASE_ERR_INVALID;
-    }
 
     AVFilterGraph *filter_graph = upipe_avfilt->filter_graph;
     if (!filter_graph || !name)
@@ -755,8 +756,7 @@ static int build_input_filter(struct upipe *upipe, struct uref *flow_def,
     }
     p->time_base.num = 1;
     p->time_base.den = UCLOCK_FREQ;
-    if (upipe_avfilt_sub)
-        p->hw_frames_ctx = upipe_avfilt_sub->hw_frames_ctx;
+    p->hw_frames_ctx = hw_frames_ctx;
 
     switch (type) {
         case AVMEDIA_TYPE_VIDEO: {
@@ -844,7 +844,10 @@ static int upipe_avfilt_sub_create_filter(struct upipe *upipe)
     if (unlikely(!upipe_avfilt->filter_graph))
         return UBASE_ERR_INVALID;
 
-    return build_input_filter(upipe, flow_def, &upipe_avfilt_sub->buffer_ctx);
+    return build_input_filter(upipe, flow_def,
+                              upipe_avfilt_sub->name,
+                              upipe_avfilt_sub->hw_frames_ctx,
+                              &upipe_avfilt_sub->buffer_ctx);
 }
 
 /** @internal @This allocates and initializes a avfilter sub pipe.
@@ -1716,68 +1719,7 @@ static int upipe_avfilt_set_flow_def(struct upipe *upipe,
                                         AVFILTER_AUTO_CONVERT_NONE);
     }
 
-    int ret = build_input_filter(upipe, flow_def, &upipe_avfilt->buffer_ctx);
-    if (unlikely(!ubase_check(ret))) {
-        const char *def = "(none)";
-        uref_flow_get_def(flow_def, &def);
-        upipe_warn_va(upipe, "unsupported flow def %s", def);
-        return ret;
-    }
-
-    upipe_notice_va(upipe, "configuring filter %s", upipe_avfilt->filters_desc);
-
-    AVFilterInOut *outputs = avfilter_inout_alloc();
-    if (outputs == NULL) {
-        upipe_err(upipe, "cannot allocate inout for input");
-        return UBASE_ERR_ALLOC;
-    }
-    outputs->name = av_strdup("in");
-    outputs->filter_ctx = upipe_avfilt->buffer_ctx;
-    outputs->pad_idx = 0;
-    outputs->next = NULL;
-
-    int err;
-    if ((err = avfilter_graph_parse_ptr(upipe_avfilt->filter_graph,
-                                        upipe_avfilt->filters_desc,
-                                        NULL, &outputs,
-                                        NULL)) < 0) {
-        upipe_err_va(upipe, "cannot parse filter graph: %s",
-                     av_err2str(err));
-        goto end;
-    }
-
-    if (outputs != NULL) {
-        const char *filters = NULL;
-        switch (avfilter_pad_get_type(outputs->filter_ctx->output_pads,
-                                      outputs->pad_idx)) {
-            case AVMEDIA_TYPE_VIDEO:
-                filters = "[out]buffersink";
-                break;
-            case AVMEDIA_TYPE_AUDIO:
-                filters = "[out]abuffersink";
-                break;
-            default:
-                upipe_err(upipe, "unknown output media type");
-                err = -1;
-                goto end;
-        }
-
-        if ((err = avfilter_graph_parse_ptr(upipe_avfilt->filter_graph,
-                                            filters, NULL, &outputs,
-                                            NULL)) < 0) {
-            upipe_err_va(upipe, "cannot parse filter graph: %s",
-                         av_err2str(err));
-            goto end;
-        }
-
-        AVFilterGraph *graph = upipe_avfilt->filter_graph;
-        upipe_avfilt->buffersink_ctx = graph->filters[graph->nb_filters - 1];
-    }
-
-end:
-    avfilter_inout_free(&outputs);
-
-    return err < 0 ? UBASE_ERR_INVALID : UBASE_ERR_NONE;
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This initializes the source buffer filter with parameters
@@ -1806,28 +1748,69 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
             return ret;
     }
 
-    AVBufferSrcParameters *p = av_buffersrc_parameters_alloc();
-    if (p == NULL) {
-        upipe_err(upipe, "cannot alloc buffer parameters");
+    struct uref *flow_def = upipe_avfilt->flow_def_input;
+    int ret = build_input_filter(upipe, flow_def, "input",
+                                 frame->hw_frames_ctx,
+                                 &upipe_avfilt->buffer_ctx);
+    if (unlikely(!ubase_check(ret))) {
+        const char *def = "(none)";
+        uref_flow_get_def(flow_def, &def);
+        upipe_warn_va(upipe, "unsupported flow def %s", def);
+        return ret;
+    }
+
+    upipe_notice_va(upipe, "configuring filter %s", upipe_avfilt->filters_desc);
+
+    AVFilterInOut *outputs = avfilter_inout_alloc();
+    if (outputs == NULL) {
+        upipe_err(upipe, "cannot allocate inout for input");
         return UBASE_ERR_ALLOC;
     }
-    p->format = frame->format;
-    p->width = frame->width;
-    p->height = frame->height;
-    p->hw_frames_ctx = frame->hw_frames_ctx;
+    outputs->name = av_strdup("in");
+    outputs->filter_ctx = upipe_avfilt->buffer_ctx;
+    outputs->pad_idx = 0;
+    outputs->next = NULL;
 
-#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 16, 100)
-    p->color_space = frame->colorspace;
-    p->color_range = frame->color_range;
-#endif
-
-    int err = av_buffersrc_parameters_set(upipe_avfilt->buffer_ctx, p);
-    av_free(p);
-    if (err < 0) {
-        upipe_err_va(upipe, "cannot set buffer parameters: %s",
-                     av_err2str(err));
+    int err;
+    if ((err = avfilter_graph_parse_ptr(upipe_avfilt->filter_graph,
+                                        upipe_avfilt->filters_desc,
+                                        NULL, &outputs,
+                                        NULL)) < 0) {
+        upipe_err_va(upipe, "cannot parse filter graph: %s", av_err2str(err));
+        avfilter_inout_free(&outputs);
         return UBASE_ERR_EXTERNAL;
     }
+
+    if (outputs != NULL) {
+        const char *filters = NULL;
+        switch (avfilter_pad_get_type(outputs->filter_ctx->output_pads,
+                                      outputs->pad_idx)) {
+            case AVMEDIA_TYPE_VIDEO:
+                filters = "[out]buffersink";
+                break;
+            case AVMEDIA_TYPE_AUDIO:
+                filters = "[out]abuffersink";
+                break;
+            default:
+                upipe_err(upipe, "unknown output media type");
+                avfilter_inout_free(&outputs);
+                return UBASE_ERR_INVALID;
+        }
+
+        if ((err = avfilter_graph_parse_ptr(upipe_avfilt->filter_graph,
+                                            filters, NULL, &outputs,
+                                            NULL)) < 0) {
+            upipe_err_va(upipe, "cannot parse filter graph: %s",
+                         av_err2str(err));
+            avfilter_inout_free(&outputs);
+            return UBASE_ERR_EXTERNAL;
+        }
+
+        AVFilterGraph *graph = upipe_avfilt->filter_graph;
+        upipe_avfilt->buffersink_ctx = graph->filters[graph->nb_filters - 1];
+    }
+
+    avfilter_inout_free(&outputs);
 
     AVBufferRef *device_ctx = upipe_avfilt->hw_device_ctx;
     if (device_ctx == NULL && frame->hw_frames_ctx != NULL) {
