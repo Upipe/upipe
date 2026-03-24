@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -130,7 +130,8 @@ static struct upipe *upipe_audio_copy_alloc(struct upipe_mgr *mgr,
         upipe_audio_copy_from_upipe(upipe);
     ulist_init(&upipe_audio_copy->buffers);
     upipe_audio_copy->planes = 0;
-    upipe_audio_copy->samplerate = UINT64_MAX;
+    upipe_audio_copy->samplerate = 0;
+    upipe_audio_copy->sample_size = 0;
     upipe_audio_copy->remain = 0;
 
     upipe_throw_ready(upipe);
@@ -140,15 +141,13 @@ static struct upipe *upipe_audio_copy_alloc(struct upipe_mgr *mgr,
     upipe_audio_copy->fps.num = 0;
     upipe_audio_copy->fps.den = 1;
     uref_pic_flow_get_fps(flow_def, &upipe_audio_copy->fps);
+    uref_free(flow_def);
 
     if (unlikely(!upipe_audio_copy->samples && !upipe_audio_copy->fps.num)) {
         upipe_err(upipe, "invalid flow def parameters");
-        uref_free(flow_def);
         upipe_release(upipe);
         return NULL;
     }
-
-    upipe_audio_copy_store_flow_def_attr(upipe, flow_def);
 
     return upipe;
 }
@@ -220,31 +219,59 @@ static int upipe_audio_copy_set_flow_def_real(struct upipe *upipe,
     struct upipe_audio_copy *upipe_audio_copy =
         upipe_audio_copy_from_upipe(upipe);
 
-    UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF));
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def,
-                                          &upipe_audio_copy->samplerate));
-    UBASE_RETURN(uref_sound_flow_get_planes(flow_def,
-                                            &upipe_audio_copy->planes));
-    UBASE_RETURN(uref_sound_flow_get_sample_size(
-            flow_def, &upipe_audio_copy->sample_size));
-    if (unlikely(!upipe_audio_copy->samplerate))
-        return UBASE_ERR_INVALID;
+    if (upipe_audio_copy_check_flow_def_input(upipe, flow_def)) {
+        /* nothing changed */
+        uref_free(flow_def);
+        return UBASE_ERR_NONE;
+    }
+    upipe_audio_copy_store_flow_def_input(upipe, flow_def);
 
-    struct uref *flow_def_dup = uref_dup(flow_def);
-    UBASE_ALLOC_RETURN(flow_def_dup);
-    struct uref *output_flow_def =
-        upipe_audio_copy_store_flow_def_input(upipe, flow_def_dup);
-    UBASE_ALLOC_RETURN(output_flow_def);
-    uint64_t latency = 0;
-    uref_clock_get_latency(flow_def, &latency);
-    latency += upipe_audio_copy->samples * UCLOCK_FREQ /
-        upipe_audio_copy->samplerate;
-    int ret = uref_clock_set_latency(output_flow_def, latency);
-    if (unlikely(!ubase_check(ret))) {
-        uref_free(output_flow_def);
-        return ret;
+    uint64_t rate = 0;
+    uint8_t planes = 0;
+    uint8_t sample_size = 0;
+    uint64_t input_latency = 0;
+    uref_sound_flow_get_rate(flow_def, &rate);
+    uref_sound_flow_get_planes(flow_def, &planes);
+    uref_sound_flow_get_sample_size(flow_def, &sample_size);
+    uref_clock_get_latency(flow_def, &input_latency);
+
+    /* allocate new output flow def */
+    flow_def = upipe_audio_copy_make_flow_def(upipe);
+    if (unlikely(!flow_def)) {
+        upipe_audio_copy_store_flow_def_input(upipe, NULL);
+        return UBASE_ERR_ALLOC;
     }
 
+    uref_sound_flow_delete_samples(flow_def);
+
+    /* compute maximum number of samples per output uref */
+    uint64_t samples = upipe_audio_copy->samples;
+    if (!samples) {
+        samples = rate * upipe_audio_copy->fps.den / upipe_audio_copy->fps.num;
+        if (samples * upipe_audio_copy->fps.num !=
+            rate * upipe_audio_copy->fps.den)
+            samples++;
+        else
+            uref_sound_flow_set_samples(flow_def, samples);
+    }
+    else
+        uref_sound_flow_set_samples(flow_def, samples);
+
+    /* compute latency */
+    uint64_t latency = samples * UCLOCK_FREQ / rate;
+    if (latency * rate != samples * UCLOCK_FREQ)
+        latency++;
+
+    uref_clock_set_latency(flow_def, input_latency + latency);
+
+    if (upipe_audio_copy->samplerate == rate &&
+        upipe_audio_copy->sample_size == sample_size &&
+        upipe_audio_copy->planes == planes) {
+        upipe_audio_copy_store_flow_def(upipe, flow_def);
+        return UBASE_ERR_NONE;
+    }
+
+    /* flush */
     struct uchain *uchain;
     while ((uchain = ulist_pop(&upipe_audio_copy->buffers))) {
         upipe_warn(upipe, "delete retained buffer");
@@ -253,7 +280,11 @@ static int upipe_audio_copy_set_flow_def_real(struct upipe *upipe,
     upipe_audio_copy->size = 0;
     upipe_audio_copy->remain = 0;
 
-    upipe_audio_copy_require_ubuf_mgr(upipe, output_flow_def);
+    /* ask for a new ubuf manager */
+    upipe_audio_copy->samplerate = rate;
+    upipe_audio_copy->sample_size = sample_size;
+    upipe_audio_copy->planes = planes;
+    upipe_audio_copy_require_ubuf_mgr(upipe, flow_def);
     return UBASE_ERR_NONE;
 }
 
@@ -477,10 +508,19 @@ static void upipe_audio_copy_input(struct upipe *upipe,
 static int upipe_audio_copy_set_flow_def(struct upipe *upipe,
                                           struct uref *flow_def)
 {
+    uint64_t rate = 0;
+    uint8_t planes = 0;
+    uint8_t sample_size = 0;
+
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF));
-    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, NULL));
-    UBASE_RETURN(uref_sound_flow_get_planes(flow_def, NULL));
-    UBASE_RETURN(uref_sound_flow_get_sample_size(flow_def, NULL));
+    UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));
+    UBASE_RETURN(uref_sound_flow_get_planes(flow_def, &planes));
+    UBASE_RETURN(uref_sound_flow_get_sample_size(flow_def, &sample_size));
+    if (unlikely(!rate || !planes || !sample_size))
+        return UBASE_ERR_INVALID;
+
+    flow_def = uref_dup(flow_def);
+    UBASE_ALLOC_RETURN(flow_def);
     upipe_input(upipe, flow_def, NULL);
     return UBASE_ERR_NONE;
 }
