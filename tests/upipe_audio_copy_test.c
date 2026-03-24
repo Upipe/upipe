@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 OpenHeadend S.A.R.L.
- * Copyright (C) 2020 EasyTools
+ * Copyright (C) 2020-2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -43,6 +43,8 @@
 #define RATE                    48000
 #define LIMIT                   8
 #define OUTPUT_SIZE             1024
+#define INPUT_SIZE              (3 * OUTPUT_SIZE + (OUTPUT_SIZE / LIMIT))
+#define TOTAL_INPUT_SIZE        (LIMIT * INPUT_SIZE)
 
 static uint64_t last_pts = 0;
 
@@ -50,6 +52,7 @@ struct sink {
     struct upipe upipe;
     struct urefcount urefcount;
     uint64_t count;
+    size_t size;
 };
 
 UPIPE_HELPER_UPIPE(sink, upipe, 0);
@@ -61,6 +64,7 @@ static void sink_free(struct upipe *upipe)
     struct sink *sink = sink_from_upipe(upipe);
 
     assert(sink->count == 3 * LIMIT + 1);
+    assert(sink->size <= TOTAL_INPUT_SIZE);
 
     upipe_throw_dead(upipe);
 
@@ -80,6 +84,7 @@ static struct upipe *sink_alloc(struct upipe_mgr *mgr,
 
     struct sink *sink = sink_from_upipe(upipe);
     sink->count = 0;
+    sink->size = 0;
 
     upipe_throw_ready(upipe);
 
@@ -97,6 +102,27 @@ static void sink_input(struct upipe *upipe, struct uref *uref,
     size_t size;
     ubase_assert(uref_sound_size(uref, &size, NULL));
     assert(size == OUTPUT_SIZE);
+    sink->size += size;
+    uint64_t pts;
+    ubase_assert(uref_clock_get_pts_prog(uref, &pts));
+    assert(pts > last_pts);
+    last_pts = pts;
+    uref_free(uref);
+}
+
+static void sink_input4(struct upipe *upipe, struct uref *uref,
+                        struct upump **upump_p)
+{
+    struct sink *sink = sink_from_upipe(upipe);
+
+    sink->count = 3 * LIMIT + 1;
+    uref_dump(uref, upipe->uprobe);
+    assert(uref->ubuf);
+    size_t size;
+    ubase_assert(uref_sound_size(uref, &size, NULL));
+    upipe_notice_va(upipe, "size %zu", size);
+    assert(size == 1600 || size == 1602);
+    sink->size += size;
     uint64_t pts;
     ubase_assert(uref_clock_get_pts_prog(uref, &pts));
     assert(pts > last_pts);
@@ -113,10 +139,20 @@ static int sink_set_flow_def1(struct upipe *upipe, struct uref *flow_def)
     return UBASE_ERR_NONE;
 }
 
-static int sink_set_flow_def2(struct upipe *upipe, struct uref *flow_def)
+static int sink_set_flow_def3(struct upipe *upipe, struct uref *flow_def)
 {
+    uint64_t samples = 0;
     ubase_assert(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF));
-    ubase_nassert(uref_sound_flow_get_samples(flow_def, NULL));
+    ubase_assert(uref_sound_flow_get_samples(flow_def, &samples));
+    assert(samples == OUTPUT_SIZE);
+    return UBASE_ERR_NONE;
+}
+
+static int sink_set_flow_def4(struct upipe *upipe, struct uref *flow_def)
+{
+    uint64_t samples = 0;
+    ubase_assert(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF));
+    ubase_nassert(uref_sound_flow_get_samples(flow_def, &samples));
     return UBASE_ERR_NONE;
 }
 
@@ -152,6 +188,9 @@ static struct upipe_mgr sink_mgr = {
 
 int main(int argc, char *argv[])
 {
+    struct uref *flow_def;
+    struct urational fps;
+
     struct uclock *uclock = uclock_std_alloc(0);
 
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -180,15 +219,15 @@ int main(int argc, char *argv[])
     struct upipe_mgr *upipe_audio_copy_mgr = upipe_audio_copy_mgr_alloc();
     assert(upipe_audio_copy_mgr);
 
-    struct uref *flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, "s16.", CHANNELS, 2 * CHANNELS);
+    flow_def = uref_alloc_control(uref_mgr);
+    ubase_assert(uref_flow_set_def(flow_def, UREF_SOUND_FLOW_DEF));
     ubase_assert(uref_sound_flow_set_samples(flow_def, OUTPUT_SIZE));
 
     struct upipe *upipe_audio_copy =
         upipe_flow_alloc(upipe_audio_copy_mgr,
                          uprobe_pfx_alloc(uprobe_use(uprobe),
                                           UPROBE_LOG_LEVEL,
-                                          "frame"),
+                                          "frame 1"),
                          flow_def);
     uref_free(flow_def);
     upipe_mgr_release(upipe_audio_copy_mgr);
@@ -207,15 +246,15 @@ int main(int argc, char *argv[])
         uref_sound_flow_alloc_def(uref_mgr, "s16.", CHANNELS, 2 * CHANNELS);
     assert(flow_def);
     ubase_assert(uref_sound_flow_set_rate(flow_def, RATE));
-    ubase_assert(uref_sound_flow_set_planes(flow_def, 2));
+    ubase_assert(uref_sound_flow_add_plane(flow_def, "l"));
+    ubase_assert(uref_sound_flow_add_plane(flow_def, "r"));
     ubase_assert(upipe_set_flow_def(upipe_audio_copy, flow_def));
     uref_free(flow_def);
 
     uint64_t pts = 1000;
     for (unsigned i = 0; i < LIMIT; i++) {
-        size_t size = 3 * OUTPUT_SIZE + (OUTPUT_SIZE / LIMIT) + (i ? 0 : 1);
-        struct uref *uref = uref_sound_alloc(uref_mgr, ubuf_mgr,
-                                             3 * OUTPUT_SIZE + (OUTPUT_SIZE / LIMIT) + (i ? 0 : 1));
+        size_t size = INPUT_SIZE + (i ? 0 : 1);
+        struct uref *uref = uref_sound_alloc(uref_mgr, ubuf_mgr, size);
         uref_clock_set_pts_prog(uref, pts);
         pts += 1000 + (UCLOCK_FREQ * size / RATE);
         upipe_input(upipe_audio_copy, uref, NULL);
@@ -224,36 +263,37 @@ int main(int argc, char *argv[])
     upipe_release(upipe_audio_copy);
 
 
-    flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, "s16.", CHANNELS, 2 * CHANNELS);
+    flow_def = uref_alloc_control(uref_mgr);
+    ubase_assert(uref_flow_set_def(flow_def, UREF_SOUND_FLOW_DEF));
     //ubase_assert(uref_sound_flow_set_samples(flow_def, OUTPUT_SIZE));
 
     upipe_audio_copy =
         upipe_flow_alloc(upipe_audio_copy_mgr,
                          uprobe_pfx_alloc(uprobe_use(uprobe),
                                           UPROBE_LOG_LEVEL,
-                                          "frame"),
+                                          "frame 2"),
                          flow_def);
     uref_free(flow_def);
     upipe_mgr_release(upipe_audio_copy_mgr);
     assert(upipe_audio_copy == NULL);
 
-    flow_def =
-        uref_sound_flow_alloc_def(uref_mgr, "s16.", CHANNELS, 2 * CHANNELS);
-    struct urational fps = { .num = RATE, .den = OUTPUT_SIZE };
+    flow_def = uref_alloc_control(uref_mgr);
+    ubase_assert(uref_flow_set_def(flow_def, UREF_SOUND_FLOW_DEF));
+    fps.num = RATE;
+    fps.den = OUTPUT_SIZE;
     ubase_assert(uref_pic_flow_set_fps(flow_def, fps));
 
     upipe_audio_copy =
         upipe_flow_alloc(upipe_audio_copy_mgr,
                          uprobe_pfx_alloc(uprobe_use(uprobe),
                                           UPROBE_LOG_LEVEL,
-                                          "frame"),
+                                          "frame 3"),
                          flow_def);
     uref_free(flow_def);
     upipe_mgr_release(upipe_audio_copy_mgr);
     assert(upipe_audio_copy);
 
-    sink_set_flow_def = sink_set_flow_def2;
+    sink_set_flow_def = sink_set_flow_def3;
     sink =
         upipe_void_alloc_output(upipe_audio_copy, &sink_mgr,
                                 uprobe_pfx_alloc(uprobe_use(uprobe),
@@ -266,14 +306,55 @@ int main(int argc, char *argv[])
         uref_sound_flow_alloc_def(uref_mgr, "s16.", CHANNELS, 2 * CHANNELS);
     assert(flow_def);
     ubase_assert(uref_sound_flow_set_rate(flow_def, RATE));
-    ubase_assert(uref_sound_flow_set_planes(flow_def, 2));
+    ubase_assert(uref_sound_flow_add_plane(flow_def, "lr"));
     ubase_assert(upipe_set_flow_def(upipe_audio_copy, flow_def));
     uref_free(flow_def);
 
     for (unsigned i = 0; i < LIMIT; i++) {
-        size_t size = 3 * OUTPUT_SIZE + (OUTPUT_SIZE / LIMIT);
-        struct uref *uref = uref_sound_alloc(
-            uref_mgr, ubuf_mgr, size);
+        struct uref *uref = uref_sound_alloc(uref_mgr, ubuf_mgr, INPUT_SIZE);
+        uref_clock_set_pts_prog(uref, pts);
+        pts += (i ? 3 : 4) * UCLOCK_FREQ;
+        upipe_input(upipe_audio_copy, uref, NULL);
+    }
+
+    upipe_release(upipe_audio_copy);
+
+    flow_def = uref_alloc_control(uref_mgr);
+    ubase_assert(uref_flow_set_def(flow_def, UREF_SOUND_FLOW_DEF));
+    fps.num = 30000;
+    fps.den = 1001;
+    ubase_assert(uref_pic_flow_set_fps(flow_def, fps));
+
+    upipe_audio_copy =
+        upipe_flow_alloc(upipe_audio_copy_mgr,
+                         uprobe_pfx_alloc(uprobe_use(uprobe),
+                                          UPROBE_LOG_LEVEL,
+                                          "frame 4"),
+                         flow_def);
+    uref_free(flow_def);
+    upipe_mgr_release(upipe_audio_copy_mgr);
+    assert(upipe_audio_copy);
+
+    sink_set_flow_def = sink_set_flow_def4;
+    sink_mgr.upipe_input = sink_input4;
+    sink =
+        upipe_void_alloc_output(upipe_audio_copy, &sink_mgr,
+                                uprobe_pfx_alloc(uprobe_use(uprobe),
+                                                 UPROBE_LOG_LEVEL,
+                                                 "sink"));
+    assert(sink);
+    upipe_release(sink);
+
+    flow_def =
+        uref_sound_flow_alloc_def(uref_mgr, "s16.", CHANNELS, 2 * CHANNELS);
+    assert(flow_def);
+    ubase_assert(uref_sound_flow_set_rate(flow_def, RATE));
+    ubase_assert(uref_sound_flow_add_plane(flow_def, "lr"));
+    ubase_assert(upipe_set_flow_def(upipe_audio_copy, flow_def));
+    uref_free(flow_def);
+
+    for (unsigned i = 0; i < LIMIT; i++) {
+        struct uref *uref = uref_sound_alloc(uref_mgr, ubuf_mgr, INPUT_SIZE);
         uref_clock_set_pts_prog(uref, pts);
         pts += (i ? 3 : 4) * UCLOCK_FREQ;
         upipe_input(upipe_audio_copy, uref, NULL);
