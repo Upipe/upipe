@@ -819,6 +819,7 @@ static int upipe_grid_out_import_format(struct upipe *upipe,
         uref_pic_flow_copy_format(out_flow, in_flow);
         uref_pic_flow_copy_hsize(out_flow, in_flow);
         uref_pic_flow_copy_vsize(out_flow, in_flow);
+        uref_pic_flow_copy_dar(out_flow, in_flow);
         uref_pic_flow_copy_sar(out_flow, in_flow);
         uref_pic_flow_copy_overscan(out_flow, in_flow);
         uref_pic_copy_progressive(out_flow, in_flow);
