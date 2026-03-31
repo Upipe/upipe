@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Benjamin Cohen
  *
@@ -93,6 +94,12 @@ int ubuf_pic_plane_clear(struct ubuf *ubuf, const char *chroma,
 
     } else if (MATCH("u16b") || MATCH("v16b")) {
         SET_COLOR(0x80, 0x00);
+
+    } else if (MATCH("u8y8v8y8")) {
+        SET_COLOR(0x80, fullrange ? 0 : 16, 0x80, fullrange ? 0 : 16);
+
+    } else if (MATCH("y8u8y8v8")) {
+        SET_COLOR(fullrange ? 0 : 16, 0x80, fullrange ? 0 : 16, 0x80);
 
     } else if (MATCH("u10y10v10y10u10y10v10y10u10y10v10y10")) {
         if (fullrange) {
