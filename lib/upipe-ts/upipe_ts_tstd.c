@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -186,6 +187,9 @@ static int upipe_ts_tstd_get_max_delay(struct upipe *upipe, uint64_t *delay_p)
 static int upipe_ts_tstd_set_max_delay(struct upipe *upipe, uint64_t delay)
 {
     struct upipe_ts_tstd *upipe_ts_tstd = upipe_ts_tstd_from_upipe(upipe);
+    if (upipe_ts_tstd->max_delay == delay)
+        return UBASE_ERR_NONE;
+
     upipe_ts_tstd->max_delay = delay;
     if (upipe_ts_tstd->flow_def != NULL)
         return upipe_ts_tstd_set_flow_def(upipe, upipe_ts_tstd->flow_def);
