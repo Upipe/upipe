@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 Open Broadcast Systems Ltd
- * Copyright (C) 2025 EasyTools
+ * Copyright (C) 2025-2026 EasyTools
  *
  * Authors: Rafaël Carré
  *
@@ -64,6 +64,8 @@ struct upipe_ts_catd {
     UPIPE_TS_PSID_TABLE_DECLARE(cat);
     /** CAT table being gathered */
     UPIPE_TS_PSID_TABLE_DECLARE(next_cat);
+    /** list of CA */
+    struct uchain ca_list;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -103,6 +105,7 @@ static struct upipe *upipe_ts_catd_alloc(struct upipe_mgr *mgr,
     upipe_ts_catd_init_flow_def(upipe);
     upipe_ts_psid_table_init(upipe_ts_catd->cat);
     upipe_ts_psid_table_init(upipe_ts_catd->next_cat);
+    ulist_init(&upipe_ts_catd->ca_list);
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -130,6 +133,18 @@ static bool upipe_ts_catd_table_validate(struct upipe *upipe)
         uref_block_unmap(section_uref, 0);
     }
     return true;
+}
+
+/** @internal @This cleans up the list of CA.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_ts_catd_clean_ca_list(struct upipe *upipe)
+{
+    struct upipe_ts_catd *upipe_ts_catd = upipe_ts_catd_from_upipe(upipe);
+    struct uchain *uchain;
+    while ((uchain = ulist_pop(&upipe_ts_catd->ca_list)))
+        uref_free(uref_from_uchain(uchain));
 }
 
 /** @internal @This is a helper function to parse biss-ca descriptors and import
@@ -175,6 +190,60 @@ static void upipe_ts_catd_parse_bissca_descs(struct upipe *upipe,
     uref_ts_flow_set_cat_esid_n(flow_def, esid_n);
 }
 
+/** @internal @This builds the flow definition corresponding to a CA.
+ *
+ * @param upipe description structure of the pipe
+ * @param desc CA descriptor
+ * @param desclength CA descriptor length
+ */
+static void upipe_ts_catd_build_ca(struct upipe *upipe, const uint8_t *desc,
+                                   uint16_t desclength)
+{
+    struct upipe_ts_catd *upipe_ts_catd = upipe_ts_catd_from_upipe(upipe);
+    struct uref *flow_def = uref_dup(upipe_ts_catd->flow_def_input);
+    if (unlikely(flow_def == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    /* set filter on table 0x81-0x8f, current */
+    uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
+    uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
+    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+    psi_set_syntax(filter);
+    psi_set_syntax(mask);
+    /* This also filters table 0x80, but if it exists it should
+        * be rejected by the decoder */
+    psi_set_tableid(filter, 0x80);
+    psi_set_tableid(mask, 0xf0);
+    psi_set_current(filter);
+    psi_set_current(mask);
+
+    uint16_t capid = desc09_get_pid(desc);
+    uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtsemm.");
+    uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                                PSI_HEADER_SIZE_SYNTAX1);
+    uref_flow_set_id(flow_def, capid);
+    uref_ts_flow_set_pid(flow_def, capid);
+    uref_ts_flow_set_capid(flow_def, capid);
+    uint16_t sysid = desc09_get_sysid(desc);
+    uref_ts_flow_set_sysid(flow_def, sysid);
+    switch (sysid) {
+        case 0x2610:
+            uref_flow_set_def(flow_def, "block.mpegtspsi.mpegtsemm.bissca.");
+            upipe_ts_catd_parse_bissca_descs(upipe, flow_def,
+                                             &desc[DESC09_HEADER_SIZE],
+                                             desclength - DESC09_HEADER_SIZE);
+            break;
+        default:
+            upipe_warn_va(upipe, "Unknown CA system 0x%04x", sysid);
+            break;
+    }
+
+    ulist_add(&upipe_ts_catd->ca_list, uref_to_uchain(flow_def));
+}
+
 /** @internal @This is a helper function to parse descriptors and import
  * the relevant ones into flow definition.
  *
@@ -194,22 +263,8 @@ static void upipe_ts_catd_parse_descs(struct upipe *upipe,
         switch (desc_get_tag(desc)) {
             case 0x09:
                 valid = desc09_validate(desc);
-                if (valid) {
-                    uref_ts_flow_set_capid(flow_def, desc09_get_pid(desc));
-                    uint16_t sysid = desc09_get_sysid(desc);
-                    uref_ts_flow_set_sysid(flow_def, sysid);
-                    switch (sysid) {
-                        case 0x2610:
-                            upipe_ts_catd_parse_bissca_descs(upipe, flow_def,
-                                    &desc[DESC09_HEADER_SIZE],
-                                    desclength - DESC09_HEADER_SIZE);
-                            break;
-                        default:
-                            upipe_warn_va(upipe, "Unknown CA system 0x%04x",
-                                    sysid);
-                            break;
-                    }
-                }
+                if (valid)
+                    upipe_ts_catd_build_ca(upipe, desc, desclength);
                 break;
             default:
                 copy = true;
@@ -266,6 +321,8 @@ static void upipe_ts_catd_input(struct upipe *upipe, struct uref *uref,
     }
     UBASE_FATAL(upipe, uref_flow_set_def(flow_def, "void."))
 
+    upipe_ts_catd_clean_ca_list(upipe);
+
     upipe_ts_psid_table_foreach (upipe_ts_catd->next_cat, section_uref) {
         const uint8_t *section;
         int size = -1;
@@ -294,6 +351,8 @@ static void upipe_ts_catd_input(struct upipe *upipe, struct uref *uref,
     upipe_ts_catd_store_flow_def(upipe, flow_def);
     /* Force sending flow def */
     upipe_ts_catd_output(upipe, NULL, upump_p);
+
+    upipe_split_throw_update(upipe);
 }
 
 /** @internal @This receives an ubuf manager.
@@ -337,6 +396,31 @@ static int upipe_ts_catd_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This iterates over CA flow definitions.
+ *
+ * @param upipe description structure of the pipe
+ * @param p filled in with the next flow definition, initialize with NULL
+ * @return an error code
+ */
+static int upipe_ts_catd_iterate(struct upipe *upipe, struct uref **p)
+{
+    struct upipe_ts_catd *upipe_ts_catd = upipe_ts_catd_from_upipe(upipe);
+    if (!p)
+        return UBASE_ERR_INVALID;
+
+    struct uchain *uchain;
+    if (*p != NULL)
+        uchain = uref_to_uchain(*p);
+    else
+        uchain = &upipe_ts_catd->ca_list;
+    if (ulist_is_last(&upipe_ts_catd->ca_list, uchain)) {
+        *p = NULL;
+        return UBASE_ERR_NONE;
+    }
+    *p = uref_from_uchain(uchain->next);
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands.
  *
  * @param upipe description structure of the pipe
@@ -351,6 +435,10 @@ static int upipe_ts_catd_control(struct upipe *upipe, int command, va_list args)
         case UPIPE_SET_FLOW_DEF: {
             struct uref *flow_def = va_arg(args, struct uref *);
             return upipe_ts_catd_set_flow_def(upipe, flow_def);
+        }
+        case UPIPE_SPLIT_ITERATE: {
+            struct uref **p = va_arg(args, struct uref **);
+            return upipe_ts_catd_iterate(upipe, p);
         }
 
         default:
@@ -367,6 +455,7 @@ static void upipe_ts_catd_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     struct upipe_ts_catd *upipe_ts_catd = upipe_ts_catd_from_upipe(upipe);
+    upipe_ts_catd_clean_ca_list(upipe);
     upipe_ts_psid_table_clean(upipe_ts_catd->cat);
     upipe_ts_psid_table_clean(upipe_ts_catd->next_cat);
     upipe_ts_catd_clean_output(upipe);
