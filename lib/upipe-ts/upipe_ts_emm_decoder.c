@@ -74,6 +74,7 @@ struct upipe_ts_emmd {
     asn1_node asn;
     gcry_cipher_hd_t aes;
     uint8_t aes_key[2][16];
+    bool aes_key_set[2];
 
     /** currently in effect EMM table */
     UPIPE_TS_PSID_TABLE_DECLARE(emm);
@@ -210,6 +211,8 @@ static struct upipe *upipe_ts_emmd_alloc(struct upipe_mgr *mgr,
     upipe_ts_emmd_init_sub_mgr(upipe);
     upipe_ts_psid_table_init(upipe_ts_emmd->emm);
     upipe_ts_psid_table_init(upipe_ts_emmd->next_emm);
+    upipe_ts_emmd->aes_key_set[0] = false;
+    upipe_ts_emmd->aes_key_set[1] = false;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -303,6 +306,7 @@ static void upipe_ts_emmd_parse_sd_descs(struct upipe *upipe,
                     break;
                 memcpy(upipe_ts_emmd->aes_key[odd], &desc[DESC_HEADER_SIZE+1],
                         16);
+                upipe_ts_emmd->aes_key_set[odd] = true;
                 break;
             case 0x82:
                 valid = length == 1;
@@ -1088,6 +1092,10 @@ static void upipe_ts_emmd_ecm_input(struct upipe *upipe, struct uref *uref,
     assert(upipe_ts_emmd_ecm->flow_def_input != NULL);
     struct upipe_ts_emmd *upipe_ts_emmd = upipe_ts_emmd_from_sub_mgr(upipe->mgr);
 
+    if (!upipe_ts_emmd->aes_key_set[0] || !upipe_ts_emmd->aes_key_set[1]) {
+        uref_free(uref);
+        return;
+    }
 
     if (!upipe_ts_psid_table_section(upipe_ts_emmd_ecm->next_ecm, uref))
         return;
