@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2018 Open Broadcast Systems Ltd
- * Copyright (C) 2025 EasyTools
+ * Copyright (C) 2025-2026 EasyTools
  *
  * Authors: Rafaël Carré
  *
@@ -767,6 +767,7 @@ static int decrypt(struct upipe *upipe, uint8_t *esd, size_t n)
     }
 
     gcry_sexp_release(plain);
+    gcry_sexp_release(l);
 
     return ret;
 }
