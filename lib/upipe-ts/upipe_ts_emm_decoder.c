@@ -195,6 +195,7 @@ static struct upipe *upipe_ts_emmd_alloc(struct upipe_mgr *mgr,
     }
 
     /* Load ASN.1 syntax */
+    memset(&upipe_ts_emmd->asn, 0, sizeof (upipe_ts_emmd->asn));
     int ret = asn1_array2tree(rsa_asn1_tab, &upipe_ts_emmd->asn, NULL);
     if (ret != ASN1_SUCCESS) {
         upipe_err_va(upipe, "Loading RSA ASN.1 failed: %s", asn1_strerror(ret));
