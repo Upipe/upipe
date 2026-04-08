@@ -33,6 +33,10 @@ enum upipe_interlace_command {
     UPIPE_INTERLACE_SET_DROP,
     /** get the configured value for field drop (bool *) */
     UPIPE_INTERLACE_GET_DROP,
+    /** set low pass filter (bool) */
+    UPIPE_INTERLACE_SET_LOWPASS,
+    /** get the configured value for low pass filter (bool *) */
+    UPIPE_INTERLACE_GET_LOWPASS,
 };
 
 /** @This converts @ref upipe_interlace_command to a string.
@@ -47,6 +51,8 @@ static inline const char *upipe_interlace_command_str(int command)
         UBASE_CASE_TO_STR(UPIPE_INTERLACE_GET_TFF);
         UBASE_CASE_TO_STR(UPIPE_INTERLACE_SET_DROP);
         UBASE_CASE_TO_STR(UPIPE_INTERLACE_GET_DROP);
+        UBASE_CASE_TO_STR(UPIPE_INTERLACE_SET_LOWPASS);
+        UBASE_CASE_TO_STR(UPIPE_INTERLACE_GET_LOWPASS);
         case UPIPE_INTERLACE_SENTINEL: break;
     }
     return NULL;
@@ -114,6 +120,31 @@ static inline int upipe_interlace_get_drop(struct upipe *upipe, bool *drop)
 {
     return upipe_control(upipe, UPIPE_INTERLACE_GET_DROP,
                          UPIPE_INTERLACE_SIGNATURE, drop);
+}
+
+/** @This sets low pass filter.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowpass true to enable low pass filter
+ * @return an error code
+ */
+static inline int upipe_interlace_set_lowpass(struct upipe *upipe, bool lowpass)
+{
+    return upipe_control(upipe, UPIPE_INTERLACE_SET_LOWPASS,
+                         UPIPE_INTERLACE_SIGNATURE, lowpass ? 1 : 0);
+}
+
+/** @This gets the configured value for low pass filter.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowpass filled with the configured value
+ * @return an error code
+ */
+static inline int upipe_interlace_get_lowpass(struct upipe *upipe,
+                                              bool *lowpass)
+{
+    return upipe_control(upipe, UPIPE_INTERLACE_GET_LOWPASS,
+                         UPIPE_INTERLACE_SIGNATURE, lowpass);
 }
 
 /** @This returns the management structure for all interlace pipes.

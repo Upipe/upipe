@@ -70,6 +70,8 @@ struct upipe_interlace {
     bool tff;
     /** drop field? */
     bool drop;
+    /** low pass filtering? */
+    bool lowpass;
     /** last input frame */
     struct uref *uref_last;
     /** current input width */
@@ -120,6 +122,7 @@ static struct upipe *upipe_interlace_alloc(struct upipe_mgr *mgr,
     upipe_interlace->uref_last = NULL;
     upipe_interlace->tff = true;
     upipe_interlace->drop = true;
+    upipe_interlace->lowpass = false;
 
     upipe_throw_ready(upipe);
 
@@ -143,6 +146,37 @@ static void upipe_interlace_free(struct upipe *upipe)
     upipe_interlace_clean_output(upipe);
     upipe_interlace_clean_urefcount(upipe);
     upipe_interlace_free_void(upipe);
+}
+
+/** @internal @This copies a line in the output buffer.
+ *
+ * @param upipe description structure of the pipe
+ * @param in pointer to the line to copy
+ * @param above pointer to the line above for filtering
+ * @param below pointer to the line below for filtering
+ * @param width number of pixel to copy
+ * @param mpixel size of a pixel in byte
+ * @param out pointer to the destination buffer
+ */
+static void upipe_interlace_line(struct upipe *upipe, const uint8_t *in,
+                                 const uint8_t *above, const uint8_t *below,
+                                 uint64_t width, uint8_t mpixel, uint8_t *out)
+{
+    struct upipe_interlace *upipe_interlace = upipe_interlace_from_upipe(upipe);
+
+    if (!upipe_interlace->lowpass || mpixel > 2) {
+        memcpy(out, in, width * mpixel);
+    } else if (mpixel == 1) {
+        for (uint64_t i = 0; i < width; i++)
+            out[i] = (1 + (in[i] << 1) + above[i] + below[i]) >> 2;
+    } else {
+        const uint16_t *in16 = (const uint16_t *)in;
+        const uint16_t *above16 = (const uint16_t *)above;
+        const uint16_t *below16 = (const uint16_t *)below;
+        uint16_t *out16 = (uint16_t *)out;
+        for (uint64_t i = 0; i < width; i++)
+            out16[i] = (1 + (in16[i] << 1) + above16[i] + below16[i]) >> 2;
+    }
 }
 
 /** @internal @This processes a picture plane
@@ -229,7 +263,10 @@ static int upipe_interlace_plane(struct upipe *upipe, struct uref *top,
     uint64_t lines = upipe_interlace->height / t_vsub;
     uint64_t width = upipe_interlace->width / t_hsub;
     for (uint64_t l = 0; l < lines; l++) {
-        memcpy(out, (l % 2 ? b_in : t_in), width * t_size);
+        const uint8_t *in = l % 2 ? b_in : t_in;
+        const uint8_t *above = l ? in - t_stride : in;
+        const uint8_t *below = l + 1 < lines ? in + t_stride : in;
+        upipe_interlace_line(upipe, in, above, below, width, t_size, out);
         t_in += t_stride;
         b_in += b_stride;
         out += out_stride;
@@ -542,6 +579,33 @@ static int _upipe_interlace_get_drop(struct upipe *upipe, bool *drop)
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This sets low pass filter.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowpass true to enable low pass filter
+ * @return an error code
+ */
+static int _upipe_interlace_set_lowpass(struct upipe *upipe, bool lowpass)
+{
+    struct upipe_interlace *upipe_interlace = upipe_interlace_from_upipe(upipe);
+    upipe_interlace->lowpass = lowpass;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This get the configured value for low pass filter.
+ *
+ * @param upipe description structure of the pipe
+ * @param lowpass filled with the configured value
+ * @return an error code
+ */
+static int _upipe_interlace_get_lowpass(struct upipe *upipe, bool *lowpass)
+{
+    struct upipe_interlace *upipe_interlace = upipe_interlace_from_upipe(upipe);
+    if (lowpass)
+        *lowpass = upipe_interlace->lowpass;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on the pipe.
  *
  * @param upipe description structure of the pipe
@@ -595,6 +659,16 @@ static int upipe_interlace_control(struct upipe *upipe, int command,
             UBASE_SIGNATURE_CHECK(args, UPIPE_INTERLACE_SIGNATURE);
             bool *drop = va_arg(args, bool *);
             return _upipe_interlace_get_drop(upipe, drop);
+        }
+        case UPIPE_INTERLACE_SET_LOWPASS: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_INTERLACE_SIGNATURE);
+            int lowpass = va_arg(args, int);
+            return _upipe_interlace_set_lowpass(upipe, lowpass != 0);
+        }
+        case UPIPE_INTERLACE_GET_LOWPASS: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_INTERLACE_SIGNATURE);
+            bool *lowpass = va_arg(args, bool *);
+            return _upipe_interlace_get_lowpass(upipe, lowpass);
         }
     }
 
