@@ -518,6 +518,20 @@ static inline void ubase_clean_fd(int *fd_p)
     }
 }
 
+/** @This replaces a string pointer with an optional string.
+ *
+ * @param str_p a pointer to the string to replace
+ * @param str a pointer to the new string or NULL
+ * @return an error code
+ */
+static inline int ubase_strdup(char **str_p, const char *str)
+{
+    ubase_clean_str(str_p);
+    if (likely(str) && unlikely(!(*str_p = strdup(str))))
+        return UBASE_ERR_ALLOC;
+    return UBASE_ERR_NONE;
+}
+
 /** @This copies the signature from a va list.
  *
  * @param args the va list to copy from
