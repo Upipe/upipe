@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -65,17 +66,23 @@ struct ubuf_mgr *ubuf_mem_mgr_alloc_from_flow_def(uint16_t ubuf_pool_depth,
         uint64_t align = 0;
         int64_t align_hmoffset = 0;
 
-        uref_pic_flow_get_hmprepend(flow_def, &hmprepend);
-        uref_pic_flow_get_hmappend(flow_def, &hmappend);
-        uref_pic_flow_get_vprepend(flow_def, &vprepend);
-        uref_pic_flow_get_vappend(flow_def, &vappend);
-        uref_pic_flow_get_align(flow_def, &align);
+        bool has_hmprepend =
+            ubase_check(uref_pic_flow_get_hmprepend(flow_def, &hmprepend));
+        bool has_hmappend =
+            ubase_check(uref_pic_flow_get_hmappend(flow_def, &hmappend));
+        bool has_vprepend =
+            ubase_check(uref_pic_flow_get_vprepend(flow_def, &vprepend));
+        bool has_vappend =
+            ubase_check(uref_pic_flow_get_vappend(flow_def, &vappend));
+        bool has_align = ubase_check(uref_pic_flow_get_align(flow_def, &align));
         uref_pic_flow_get_align_hmoffset(flow_def, &align_hmoffset);
 
-        struct ubuf_mgr *mgr = ubuf_pic_mem_mgr_alloc(ubuf_pool_depth,
-                shared_pool_depth, umem_mgr, macropixel,
-                hmprepend * macropixel, hmappend * macropixel,
-                vprepend, vappend, align, align_hmoffset);
+        struct ubuf_mgr *mgr = ubuf_pic_mem_mgr_alloc(
+            ubuf_pool_depth, shared_pool_depth, umem_mgr, macropixel,
+            has_hmprepend ? (hmprepend * macropixel) : -1,
+            has_hmappend ? (hmappend * macropixel) : -1,
+            has_vprepend ? vprepend : -1, has_vappend ? vappend : -1,
+            has_align ? align : -1, align_hmoffset);
         if (unlikely(mgr == NULL))
             return NULL;
 
