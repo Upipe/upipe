@@ -270,6 +270,44 @@ int ubuf_pic_common_check_skip(struct ubuf_mgr *mgr, int hskip, int vskip)
     return UBASE_ERR_NONE;
 }
 
+/** @This extracts lines from an ubuf.
+ *
+ * @param ubuf pointer to ubuf to extract lines from
+ * @param vskip number of lines to skip at the beginning of the picture
+ * @param vdrop number of lines to drop between two extractions
+ * @return a new ubuf with the extracted lines
+*/
+static struct ubuf *ubuf_pic_common_vextract(struct ubuf *ubuf, int vskip,
+                                             int vdrop)
+{
+    if (vskip < 0 || vdrop < 0 || vskip > vdrop)
+        return NULL;
+
+    struct ubuf *out = ubuf_dup(ubuf);
+    if (unlikely(!out))
+        return NULL;
+
+    const struct ubuf_pic_common_mgr *common_mgr =
+        ubuf_pic_common_mgr_from_ubuf_mgr(out->mgr);
+    struct ubuf_pic_common *common = ubuf_pic_common_from_ubuf(out);
+    for (uint8_t plane = 0; plane < common_mgr->nb_planes; plane++) {
+        const struct ubuf_pic_common_mgr_plane *p = common_mgr->planes[plane];
+        struct ubuf_pic_common_plane *pic_p = &common->planes[plane];
+        if (common->vsize % ((1 + vdrop) * p->vsub)) {
+            ubuf_free(out);
+            return NULL;
+        }
+        pic_p->buffer += pic_p->stride * common->vprepend / p->vsub;
+        pic_p->buffer += pic_p->stride * vskip;
+        pic_p->stride *= vdrop + 1;
+    }
+    common->vprepend = 0;
+    common->vappend = 0;
+    common->vsize /= (1 + vdrop);
+    return out;
+
+}
+
 /** @This splits an interlaced picture ubuf in its two fields.
  *
  * Two extra ubufs are allocated, one per field.
@@ -282,38 +320,13 @@ int ubuf_pic_common_check_skip(struct ubuf_mgr *mgr, int hskip, int vskip)
 int ubuf_pic_common_split_fields(struct ubuf *ubuf, struct ubuf **odd,
         struct ubuf **even)
 {
-    *odd = ubuf_dup(ubuf);
-    if (!*odd)
-        return UBASE_ERR_ALLOC;
-
-    *even = ubuf_dup(ubuf);
-    if (!*odd) {
+    *even = ubuf_pic_common_vextract(ubuf, 0, 1);
+    *odd = ubuf_pic_common_vextract(ubuf, 1, 1);
+    if (!*odd || !*even) {
+        ubuf_free(*even);
         ubuf_free(*odd);
         return UBASE_ERR_ALLOC;
     }
-
-
-    for (int i = 0; i < 2; i++) {
-        struct ubuf *field = i ? *odd : *even;
-        struct ubuf_pic_common *pic_common = ubuf_pic_common_from_ubuf(field);
-        pic_common->vsize /= 2;
-
-        const char *chroma = NULL;
-        while (ubase_check(ubuf_pic_iterate_plane(ubuf, &chroma)) && chroma) {
-            int plane = ubuf_pic_common_plane(ubuf->mgr, chroma);
-            if (plane < 0) {
-                abort();
-            }
-
-            struct ubuf_pic_common_plane *p = &pic_common->planes[plane];
-            size_t stride = p->stride;
-            uint8_t *buffer = p->buffer;
-            if (i)
-                buffer += stride;
-            ubuf_pic_common_plane_init(field, plane, buffer, 2 * stride);
-        }
-    }
-
     return UBASE_ERR_NONE;
 }
 
