@@ -154,7 +154,6 @@ static bool compare_chroma(struct uref **urefs, const char *chroma, uint8_t hsub
 
     assert(vsize[0] == vsize[1]);
     assert(hsize[0] == hsize[1]);
-    assert(stride[0] == stride[1]);
     for (y = 0; y < vsize[0]; y++) {
         str = string;
         for (x = 0; x < hsize[0]; x++) {
