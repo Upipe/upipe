@@ -122,8 +122,6 @@ struct upipe_avfsrc {
     /** URL */
     char *url;
 
-    /** avcodec initialization watcher */
-    struct upump *upump_av_deal;
     /** avformat options */
     AVDictionary *options;
     /** avformat context opened from URL */
@@ -474,30 +472,13 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->systime_rap = UINT64_MAX;
     upipe_avfsrc->cr_id = UINT64_MAX;
     upipe_avfsrc->last_cr_id = UINT64_MAX;
-
     upipe_avfsrc->url = NULL;
-
-    upipe_avfsrc->upump_av_deal = NULL;
     upipe_avfsrc->options = NULL;
     upipe_avfsrc->context = NULL;
     upipe_avfsrc->probed = false;
+
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @This aborts and frees an existing upump watching for exclusive access to
- * avcodec_open().
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_avfsrc_abort_av_deal(struct upipe *upipe)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    if (unlikely(upipe_avfsrc->upump_av_deal != NULL)) {
-        upipe_av_deal_abort(upipe_avfsrc->upump_av_deal);
-        upump_free(upipe_avfsrc->upump_av_deal);
-        upipe_avfsrc->upump_av_deal = NULL;
-    }
 }
 
 /** @internal @This finds the given id in the list of output subpipes.
@@ -562,156 +543,6 @@ static void upipe_avfsrc_update_cr(struct upipe *upipe)
     }
 
     upipe_avfsrc->cr_id = cr_id;
-}
-
-/** @internal @This reads data from the source and outputs it.
- * It is called either when the idler triggers (permanent storage mode) or
- * when data is available on the file descriptor (live stream mode).
- *
- * @param upump description structure of the read watcher
- */
-static void upipe_avfsrc_worker(struct upump *upump)
-{
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    AVPacket pkt;
-
-    int error = av_read_frame(upipe_avfsrc->context, &pkt);
-    if (unlikely(error < 0)) {
-        if (error != AVERROR_EOF) {
-            upipe_err_va(upipe, "read error from %s (%s)",
-                         upipe_avfsrc->url, av_err2str(error));
-        }
-        upipe_avfsrc_set_upump(upipe, NULL);
-        upipe_throw_source_end(upipe);
-        return;
-    }
-
-    struct upipe_avfsrc_sub *output =
-        upipe_avfsrc_find_output(upipe, pkt.stream_index);
-    if (output == NULL) {
-        av_packet_unref(&pkt);
-        return;
-    }
-    if (unlikely(output->ubuf_mgr == NULL)) {
-        if (unlikely(!upipe_avfsrc_sub_demand_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output), uref_dup(output->flow_def)))) {
-            av_packet_unref(&pkt);
-            return;
-        }
-    }
-
-    struct uref *uref = uref_block_alloc(upipe_avfsrc->uref_mgr,
-                                         output->ubuf_mgr, pkt.size);
-    if (unlikely(uref == NULL)) {
-        av_packet_unref(&pkt);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-
-    if (upipe_avfsrc->cr_id == UINT64_MAX)
-        upipe_avfsrc_update_cr(upipe);
-
-    AVStream *stream = upipe_avfsrc->context->streams[pkt.stream_index];
-    uint64_t systime = upipe_avfsrc->uclock != NULL ?
-                       uclock_now(upipe_avfsrc->uclock) : UINT64_MAX;
-    uint8_t *buffer;
-    int read_size = -1;
-    if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size, &buffer)))) {
-        uref_free(uref);
-        av_packet_unref(&pkt);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
-    assert(read_size == pkt.size);
-    memcpy(buffer, pkt.data, pkt.size);
-    uref_block_unmap(uref, 0);
-
-    bool ts = false;
-    if (upipe_avfsrc->uclock != NULL)
-        uref_clock_set_cr_sys(uref, systime);
-    if (pkt.flags & AV_PKT_FLAG_KEY) {
-        UBASE_FATAL(upipe, uref_pic_set_key(uref))
-        upipe_avfsrc->systime_rap = systime;
-    }
-
-    av_packet_rescale_ts(&pkt, stream->time_base, UCLOCK_TIME_BASE);
-
-    uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
-    if (pkt.dts != AV_NOPTS_VALUE) {
-        dts_orig = (uint64_t)pkt.dts - INT64_MIN;
-        if (pkt.pts != AV_NOPTS_VALUE) {
-            if (pkt.pts < pkt.dts) {
-                upipe_warn_va(upipe, "pts in the past (pts=%"PRIi64", "
-                              "dts=%"PRIi64")", pkt.pts, pkt.dts);
-            } else {
-                dts_pts_delay = pkt.pts - pkt.dts;
-            }
-        }
-    } else if (pkt.pts != AV_NOPTS_VALUE) {
-        dts_orig = (uint64_t)pkt.pts - INT64_MIN;
-    }
-
-    if (dts_orig != UINT64_MAX) {
-        uref_clock_set_dts_orig(uref, dts_orig);
-        uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
-
-        if (!upipe_avfsrc->timestamp_offset)
-            upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
-                                             dts_orig + PCR_OFFSET;
-        uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
-        if (output->last_dts_prog != UINT64_MAX) {
-            if (output->last_dts_prog > dts) {
-                upipe_warn_va(upipe, "dts %.3f ms in the past, resetting",
-                              (float)(output->last_dts_prog - dts) /
-                              (float)(UCLOCK_FREQ / 1000));
-                dts = output->last_dts_prog;
-            }
-        }
-        output->last_dts_prog = dts;
-        uref_clock_set_dts_prog(uref, dts);
-        if (upipe_avfsrc->timestamp_highest < dts + dts_pts_delay)
-            upipe_avfsrc->timestamp_highest = dts + dts_pts_delay;
-        ts = true;
-
-        /* this is subtly wrong, but whatever */
-        if (output->id == upipe_avfsrc->cr_id) {
-            int discontinuity = 0;
-            if (upipe_avfsrc->last_cr_id != UINT64_MAX &&
-                upipe_avfsrc->last_cr_id != upipe_avfsrc->cr_id)
-                discontinuity = 1;
-            upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, discontinuity);
-            upipe_avfsrc->last_cr_id = upipe_avfsrc->cr_id;
-        }
-    }
-    if (pkt.duration > 0)
-        UBASE_FATAL(upipe, uref_clock_set_duration(uref, pkt.duration))
-    if (upipe_avfsrc->systime_rap != UINT64_MAX)
-        uref_clock_set_rap_sys(uref, upipe_avfsrc->systime_rap);
-
-    if (ts)
-        upipe_throw_clock_ts(upipe, uref);
-    av_packet_unref(&pkt);
-
-    upipe_input(output->last_inner, uref, &upipe_avfsrc->upump);
-}
-
-/** @internal @This starts the worker.
- *
- * @param upipe description structure of the pipe
- */
-static bool upipe_avfsrc_start(struct upipe *upipe)
-{
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    struct upump *upump = upump_alloc_idler(upipe_avfsrc->upump_mgr,
-                                            upipe_avfsrc_worker, upipe,
-                                            upipe->refcount);
-    if (unlikely(upump == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-        return false;
-    }
-    upipe_avfsrc_set_upump(upipe, upump);
-    upump_start(upump);
-    return true;
 }
 
 /** @internal @This returns a flow definition for a raw audio media type.
@@ -877,16 +708,13 @@ static struct uref *alloc_data_def(struct upipe *upipe,
 
 /** @internal @This probes all flows from the source.
  *
- * @param upump description structure of the dealer
+ * @param upipe description structure of the pipe
+ * @return an error code
  */
-static void upipe_avfsrc_probe(struct upump *upump)
+static int upipe_avfsrc_probe(struct upipe *upipe)
 {
-    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
     AVFormatContext *context = upipe_avfsrc->context;
-
-    if (unlikely(!upipe_av_deal_grab()))
-        return;
 
     unsigned nb_streams = context->nb_streams;
     int error = 0;
@@ -904,22 +732,13 @@ static void upipe_avfsrc_probe(struct upump *upump)
     else
         error = avformat_find_stream_info(context, NULL);
 
-    upipe_av_deal_yield(upump);
-    upump_free(upipe_avfsrc->upump_av_deal);
-    upipe_avfsrc->upump_av_deal = NULL;
-    upipe_avfsrc->probed = true;
-
     if (unlikely(error < 0)) {
         upipe_err_va(upipe, "can't probe URL %s (%s)", upipe_avfsrc->url,
                      av_err2str(error));
-        if (likely(upipe_avfsrc->url != NULL))
-            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
-        avformat_close_input(&upipe_avfsrc->context);
-        upipe_avfsrc->context = NULL;
-        ubase_clean_str(&upipe_avfsrc->url);
-        return;
+        return UBASE_ERR_EXTERNAL;
     }
 
+    upipe_avfsrc->probed = true;
     upipe_avfsrc->streams = calloc(context->nb_streams, sizeof(struct uref *));
 
     for (int i = 0; i < context->nb_streams; i++) {
@@ -960,27 +779,190 @@ static void upipe_avfsrc_probe(struct upump *upump)
                           codecpar->codec_type, codecpar->codec_id);
             continue;
         }
-        UBASE_FATAL(upipe, uref_flow_set_id(flow_def, i))
+        UBASE_RETURN(uref_flow_set_id(flow_def, i));
 
         AVDictionaryEntry *lang = av_dict_get(stream->metadata, "language",
                                               NULL, 0);
         if (lang != NULL && lang->value != NULL) {
-            UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, 1))
-            UBASE_FATAL(upipe, uref_flow_set_language(flow_def, lang->value, 0))
+            UBASE_RETURN(uref_flow_set_languages(flow_def, 1))
+            UBASE_RETURN(uref_flow_set_language(flow_def, lang->value, 0))
         }
         if (codecpar->extradata_size) {
-            UBASE_FATAL(upipe, uref_flow_set_global(flow_def))
-            UBASE_FATAL(upipe, uref_flow_set_headers(flow_def, codecpar->extradata,
-                                                     codecpar->extradata_size))
+            UBASE_RETURN(uref_flow_set_global(flow_def))
+            UBASE_RETURN(uref_flow_set_headers(flow_def, codecpar->extradata,
+                                               codecpar->extradata_size))
         }
 
         upipe_avfsrc->streams[i] = flow_def;
     }
 
-    upipe_split_throw_update(upipe);
-    upipe_avfsrc_start(upipe);
+    return upipe_split_throw_update(upipe);
 }
 
+/** @internal @This closes the current context.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_avfsrc_close(struct upipe *upipe)
+{
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    AVFormatContext *context = upipe_avfsrc->context;
+
+    upipe_avfsrc->context = NULL;
+    if (unlikely(context != NULL)) {
+        if (likely(upipe_avfsrc->url != NULL))
+            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
+        for (int i = 0; i < context->nb_streams; i++)
+            uref_free(upipe_avfsrc->streams[i]);
+        avformat_close_input(&context);
+        upipe_avfsrc_set_upump(upipe, NULL);
+        upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
+        free(upipe_avfsrc->streams);
+        upipe_avfsrc->streams = NULL;
+    }
+    ubase_clean_str(&upipe_avfsrc->url);
+    upipe_avfsrc->probed = false;
+    upipe_split_throw_update(upipe);
+}
+
+/** @internal @This reads data from the source and outputs it.
+ * It is called either when the idler triggers (permanent storage mode) or
+ * when data is available on the file descriptor (live stream mode).
+ *
+ * @param upump description structure of the read watcher
+ */
+static void upipe_avfsrc_worker(struct upump *upump)
+{
+    struct upipe *upipe = upump_get_opaque(upump, struct upipe *);
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+    AVPacket pkt;
+
+    if (unlikely(!upipe_avfsrc->probed)) {
+        if (unlikely(!ubase_check(upipe_avfsrc_probe(upipe)))) {
+            upipe_warn_va(upipe, "fail to probe %s", upipe_avfsrc->url);
+            upipe_avfsrc_close(upipe);
+            return;
+        }
+    }
+
+    int error = av_read_frame(upipe_avfsrc->context, &pkt);
+    if (unlikely(error < 0)) {
+        if (error != AVERROR_EOF) {
+            upipe_err_va(upipe, "read error from %s (%s)",
+                         upipe_avfsrc->url, av_err2str(error));
+        }
+        upipe_avfsrc_set_upump(upipe, NULL);
+        upipe_throw_source_end(upipe);
+        return;
+    }
+
+    struct upipe_avfsrc_sub *output =
+        upipe_avfsrc_find_output(upipe, pkt.stream_index);
+    if (output == NULL) {
+        av_packet_unref(&pkt);
+        return;
+    }
+    if (unlikely(output->ubuf_mgr == NULL)) {
+        if (unlikely(!upipe_avfsrc_sub_demand_ubuf_mgr(upipe_avfsrc_sub_to_upipe(output), uref_dup(output->flow_def)))) {
+            av_packet_unref(&pkt);
+            return;
+        }
+    }
+
+    struct uref *uref = uref_block_alloc(upipe_avfsrc->uref_mgr,
+                                         output->ubuf_mgr, pkt.size);
+    if (unlikely(uref == NULL)) {
+        av_packet_unref(&pkt);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    if (upipe_avfsrc->cr_id == UINT64_MAX)
+        upipe_avfsrc_update_cr(upipe);
+
+    AVStream *stream = upipe_avfsrc->context->streams[pkt.stream_index];
+    uint64_t systime = upipe_avfsrc->uclock != NULL ?
+                       uclock_now(upipe_avfsrc->uclock) : UINT64_MAX;
+    uint8_t *buffer;
+    int read_size = -1;
+    if (unlikely(!ubase_check(uref_block_write(uref, 0, &read_size, &buffer)))) {
+        uref_free(uref);
+        av_packet_unref(&pkt);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    assert(read_size == pkt.size);
+    memcpy(buffer, pkt.data, pkt.size);
+    uref_block_unmap(uref, 0);
+
+    bool ts = false;
+    if (upipe_avfsrc->uclock != NULL)
+        uref_clock_set_cr_sys(uref, systime);
+    if (pkt.flags & AV_PKT_FLAG_KEY) {
+        UBASE_FATAL(upipe, uref_pic_set_key(uref))
+        upipe_avfsrc->systime_rap = systime;
+    }
+
+    av_packet_rescale_ts(&pkt, stream->time_base, UCLOCK_TIME_BASE);
+
+    uint64_t dts_orig = UINT64_MAX, dts_pts_delay = 0;
+    if (pkt.dts != AV_NOPTS_VALUE) {
+        dts_orig = (uint64_t)pkt.dts - INT64_MIN;
+        if (pkt.pts != AV_NOPTS_VALUE) {
+            if (pkt.pts < pkt.dts) {
+                upipe_warn_va(upipe, "pts in the past (pts=%"PRIi64", "
+                              "dts=%"PRIi64")", pkt.pts, pkt.dts);
+            } else {
+                dts_pts_delay = pkt.pts - pkt.dts;
+            }
+        }
+    } else if (pkt.pts != AV_NOPTS_VALUE) {
+        dts_orig = (uint64_t)pkt.pts - INT64_MIN;
+    }
+
+    if (dts_orig != UINT64_MAX) {
+        uref_clock_set_dts_orig(uref, dts_orig);
+        uref_clock_set_dts_pts_delay(uref, dts_pts_delay);
+
+        if (!upipe_avfsrc->timestamp_offset)
+            upipe_avfsrc->timestamp_offset = upipe_avfsrc->timestamp_highest -
+                                             dts_orig + PCR_OFFSET;
+        uint64_t dts = dts_orig + upipe_avfsrc->timestamp_offset;
+        if (output->last_dts_prog != UINT64_MAX) {
+            if (output->last_dts_prog > dts) {
+                upipe_warn_va(upipe, "dts %.3f ms in the past, resetting",
+                              (float)(output->last_dts_prog - dts) /
+                              (float)(UCLOCK_FREQ / 1000));
+                dts = output->last_dts_prog;
+            }
+        }
+        output->last_dts_prog = dts;
+        uref_clock_set_dts_prog(uref, dts);
+        if (upipe_avfsrc->timestamp_highest < dts + dts_pts_delay)
+            upipe_avfsrc->timestamp_highest = dts + dts_pts_delay;
+        ts = true;
+
+        /* this is subtly wrong, but whatever */
+        if (output->id == upipe_avfsrc->cr_id) {
+            int discontinuity = 0;
+            if (upipe_avfsrc->last_cr_id != UINT64_MAX &&
+                upipe_avfsrc->last_cr_id != upipe_avfsrc->cr_id)
+                discontinuity = 1;
+            upipe_throw_clock_ref(upipe, uref, dts - PCR_OFFSET, discontinuity);
+            upipe_avfsrc->last_cr_id = upipe_avfsrc->cr_id;
+        }
+    }
+    if (pkt.duration > 0)
+        UBASE_FATAL(upipe, uref_clock_set_duration(uref, pkt.duration))
+    if (upipe_avfsrc->systime_rap != UINT64_MAX)
+        uref_clock_set_rap_sys(uref, upipe_avfsrc->systime_rap);
+
+    if (ts)
+        upipe_throw_clock_ts(upipe, uref);
+    av_packet_unref(&pkt);
+
+    upipe_input(output->last_inner, uref, &upipe_avfsrc->upump);
+}
 
 /** @internal @This iterates over output flow definitions.
  *
@@ -1086,24 +1068,13 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
 
-    if (unlikely(upipe_avfsrc->context != NULL)) {
-        if (likely(upipe_avfsrc->url != NULL))
-            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
-        avformat_close_input(&upipe_avfsrc->context);
-        upipe_avfsrc->context = NULL;
-        upipe_avfsrc_set_upump(upipe, NULL);
-        upipe_avfsrc_abort_av_deal(upipe);
-        upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
-        free(upipe_avfsrc->streams);
-    }
-    ubase_clean_str(&upipe_avfsrc->url);
+    upipe_avfsrc_close(upipe);
 
     if (unlikely(url == NULL))
         return UBASE_ERR_NONE;
 
     if (unlikely(!upipe_avfsrc_demand_uref_mgr(upipe)))
         return UBASE_ERR_ALLOC;
-    upipe_avfsrc_check_upump_mgr(upipe);
 
     struct uref *flow_def = uref_alloc_control(upipe_avfsrc->uref_mgr);
     uref_flow_set_def(flow_def, "void.");
@@ -1178,7 +1149,6 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
     switch (command) {
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_avfsrc_set_upump(upipe, NULL);
-            upipe_avfsrc_abort_av_deal(upipe);
             return upipe_avfsrc_attach_upump_mgr(upipe);
         case UPIPE_ATTACH_UCLOCK:
             upipe_avfsrc_set_upump(upipe, NULL);
@@ -1228,6 +1198,33 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
     }
 }
 
+/** @internal @This checks the status of the pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_avfsrc_check(struct upipe *upipe)
+{
+    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
+
+    upipe_avfsrc_check_upump_mgr(upipe);
+
+    if (upipe_avfsrc->upump_mgr != NULL && upipe_avfsrc->url != NULL &&
+        upipe_avfsrc->upump == NULL) {
+        struct upump *upump =
+            upump_alloc_idler(upipe_avfsrc->upump_mgr, upipe_avfsrc_worker,
+                              upipe, upipe->refcount);
+        if (unlikely(upump == NULL)) {
+            upipe_warn(upipe, "fail to allocate idler");
+            return UBASE_ERR_ALLOC;
+            upipe_avfsrc_set_upump(upipe, upump);
+            upump_start(upump);
+        }
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on an avformat source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -1239,30 +1236,7 @@ static int _upipe_avfsrc_control(struct upipe *upipe,
 static int upipe_avfsrc_control(struct upipe *upipe, int command, va_list args)
 {
     UBASE_RETURN(_upipe_avfsrc_control(upipe, command, args));
-
-    struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    if (upipe_avfsrc->upump_mgr != NULL && upipe_avfsrc->url != NULL &&
-        upipe_avfsrc->upump == NULL) {
-        if (unlikely(upipe_avfsrc->probed))
-            return upipe_avfsrc_start(upipe) ?
-                   UBASE_ERR_NONE : UBASE_ERR_EXTERNAL;
-
-        if (unlikely(upipe_avfsrc->upump_av_deal != NULL))
-            return UBASE_ERR_NONE;
-
-        struct upump *upump_av_deal =
-            upipe_av_deal_upump_alloc(upipe_avfsrc->upump_mgr,
-                    upipe_avfsrc_probe, upipe, upipe->refcount);
-        if (unlikely(upump_av_deal == NULL)) {
-            upipe_err(upipe, "can't create dealer");
-            upipe_throw_fatal(upipe, UBASE_ERR_UPUMP);
-            return UBASE_ERR_UPUMP;
-        }
-        upipe_avfsrc->upump_av_deal = upump_av_deal;
-        upipe_av_deal_start(upump_av_deal);
-    }
-
-    return UBASE_ERR_NONE;
+    return upipe_avfsrc_check(upipe);
 }
 
 /** @This frees a upipe.
@@ -1276,17 +1250,6 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
     struct upipe *upipe = upipe_avfsrc_to_upipe(upipe_avfsrc);
     upipe_avfsrc_clean_sub_subs(upipe);
 
-    upipe_avfsrc_abort_av_deal(upipe);
-    if (likely(upipe_avfsrc->context != NULL)) {
-        if (likely(upipe_avfsrc->url != NULL))
-            upipe_notice_va(upipe, "closing URL %s", upipe_avfsrc->url);
-
-        for (int i = 0; i < upipe_avfsrc->context->nb_streams; i++)
-            uref_free(upipe_avfsrc->streams[i]);
-
-        free(upipe_avfsrc->streams);
-        avformat_close_input(&upipe_avfsrc->context);
-    }
     upipe_throw_dead(upipe);
 
     av_dict_free(&upipe_avfsrc->options);
@@ -1309,8 +1272,7 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
 static void upipe_avfsrc_no_input(struct upipe *upipe)
 {
     struct upipe_avfsrc *upipe_avfsrc = upipe_avfsrc_from_upipe(upipe);
-    upipe_avfsrc_throw_sub_subs(upipe, UPROBE_SOURCE_END);
-    upipe_split_throw_update(upipe);
+    upipe_avfsrc_close(upipe);
     urefcount_release(upipe_avfsrc_to_urefcount_real(upipe_avfsrc));
 }
 
