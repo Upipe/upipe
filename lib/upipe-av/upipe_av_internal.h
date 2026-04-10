@@ -14,9 +14,6 @@
 /** @hidden */
 #define _UPIPE_AV_INTERNAL_H_
 
-#include "upipe/udeal.h"
-#include "upipe/upump.h"
-
 #include <stdbool.h>
 
 #include <libavutil/error.h>
@@ -37,63 +34,6 @@ enum CodecID;
 #define AV_CODEC_ID_FIRST_SUBTITLE CODEC_ID_FIRST_SUBTITLE
 #define AV_CODEC_ID_FIRST_AUDIO CODEC_ID_FIRST_AUDIO
 #endif
-
-/** structure to protect exclusive access to avcodec_open() */
-extern struct udeal upipe_av_deal;
-
-/** @This allocates a watcher triggering when exclusive access to avcodec_open()
- * is granted.
- *
- * @param upump_mgr management structure for this event loop
- * @param cb function to call when the watcher triggers
- * @param opaque pointer to the module's internal structure
- * @param refcount pointer to urefcount structure to increment during callback,
- * or NULL
- * @return pointer to allocated watcher, or NULL in case of failure
- */
-static inline struct upump *upipe_av_deal_upump_alloc(
-        struct upump_mgr *upump_mgr, upump_cb cb, void *opaque,
-        struct urefcount *refcount)
-{
-    return udeal_upump_alloc(&upipe_av_deal, upump_mgr, cb, opaque, refcount);
-}
-
-/** @This starts the watcher on exclusive access to avcodec_open().
- *
- * @param upump watcher allocated by @ref udeal_upump_alloc
- */
-static inline void upipe_av_deal_start(struct upump *upump)
-{
-    udeal_start(&upipe_av_deal, upump);
-}
-
-/** @This tries to grab the exclusive access to avcodec_open().
- */
-static inline bool upipe_av_deal_grab(void)
-{
-    return udeal_grab(&upipe_av_deal);
-}
-
-/** @This yields exclusive access to avcodec_open() previously acquired from
- * @ref upipe_av_deal_grab.
- *
- * @param upump watcher allocated by @ref udeal_upump_alloc
- */
-static inline void upipe_av_deal_yield(struct upump *upump)
-{
-    udeal_yield(&upipe_av_deal, upump);
-}
-
-/** @This aborts the watcher before it has had a chance to run. It must only
- * be called in case of abort, otherwise @ref upipe_av_deal_yield does the
- * same job.
- *
- * @param upump watcher allocated by @ref udeal_upump_alloc
- */
-static inline void upipe_av_deal_abort(struct upump *upump)
-{
-    udeal_abort(&upipe_av_deal, upump);
-}
 
 /** @This allows to convert from avcodec ID to flow definition codec.
  *

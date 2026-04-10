@@ -10,7 +10,6 @@
  * @short common functions for libav wrappers
  */
 
-#include "upipe/udeal.h"
 #include "upipe/uprobe.h"
 #include "upipe/upipe.h"
 #include "upipe/uref_pic.h"
@@ -25,8 +24,6 @@
 
 #include <stdbool.h>
 
-/** structure to protect exclusive access to avcodec_open() */
-struct udeal upipe_av_deal;
 /** @internal true if only avcodec was initialized */
 static bool avcodec_only = false;
 /** @internal probe used by upipe_av_vlog, defined in upipe_av_init() */
@@ -72,11 +69,6 @@ bool upipe_av_init(bool init_avcodec_only, struct uprobe *uprobe)
 {
     avcodec_only = init_avcodec_only;
 
-    if (unlikely(!udeal_init(&upipe_av_deal))) {
-        uprobe_release(uprobe);
-        return false;
-    }
-
     if (unlikely(avcodec_only)) {
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(58, 10, 100)
         avcodec_register_all();
@@ -102,7 +94,6 @@ void upipe_av_clean(void)
 {
     if (likely(!avcodec_only))
         avformat_network_deinit();
-    udeal_clean(&upipe_av_deal);
     if (logprobe)
         uprobe_release(logprobe);
 }
