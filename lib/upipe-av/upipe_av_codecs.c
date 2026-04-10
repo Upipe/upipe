@@ -12,6 +12,7 @@
  */
 
 #include <string.h>
+#include "upipe/ubase.h"
 #include "upipe_av_internal.h"
 
 /** @This allows to convert from avcodec ID to flow definition codec.
