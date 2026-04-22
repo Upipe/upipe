@@ -3330,7 +3330,8 @@ static void upipe_ts_demux_emm_no_input(struct upipe *upipe)
 
     struct upipe_ts_demux_psi_pid *psi_pid = upipe_ts_demux_emm->psi_pid_emm;
     upipe_ts_demux_emm->psi_pid_emm = NULL;
-    upipe_ts_demux_psi_pid_release(psi_pid);
+    if (psi_pid)
+        upipe_ts_demux_psi_pid_release(psi_pid);
 
     upipe_ts_demux_emm_clean_emmd(upipe);
     upipe_ts_demux_emm_clean_psi_split_output_emm(upipe);
