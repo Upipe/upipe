@@ -3368,14 +3368,17 @@ static void upipe_ts_demux_emm_free(struct upipe *upipe)
 static int upipe_ts_demux_emm_control(struct upipe *upipe, int command,
                                       va_list args)
 {
-    struct upipe_ts_demux_emm *emm = upipe_ts_demux_emm_from_upipe(upipe);
     UBASE_HANDLED_RETURN(
         upipe_ts_demux_emm_control_super(upipe, command, args));
+
+#ifdef HAVE_TS_CRYPT
+    struct upipe_ts_demux_emm *emm = upipe_ts_demux_emm_from_upipe(upipe);
 
     switch (command) {
         case UPIPE_TS_EMM_SET_PRIVATE_KEY:
             return upipe_control_va(emm->emmd, command, args);
     }
+#endif
     return UBASE_ERR_UNHANDLED;
 }
 
