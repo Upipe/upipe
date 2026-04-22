@@ -3376,7 +3376,7 @@ static int upipe_ts_demux_emm_control(struct upipe *upipe, int command,
         case UPIPE_TS_EMM_SET_PRIVATE_KEY:
             return upipe_control_va(emm->emmd, command, args);
     }
-    return UBASE_ERR_NONE;
+    return UBASE_ERR_UNHANDLED;
 }
 
 
