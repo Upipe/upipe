@@ -52,6 +52,7 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
+#include <ctype.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavutil/avutil.h>
@@ -190,6 +191,11 @@ struct upipe_avcenc {
     bool reinit;
     /** true if the pipe need to be released after output_input */
     bool release_needed;
+
+    /** codec level */
+    int level;
+    /** codec tier */
+    int tier;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -468,6 +474,177 @@ static void upipe_avcenc_close(struct upipe *upipe)
     upipe_avcenc_start_av_deal(upipe);
 }
 
+/** @internal @This sets max octetrate and buffer size attributes.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet
+ * @return an error code
+ */
+static int upipe_avcenc_set_codec_cpb_attr(struct upipe *upipe,
+                                           struct uref *flow_def)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    AVCodecContext *context = upipe_avcenc->context;
+
+    uint64_t max_octetrate;
+    uint64_t max_bs;
+
+    switch (context->codec_id) {
+        case AV_CODEC_ID_MPEG2VIDEO:
+            switch (upipe_avcenc->level) {
+                case 10:
+                    max_octetrate = 4000000 / 8;
+                    max_bs = 475136 / 8;
+                    break;
+                case 8:
+                    max_octetrate = 15000000 / 8;
+                    max_bs = 1835008 / 8;
+                    break;
+                case 6:
+                    max_octetrate = 60000000 / 8;
+                    max_bs = 7340032 / 8;
+                    break;
+                case 4:
+                    max_octetrate = 80000000 / 8;
+                    max_bs = 9781248 / 8;
+                    break;
+                case 2:
+                    max_octetrate = 120000000 / 8;
+                    max_bs = 14671872 / 8;
+                    break;
+                default:
+                    upipe_warn_va(upipe, "unknown mpeg2 level %d",
+                                  upipe_avcenc->level);
+                    return UBASE_ERR_INVALID;
+            }
+            break;
+        case AV_CODEC_ID_H264:
+            switch (upipe_avcenc->level) {
+                case 10:
+                    max_octetrate = 64000 / 8;
+                    max_bs = 175000 / 8;
+                    break;
+                case 11:
+                    max_octetrate = 192000 / 8;
+                    max_bs = 500000 / 8;
+                    break;
+                case 12:
+                    max_octetrate = 384000 / 8;
+                    max_bs = 1000000 / 8;
+                    break;
+                case 13:
+                    max_octetrate = 768000 / 8;
+                    max_bs = 2000000 / 8;
+                    break;
+                case 20:
+                    max_octetrate = 2000000 / 8;
+                    max_bs = 2000000 / 8;
+                    break;
+                case 21:
+                case 22:
+                    max_octetrate = 4000000 / 8;
+                    max_bs = 4000000 / 8;
+                    break;
+                case 30:
+                    max_octetrate = 10000000 / 8;
+                    max_bs = 10000000 / 8;
+                    break;
+                case 31:
+                    max_octetrate = 14000000 / 8;
+                    max_bs = 14000000 / 8;
+                    break;
+                case 32:
+                case 40:
+                    max_octetrate = 20000000 / 8;
+                    max_bs = 20000000 / 8;
+                    break;
+                case 41:
+                case 42:
+                    max_octetrate = 50000000 / 8;
+                    max_bs = 62500000 / 8;
+                    break;
+                case 50:
+                    max_octetrate = 135000000 / 8;
+                    max_bs = 135000000 / 8;
+                    break;
+                case 51:
+                case 52:
+                    max_octetrate = 240000000 / 8;
+                    max_bs = 240000000 / 8;
+                    break;
+                default:
+                    upipe_warn_va(upipe, "unknown h264 level %d",
+                                  upipe_avcenc->level);
+                    return UBASE_ERR_INVALID;
+            }
+            break;
+        case AV_CODEC_ID_HEVC: {
+            int tier = upipe_avcenc->tier;
+            if (tier < 0) {
+                upipe_warn(upipe, "unknown hevc tier");
+                return UBASE_ERR_INVALID;
+            }
+            switch (upipe_avcenc->level) {
+                case 10:
+                    max_octetrate = 128000 / 8;
+                    max_bs = 350000 / 8;
+                    break;
+                case 20:
+                    max_octetrate = max_bs = 1500000 / 8;
+                    break;
+                case 21:
+                    max_octetrate = max_bs = 3000000 / 8;
+                    break;
+                case 30:
+                    max_octetrate = max_bs = 6000000 / 8;
+                    break;
+                case 31:
+                    max_octetrate = max_bs = 10000000 / 8;
+                    break;
+                case 40:
+                    max_octetrate = max_bs = tier ? (30000000 / 8) : (12000000 / 8);
+                    break;
+                case 41:
+                    max_octetrate = max_bs = tier ? (50000000 / 8) : (20000000 / 8);
+                    break;
+                case 50:
+                    max_octetrate = max_bs = tier ? (100000000 / 8) : (25000000 / 8);
+                    break;
+                case 51:
+                    max_octetrate = max_bs = tier ? (160000000 / 8) : (40000000 / 8);
+                    break;
+                case 52:
+                    max_octetrate = max_bs = tier ? (240000000 / 8) : (60000000 / 8);
+                    break;
+                case 60:
+                    max_octetrate = max_bs = tier ? (240000000 / 8) : (60000000 / 8);
+                    break;
+                case 61:
+                    max_octetrate = max_bs = tier ? (480000000 / 8) : (120000000 / 8);
+                    break;
+                case 62:
+                    max_octetrate = max_bs = tier ? (800000000 / 8) : (240000000 / 8);
+                    break;
+                default:
+                    upipe_warn_va(upipe, "unknown hevc level %d",
+                                  upipe_avcenc->level);
+                    return UBASE_ERR_INVALID;
+            }
+            break;
+        }
+        default:
+            return UBASE_ERR_NONE;
+    }
+
+    UBASE_RETURN(uref_block_flow_set_max_octetrate(flow_def, max_octetrate))
+    UBASE_RETURN(uref_block_flow_set_max_buffer_size(flow_def, max_bs))
+
+    if (!ubase_check(uref_block_flow_get_octetrate(flow_def, NULL)))
+        UBASE_RETURN(uref_block_flow_set_octetrate(flow_def, max_octetrate))
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This builds the flow definition packet.
  *
  * @param upipe description structure of the pipe
@@ -484,16 +661,31 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
         return;
     }
 
-    if (context->bit_rate) {
-        uint64_t octetrate = context->bit_rate / 8;
-
+    /* CPB metadata */
+    uint64_t octetrate = 0;
+    uint64_t buffer_size = 0;
+    AVCPBProperties *cpb_props = NULL;
+    for (int i = 0; i < context->nb_coded_side_data; i++)
+        if (context->coded_side_data[i].type == AV_PKT_DATA_CPB_PROPERTIES) {
+            cpb_props = (AVCPBProperties *) context->coded_side_data[i].data;
+            break;
+        }
+    if (cpb_props) {
+        octetrate = cpb_props->avg_bitrate / 8;
+        buffer_size = cpb_props->buffer_size / 8;
+    } else if (context->bit_rate) {
+        octetrate = context->bit_rate / 8;
         if (!strcmp(context->codec->name, "libopus"))
             octetrate += context->sample_rate / context->frame_size;
-        uref_block_flow_set_octetrate(flow_def, octetrate);
         if (context->rc_buffer_size)
-            uref_block_flow_set_buffer_size(flow_def,
-                                            context->rc_buffer_size / 8);
+            buffer_size = context->rc_buffer_size / 8;
     }
+    if (octetrate)
+        UBASE_FATAL(upipe, uref_block_flow_set_octetrate(flow_def, octetrate))
+    if (buffer_size)
+        UBASE_FATAL(upipe, uref_block_flow_set_buffer_size(flow_def, buffer_size))
+    if (upipe_avcenc->level != -1)
+        UBASE_FATAL(upipe, upipe_avcenc_set_codec_cpb_attr(upipe, flow_def))
 
     if (context->codec->type == AVMEDIA_TYPE_AUDIO && context->frame_size > 0)
         uref_sound_flow_set_samples(flow_def, context->frame_size);
@@ -530,6 +722,84 @@ static void upipe_avcenc_build_flow_def(struct upipe *upipe)
     }
 
     upipe_avcenc_store_flow_def(upipe, flow_def);
+}
+
+/** @internal @This extracts config properties from codec extradata.
+ *
+ * @param upipe description structure of the pipe
+ * @param buf pointer to extradata buffer
+ * @param len size of extradata buffer
+ * @return an error code
+ */
+static int upipe_avcenc_parse_extra_data(struct upipe *upipe,
+                                         uint8_t *buf, size_t len)
+{
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+
+    switch (upipe_avcenc->context->codec_id) {
+        case AV_CODEC_ID_H264:
+            while (len > 4) {
+                if (!(buf[0] == 0 &&
+                      buf[1] == 0 &&
+                      buf[2] == 0 &&
+                      buf[3] == 1))
+                    return UBASE_ERR_INVALID;
+                buf += 1;
+                len -= 1;
+                switch (h264nal_get_type(buf)) {
+                    case H264NAL_TYPE_AUD:
+                        if (len < 5)
+                            return UBASE_ERR_INVALID;
+                        buf += 5;
+                        len -= 5;
+                        break;
+                    case H264NAL_TYPE_SPS:
+                        if (len < H264SPS_HEADER_SIZE)
+                            return UBASE_ERR_INVALID;
+                        upipe_avcenc->level = h264sps_get_level(buf);
+                        upipe_notice_va(upipe, "h264 level %g",
+                                        upipe_avcenc->level / 10.);
+                        return UBASE_ERR_NONE;
+                    default:
+                        return UBASE_ERR_INVALID;
+                }
+            }
+            break;
+        case AV_CODEC_ID_HEVC:
+            while (len > 5) {
+                if (!(buf[0] == 0 &&
+                      buf[1] == 0 &&
+                      buf[2] == 0 &&
+                      buf[3] == 1))
+                    return UBASE_ERR_INVALID;
+                buf += 1;
+                len -= 1;
+                switch (h265nal_get_type(buf)) {
+                    case H265NAL_TYPE_AUD:
+                        if (len < H265AUD_HEADER_SIZE)
+                            return UBASE_ERR_INVALID;
+                        buf += H265AUD_HEADER_SIZE;
+                        len -= H265AUD_HEADER_SIZE;
+                        break;
+                    case H265NAL_TYPE_VPS:
+                        if (len < H265VPS_HEADER_SIZE + H265PTL_HEADER_SIZE + 2)
+                            return UBASE_ERR_INVALID;
+                        upipe_avcenc->tier = h265vps_get_tier(buf);
+                        upipe_avcenc->level = h265vps_get_level(buf) / 3;
+                        upipe_notice_va(upipe, "hevc level %g, %s tier",
+                                        upipe_avcenc->level / 10.,
+                                        upipe_avcenc->tier ? "high" : "main");
+                        return UBASE_ERR_NONE;
+                    default:
+                        return UBASE_ERR_INVALID;
+                }
+            }
+            break;
+        default:
+            break;
+    }
+
+    return UBASE_ERR_INVALID;
 }
 
 /** @internal @This outputs av packet.
@@ -572,6 +842,12 @@ static void upipe_avcenc_output_pkt(struct upipe *upipe,
 
     int64_t pkt_pts = avpkt->pts, pkt_dts = avpkt->dts;
     bool keyframe = avpkt->flags & AV_PKT_FLAG_KEY;
+
+    size_t sd_size;
+    uint8_t *sd = av_packet_get_side_data(avpkt, AV_PKT_DATA_NEW_EXTRADATA,
+                                          &sd_size);
+    if (sd && sd_size > 0)
+        upipe_avcenc_parse_extra_data(upipe, sd, sd_size);
 
     /* find uref corresponding to avpkt */
     upipe_verbose_va(upipe, "output pts %"PRId64, pkt_pts);
@@ -2094,6 +2370,8 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc->slice_type_enforce = false;
     upipe_avcenc->options = options;
     upipe_avcenc->release_needed = false;
+    upipe_avcenc->level = -1;
+    upipe_avcenc->tier = -1;
 
     ulist_init(&upipe_avcenc->sound_urefs);
     upipe_avcenc->nb_samples = 0;
