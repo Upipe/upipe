@@ -113,15 +113,23 @@ struct upipe_ffmt {
     /** swscale flags */
     int sws_flags;
     /** deinterlace_vaapi mode option */
-    const char *deinterlace_vaapi_mode;
+    char *deinterlace_vaapi_mode;
     /** scale_vaapi mode option */
-    const char *scale_vaapi_mode;
+    char *scale_vaapi_mode;
     /** vpp_qsv deinterlace option */
-    const char *vpp_qsv_deinterlace;
+    char *vpp_qsv_deinterlace;
     /** vpp_qsv scale_mode option */
-    const char *vpp_qsv_scale_mode;
+    char *vpp_qsv_scale_mode;
     /** ni_quadra_scale filterblit option */
-    const char *ni_quadra_scale_filterblit;
+    char *ni_quadra_scale_filterblit;
+    /** zscale filter option */
+    char *zscale_filter;
+    /** tonemap tonemap option */
+    char *tonemap_tonemap;
+    /** tonemap param option */
+    char *tonemap_param;
+    /** tonemap desat option */
+    char *tonemap_desat;
 
     /** avfilter hw config type */
     char *hw_type;
@@ -209,6 +217,10 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt->vpp_qsv_deinterlace = NULL;
     upipe_ffmt->vpp_qsv_scale_mode = NULL;
     upipe_ffmt->ni_quadra_scale_filterblit = NULL;
+    upipe_ffmt->zscale_filter = NULL;
+    upipe_ffmt->tonemap_tonemap = NULL;
+    upipe_ffmt->tonemap_param = NULL;
+    upipe_ffmt->tonemap_desat = NULL;
     upipe_ffmt->hw_type = NULL;
     upipe_ffmt->hw_device = NULL;
     upipe_throw_ready(upipe);
@@ -401,9 +413,9 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool need_derive = pic_vaapi_in && pic_qsv_out;
         bool need_tonemap = ubase_check(uref_pic_flow_check_hdr10(flow_def)) &&
             ubase_check(uref_pic_flow_check_sdr(flow_def_dup));
-        bool need_avfilter = ffmt_mgr->avfilter_mgr && hw &&
+        bool need_avfilter = ffmt_mgr->avfilter_mgr && (hw || need_tonemap) &&
             (need_deint || need_scale || need_format || need_hw_transfer ||
-             need_derive || need_range);
+             need_derive || need_range || need_tonemap);
 
         if (need_avfilter) {
             const char *range_in =
@@ -501,7 +513,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             pos += snprintf(filters + pos, sizeof(filters) - pos, \
                             "%s" Fmt, opt++ ? ":" : "=", ##__VA_ARGS__)
 
-            if (!hw_in) {
+            if (!hw_in && hw_out) {
                 if (pic_quadra_out) {
                     if (need_deint) {
                         add_filter("yadif");
@@ -544,7 +556,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                     add_option("out_color_transfer=%s", color_transfer);
                 add_option("tonemap=%d", need_tonemap ? 1 : 0);
                 add_option("async_depth=0");
-            } else {
+            } else if (hw_out) {
                 if (need_deint && !pic_quadra_out) {
                     add_filter("deinterlace_vaapi");
                     add_option("auto=1");
@@ -572,17 +584,21 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                         }
                         if (need_range)
                             add_option("out_range=%s", range_out);
-                        if (color_primaries)
-                            add_option("out_color_primaries=%s",
-                                       color_primaries);
-                        if (color_transfer)
-                            add_option("out_color_transfer=%s",
-                                       color_transfer);
+                        if (!need_tonemap) {
+                            if (color_primaries)
+                                add_option("out_color_primaries=%s",
+                                           color_primaries);
+                            if (color_transfer)
+                                add_option("out_color_transfer=%s",
+                                           color_transfer);
+                        }
                     }
-                    if (color_matrix)
-                        add_option("out_color_matrix=%s", color_matrix);
-                    if (need_format)
-                        add_option("format=%s", pix_fmt_sw);
+                    if (!(need_tonemap && (pic_vaapi_in || pic_vaapi_out))) {
+                        if (color_matrix)
+                            add_option("out_color_matrix=%s", color_matrix);
+                        if (need_format)
+                            add_option("format=%s", pix_fmt_sw);
+                    }
                 }
                 if (need_tonemap && (pic_vaapi_in || pic_vaapi_out)) {
                     add_filter("tonemap_vaapi");
@@ -594,8 +610,53 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                     if (color_transfer)
                         add_option("transfer=%s", color_transfer);
                 }
+            } else {
+                if (need_tonemap) {
+                    add_filter("zscale");
+                    if (need_scale) {
+                        add_option("width=%"PRIu64, hsize);
+                        add_option("height=%"PRIu64, vsize);
+                        add_option("filter=%s",
+                                   upipe_ffmt->zscale_filter ?: "bicubic");
+                    }
+                    add_option("npl=100");
+                    add_option("transfer=linear");
+                    add_option("primaries=%s", color_primaries);
+                    add_filter("tonemap");
+                    add_option("tonemap=%s",
+                               upipe_ffmt->tonemap_tonemap ?: "hable");
+                    if (upipe_ffmt->tonemap_param)
+                        add_option("param=%s", upipe_ffmt->tonemap_param);
+                    if (upipe_ffmt->tonemap_desat)
+                        add_option("desat=%s", upipe_ffmt->tonemap_desat);
+                    add_filter("zscale");
+                    add_option("range=%s", range_out);
+                    add_option("transfer=%s", color_transfer);
+                    add_option("matrix=%s", color_matrix);
+                    add_filter("format");
+                    add_option("%s", pix_fmt_sw);
+                } else if (need_scale || need_format || need_range) {
+                    add_filter("scale");
+                    add_option("interl=-1");
+                    if (need_scale) {
+                        add_option("w=%"PRIu64, hsize);
+                        add_option("h=%"PRIu64, vsize);
+                    }
+                    if (need_range)
+                        add_option("out_range=%s", range_out);
+                    if (color_matrix)
+                        add_option("out_color_matrix=%s", color_matrix);
+                    if (color_primaries)
+                        add_option("out_primaries=%s", color_primaries);
+                    if (color_transfer)
+                        add_option("out_transfer=%s", color_transfer);
+                }
+                if (need_deint) {
+                    add_filter("yadif");
+                    add_option("deint=interlaced");
+                }
             }
-            if (!hw_out) {
+            if (hw_in && !hw_out) {
                 add_filter("hwmap");
                 add_option("mode=read+direct");
                 add_filter("format");
@@ -780,43 +841,52 @@ static int upipe_ffmt_set_option(struct upipe *upipe,
 {
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
 
-    if (!strcmp(option, "deinterlace_vaapi/mode"))
-        // default bob weave motion_adaptive motion_compensated
-        upipe_ffmt->deinterlace_vaapi_mode = value;
-    else if (!strcmp(option, "scale_vaapi/mode"))
-        // default fast hq nl_anamorphic
-        upipe_ffmt->scale_vaapi_mode = value;
-    else if (!strcmp(option, "vpp_qsv/deinterlace"))
-        // bob advanced
-        upipe_ffmt->vpp_qsv_deinterlace = value;
-    else if (!strcmp(option, "vpp_qsv/scale_mode"))
-        // auto low_power hq compute vd ve
-        upipe_ffmt->vpp_qsv_scale_mode = value;
-    else if (!strcmp(option, "ni_quadra_scale/filterblit"))
-        // 0 1 2
-        upipe_ffmt->ni_quadra_scale_filterblit = value;
-    else if (!strcmp(option, "deinterlace-preset")) {
+#define SET_OPTION_VALUE(Field, Value) \
+    UBASE_RETURN(ubase_strdup(&upipe_ffmt->Field, Value))
+
+#define SET_OPTION(Option, Field) \
+    if (!strcmp(option, Option)) { \
+        SET_OPTION_VALUE(Field, value) \
+        return UBASE_ERR_NONE; \
+    }
+
+    SET_OPTION("deinterlace_vaapi/mode", deinterlace_vaapi_mode)
+    SET_OPTION("scale_vaapi/mode", scale_vaapi_mode)
+    SET_OPTION("vpp_qsv/deinterlace", vpp_qsv_deinterlace)
+    SET_OPTION("vpp_qsv/scale_mode", vpp_qsv_scale_mode)
+    SET_OPTION("ni_quadra_scale/filterblit", ni_quadra_scale_filterblit)
+    SET_OPTION("zscale/filter", zscale_filter)
+    SET_OPTION("tonemap/tonemap", tonemap_tonemap)
+    SET_OPTION("tonemap/param", tonemap_param)
+    SET_OPTION("tonemap/desat", tonemap_desat)
+
+    if (!strcmp(option, "deinterlace-preset")) {
         if (!strcmp(value, "fast")) {
-            upipe_ffmt->deinterlace_vaapi_mode = "bob";
-            upipe_ffmt->vpp_qsv_deinterlace = "bob";
+            SET_OPTION_VALUE(deinterlace_vaapi_mode, "bob");
+            SET_OPTION_VALUE(vpp_qsv_deinterlace, "bob");
         } else if (!strcmp(value, "hq")) {
-            upipe_ffmt->deinterlace_vaapi_mode = "motion_compensated";
-            upipe_ffmt->vpp_qsv_deinterlace = "advanced";
+            SET_OPTION_VALUE(deinterlace_vaapi_mode, "motion_compensated");
+            SET_OPTION_VALUE(vpp_qsv_deinterlace, "advanced");
         } else
             return UBASE_ERR_INVALID;
     } else if (!strcmp(option, "scale-preset")) {
         if (!strcmp(value, "fast")) {
-            upipe_ffmt->scale_vaapi_mode = "fast";
-            upipe_ffmt->vpp_qsv_scale_mode = "low_power";
-            upipe_ffmt->ni_quadra_scale_filterblit = "0";
+            SET_OPTION_VALUE(scale_vaapi_mode, "fast");
+            SET_OPTION_VALUE(vpp_qsv_scale_mode, "low_power");
+            SET_OPTION_VALUE(ni_quadra_scale_filterblit, "0");
+            SET_OPTION_VALUE(zscale_filter, "bilinear");
         } else if (!strcmp(value, "hq")) {
-            upipe_ffmt->scale_vaapi_mode = "hq";
-            upipe_ffmt->vpp_qsv_scale_mode = "hq";
-            upipe_ffmt->ni_quadra_scale_filterblit = NULL;
+            SET_OPTION_VALUE(scale_vaapi_mode, "hq");
+            SET_OPTION_VALUE(vpp_qsv_scale_mode, "hq");
+            SET_OPTION_VALUE(ni_quadra_scale_filterblit, NULL);
+            SET_OPTION_VALUE(zscale_filter, "bicubic");
         } else
             return UBASE_ERR_INVALID;
     } else
         return UBASE_ERR_INVALID;
+
+#undef SET_OPTION_VALUE
+#undef SET_OPTION
 
     return UBASE_ERR_NONE;
 }
@@ -1016,6 +1086,15 @@ static void upipe_ffmt_free(struct urefcount *urefcount_real)
         upipe_ffmt_from_urefcount_real(urefcount_real);
     struct upipe *upipe = upipe_ffmt_to_upipe(upipe_ffmt);
     upipe_throw_dead(upipe);
+    free(upipe_ffmt->deinterlace_vaapi_mode);
+    free(upipe_ffmt->scale_vaapi_mode);
+    free(upipe_ffmt->vpp_qsv_deinterlace);
+    free(upipe_ffmt->vpp_qsv_scale_mode);
+    free(upipe_ffmt->ni_quadra_scale_filterblit);
+    free(upipe_ffmt->zscale_filter);
+    free(upipe_ffmt->tonemap_tonemap);
+    free(upipe_ffmt->tonemap_param);
+    free(upipe_ffmt->tonemap_desat);
     free(upipe_ffmt->hw_type);
     free(upipe_ffmt->hw_device);
     upipe_ffmt_clean_input(upipe);
