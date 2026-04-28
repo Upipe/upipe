@@ -194,7 +194,7 @@ struct upipe_x265 {
     int sar_height;
     /** input overscan */
     enum {
-        OVERSCAN_UNDEF,
+        OVERSCAN_UNKNOWN,
         OVERSCAN_SHOW,
         OVERSCAN_CROP,
     } overscan;
@@ -363,7 +363,7 @@ static int upipe_x265_set_option(struct upipe *upipe,
 static const char *overscan_to_str(int overscan)
 {
     switch (overscan) {
-        case OVERSCAN_UNDEF: return "undef";
+        case OVERSCAN_UNKNOWN: return "unknown";
         case OVERSCAN_SHOW: return "show";
         case OVERSCAN_CROP: return "crop";
     }
@@ -572,7 +572,7 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
     upipe_x265->headers_requested = false;
     upipe_x265->encaps_requested = UREF_H26X_ENCAPS_ANNEXB;
     upipe_x265->aspect_ratio_idc = 0;
-    upipe_x265->overscan = OVERSCAN_UNDEF;
+    upipe_x265->overscan = OVERSCAN_UNKNOWN;
 
     upipe_x265->last_dts = UINT64_MAX;
     upipe_x265->last_dts_sys = UINT64_MAX;
@@ -812,7 +812,7 @@ static void upipe_x265_build_flow_def(struct upipe *upipe)
 static int params_overscan(x265_param *params)
 {
     if (!params->vui.bEnableOverscanInfoPresentFlag)
-        return OVERSCAN_UNDEF;
+        return OVERSCAN_UNKNOWN;
     return params->vui.bEnableOverscanAppropriateFlag ?
         OVERSCAN_CROP : OVERSCAN_SHOW;
 }
@@ -917,7 +917,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
 
         bool overscan;
         if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
-            upipe_x265->overscan = OVERSCAN_UNDEF;
+            upipe_x265->overscan = OVERSCAN_UNKNOWN;
         else
             upipe_x265->overscan = overscan ?
                 OVERSCAN_CROP : OVERSCAN_SHOW;
