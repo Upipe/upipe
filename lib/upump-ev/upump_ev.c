@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -30,8 +31,15 @@ struct upump_ev_mgr {
 
     /** ev private structure */
     struct ev_loop *ev_loop;
+    /** watcher to wake up the event loop from a remote event loop */
+    struct ev_async ev_async;
     /** true if the loop has to be destroyed at the end */
     bool destroy;
+
+    /** current mutex used if any */
+    struct umutex *umutex;
+    /** current ev_async configured if any */
+    struct ev_async *async;
 
     /** common structure */
     struct upump_common_mgr common_mgr;
@@ -215,6 +223,10 @@ static void upump_ev_real_start(struct upump *upump, bool status)
     }
     if (!status)
         ev_unref(ev_mgr->ev_loop);
+
+    if (ev_mgr->async)
+        /* wake up remote event loop to take account for this event */
+        ev_async_send(ev_mgr->ev_loop, ev_mgr->async);
 }
 
 /** @This stops a pump.
@@ -373,8 +385,9 @@ static int upump_ev_control(struct upump *upump, int command, va_list args)
  **/
 static void upump_ev_mgr_lock(struct ev_loop *loop)
 {
-    struct umutex *mutex = ev_userdata(loop);
-    umutex_lock(mutex);
+    struct upump_ev_mgr *ev_mgr = ev_userdata(loop);
+    umutex_lock(ev_mgr->umutex);
+    ev_mgr->async = NULL;
 }
 
 /** @internal @This is called when the event loop goes to sleep.
@@ -383,8 +396,24 @@ static void upump_ev_mgr_lock(struct ev_loop *loop)
  **/
 static void upump_ev_mgr_unlock(struct ev_loop *loop)
 {
-    struct umutex *mutex = ev_userdata(loop);
-    umutex_unlock(mutex);
+    struct upump_ev_mgr *ev_mgr = ev_userdata(loop);
+    /* configure async event so remote event loops can wake us up if they start
+     * events in this event loop.
+     *
+     * From man ev:
+     *
+     * ev_set_loop_release_cb
+     * [...]
+     * While event loop modifications are allowed between invocations of
+     * "release" and "acquire" (that's their only purpose after all), no
+     * modifications done will affect the event loop, i.e.  adding  watchers
+     * will  have  no effect  on  the set of file descriptors being watched, or
+     * the time waited. Use an "ev_async" watcher to wake up "ev_run" when you
+     * want it to take note of any changes you made.
+     * [...]
+     */
+    ev_mgr->async = &ev_mgr->ev_async;
+    umutex_unlock(ev_mgr->umutex);
 }
 
 /** @internal @This runs an event loop.
@@ -397,9 +426,10 @@ static void upump_ev_mgr_unlock(struct ev_loop *loop)
 static int upump_ev_mgr_run(struct upump_mgr *mgr, struct umutex *mutex)
 {
     struct upump_ev_mgr *ev_mgr = upump_ev_mgr_from_upump_mgr(mgr);
+    ev_mgr->umutex = mutex;
 
     if (mutex != NULL) {
-        ev_set_userdata(ev_mgr->ev_loop, mutex);
+        ev_set_userdata(ev_mgr->ev_loop, ev_mgr);
         ev_set_loop_release_cb(ev_mgr->ev_loop,
                                upump_ev_mgr_unlock, upump_ev_mgr_lock);
 
@@ -456,6 +486,13 @@ static void upump_ev_mgr_free(struct urefcount *urefcount)
     free(ev_mgr);
 }
 
+/** @internal @This is called when an async ev is raised.  */
+static void upump_ev_mgr_async_cb(struct ev_loop *loop, struct ev_async *w,
+                                  int revents)
+{
+    /* nothing to do */
+}
+
 /** @This allocates and initializes a upump_ev_mgr structure.
  *
  * @param ev_loop pointer to an ev loop
@@ -490,6 +527,10 @@ struct upump_mgr *upump_ev_mgr_alloc(struct ev_loop *ev_loop,
 
     ev_mgr->ev_loop = ev_loop;
     ev_mgr->destroy = false;
+    ev_mgr->async = NULL;
+    ev_async_init(&ev_mgr->ev_async, upump_ev_mgr_async_cb);
+    ev_async_start(ev_loop, &ev_mgr->ev_async);
+    ev_unref(ev_loop);
     return mgr;
 }
 
