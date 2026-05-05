@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -203,19 +204,6 @@ static int STRUCTURE##_unregister_bin_request(struct upipe *upipe,          \
         return upipe_unregister_request(s->FIRST_INNER, urequest);          \
     return UBASE_ERR_NONE;                                                  \
 }                                                                           \
-/** @internal @This handles the result of a proxy request.                  \
- *                                                                          \
- * @param urequest request provided                                         \
- * @param args optional arguments                                           \
- * @return an error code                                                    \
- */                                                                         \
-static int STRUCTURE##_provide_bin_proxy(struct urequest *urequest,         \
-                                         va_list args)                      \
-{                                                                           \
-    struct urequest *upstream = urequest_get_opaque(urequest,               \
-                                                    struct urequest *);     \
-    return urequest_provide_va(upstream, args);                             \
-}                                                                           \
 /** @internal @This creates and registers a proxy request for an upstream   \
  * request to be forwarded downstream.                                      \
  *                                                                          \
@@ -226,19 +214,9 @@ static int STRUCTURE##_provide_bin_proxy(struct urequest *urequest,         \
 static int STRUCTURE##_alloc_bin_proxy(struct upipe *upipe,                 \
                                        struct urequest *urequest)           \
 {                                                                           \
-    struct urequest *proxy =                                                \
-        (struct urequest *)malloc(sizeof(struct urequest));                 \
-    UBASE_ALLOC_RETURN(proxy);                                              \
-    urequest_set_opaque(proxy, urequest);                                   \
-    struct uref *uref = NULL;                                               \
-    if (urequest->uref != NULL &&                                           \
-        (uref = uref_dup(urequest->uref)) == NULL) {                        \
-        free(proxy);                                                        \
+    struct urequest *proxy = urequest_alloc_proxy(urequest);                \
+    if (unlikely(!proxy))                                                   \
         return UBASE_ERR_ALLOC;                                             \
-    }                                                                       \
-    urequest_init(proxy, urequest->type, uref,                              \
-                  STRUCTURE##_provide_bin_proxy,                            \
-                  (urequest_free_func)free);                                \
     return STRUCTURE##_register_bin_request(upipe, proxy);                  \
 }                                                                           \
 /** @internal @This unregisters and frees a proxy request.                  \
