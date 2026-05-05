@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -73,7 +74,7 @@ extern "C" {
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_init_flow_def_check(struct upipe *upipe)            \
+static void STRUCTURE##_init_##FLOW_DEF_CHECK(struct upipe *upipe)          \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     s->FLOW_DEF_CHECK = NULL;                                               \
@@ -84,9 +85,9 @@ static void STRUCTURE##_init_flow_def_check(struct upipe *upipe)            \
  * @param upipe description structure of the pipe                           \
  * @return a pointer to a flow def check                                    \
  */                                                                         \
-static struct uref *                                                        \
-    STRUCTURE##_alloc_flow_def_check(struct upipe *upipe,                   \
-                                     struct uref *flow_def_input)           \
+static UBASE_UNUSED struct uref *                                           \
+    STRUCTURE##_alloc_##FLOW_DEF_CHECK(struct upipe *upipe,                 \
+                                       struct uref *flow_def_input)         \
 {                                                                           \
     return uref_sibling_alloc_control(flow_def_input);                      \
 }                                                                           \
@@ -97,8 +98,8 @@ static struct uref *                                                        \
  * @param flow_def_check flow def check derived from new input flow def     \
  * @return false if the flow def check packets are different                \
  */                                                                         \
-static bool STRUCTURE##_check_flow_def_check(struct upipe *upipe,           \
-                                             struct uref *flow_def_check)   \
+static bool STRUCTURE##_check_##FLOW_DEF_CHECK(struct upipe *upipe,         \
+                                               struct uref *flow_def_check) \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     return s->FLOW_DEF_CHECK != NULL &&                                     \
@@ -109,8 +110,8 @@ static bool STRUCTURE##_check_flow_def_check(struct upipe *upipe,           \
  * @param upipe description structure of the pipe                           \
  * @param flow_def_check flow def check uref                                \
  */                                                                         \
-static void STRUCTURE##_store_flow_def_check(struct upipe *upipe,           \
-                                             struct uref *flow_def_check)   \
+static void STRUCTURE##_store_##FLOW_DEF_CHECK(struct upipe *upipe,         \
+                                               struct uref *flow_def_check) \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->FLOW_DEF_CHECK != NULL)                                          \
@@ -121,7 +122,7 @@ static void STRUCTURE##_store_flow_def_check(struct upipe *upipe,           \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  */                                                                         \
-static void STRUCTURE##_clean_flow_def_check(struct upipe *upipe)           \
+static void STRUCTURE##_clean_##FLOW_DEF_CHECK(struct upipe *upipe)         \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     if (s->FLOW_DEF_CHECK != NULL)                                          \
