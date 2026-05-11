@@ -151,30 +151,13 @@ UPIPE_HELPER_INPUT(upipe_ffmt, urefs, nb_urefs, max_urefs, blockers,
 UPIPE_HELPER_INNER(upipe_ffmt, first_inner)
 UPIPE_HELPER_BIN_INPUT(upipe_ffmt, first_inner, input_request_list)
 UPIPE_HELPER_INNER(upipe_ffmt, last_inner)
+UPIPE_HELPER_UPROBE(upipe_ffmt, urefcount_real, proxy_probe, NULL)
 UPIPE_HELPER_UPROBE(upipe_ffmt, urefcount_real, last_inner_probe, NULL)
 UPIPE_HELPER_BIN_OUTPUT(upipe_ffmt, last_inner, output, output_request_list)
 UPIPE_HELPER_FLOW_FORMAT(upipe_ffmt, request,
                          upipe_ffmt_check_flow_format,
                          upipe_ffmt_register_bin_output_request,
                          upipe_ffmt_unregister_bin_output_request)
-
-/** @internal @This catches events coming from an inner pipe, and
- * attaches them to the bin pipe.
- *
- * @param uprobe pointer to the probe in upipe_ffmt_alloc
- * @param inner pointer to the inner pipe
- * @param event event triggered by the inner pipe
- * @param args arguments of the event
- * @return an error code
- */
-static int upipe_ffmt_proxy_probe(struct uprobe *uprobe, struct upipe *inner,
-                                  int event, va_list args)
-{
-    struct upipe_ffmt *s = container_of(uprobe, struct upipe_ffmt,
-                                          proxy_probe);
-    struct upipe *upipe = upipe_ffmt_to_upipe(s);
-    return upipe_throw_proxy(upipe, inner, event, args);
-}
 
 /** @internal @This allocates a ffmt pipe.
  *
@@ -198,13 +181,11 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt_init_urefcount_real(upipe);
     upipe_ffmt_init_flow_format(upipe);
     upipe_ffmt_init_input(upipe);
+    upipe_ffmt_init_proxy_probe(upipe);
     upipe_ffmt_init_last_inner_probe(upipe);
     upipe_ffmt_init_bin_input(upipe);
     upipe_ffmt_init_bin_output(upipe);
 
-    uprobe_init(&upipe_ffmt->proxy_probe, upipe_ffmt_proxy_probe, NULL);
-    upipe_ffmt->proxy_probe.refcount =
-        upipe_ffmt_to_urefcount_real(upipe_ffmt);
     upipe_ffmt->flow_def_input = NULL;
     upipe_ffmt->flow_def_wanted = flow_def;
     upipe_ffmt->flow_def_requested = NULL;
@@ -1106,7 +1087,7 @@ static void upipe_ffmt_free(struct upipe *upipe)
     uref_free(upipe_ffmt->flow_def_wanted);
     uref_free(upipe_ffmt->flow_def_requested);
     uref_free(upipe_ffmt->flow_def_provided);
-    uprobe_clean(&upipe_ffmt->proxy_probe);
+    upipe_ffmt_clean_proxy_probe(upipe);
     upipe_ffmt_clean_last_inner_probe(upipe);
     upipe_ffmt_clean_urefcount_real(upipe);
     upipe_ffmt_clean_urefcount(upipe);
