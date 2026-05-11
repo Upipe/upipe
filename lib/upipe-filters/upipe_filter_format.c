@@ -22,6 +22,7 @@
 #include "upipe/upipe.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_flow.h"
+#include "upipe/upipe_helper_flow_def.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_flow_format.h"
@@ -146,6 +147,7 @@ UPIPE_HELPER_UPIPE(upipe_ffmt, upipe, UPIPE_FFMT_SIGNATURE)
 UPIPE_HELPER_FLOW(upipe_ffmt, NULL)
 UPIPE_HELPER_UREFCOUNT(upipe_ffmt, urefcount, upipe_ffmt_no_ref)
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_ffmt, urefcount_real, upipe_ffmt_free)
+UPIPE_HELPER_FLOW_DEF(upipe_ffmt, flow_def_input, flow_def_wanted)
 UPIPE_HELPER_INPUT(upipe_ffmt, urefs, nb_urefs, max_urefs, blockers,
                   upipe_ffmt_handle)
 UPIPE_HELPER_INNER(upipe_ffmt, first_inner)
@@ -181,13 +183,12 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt_init_urefcount_real(upipe);
     upipe_ffmt_init_flow_format(upipe);
     upipe_ffmt_init_input(upipe);
+    upipe_ffmt_init_flow_def(upipe);
     upipe_ffmt_init_proxy_probe(upipe);
     upipe_ffmt_init_last_inner_probe(upipe);
     upipe_ffmt_init_bin_input(upipe);
     upipe_ffmt_init_bin_output(upipe);
 
-    upipe_ffmt->flow_def_input = NULL;
-    upipe_ffmt->flow_def_wanted = flow_def;
     upipe_ffmt->flow_def_requested = NULL;
     upipe_ffmt->flow_def_provided = NULL;
     upipe_ffmt->sws_flags = 0;
@@ -204,7 +205,52 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt->hw_device = NULL;
     upipe_throw_ready(upipe);
 
+    upipe_ffmt_store_flow_def_attr(upipe, flow_def);
+
     return upipe;
+}
+
+/** @internal @This sets the input flow definition for real.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def input flow definition to set
+ * @return an error code
+ */
+static int upipe_ffmt_set_flow_def_real(struct upipe *upipe,
+                                        struct uref *flow_def)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+
+    if (upipe_ffmt_check_flow_def_input(upipe, flow_def)) {
+        uref_free(flow_def);
+        return UBASE_ERR_NONE;
+    }
+
+    uref_free(upipe_ffmt->flow_def_requested);
+    upipe_ffmt->flow_def_requested = NULL;
+    flow_def = upipe_ffmt_store_flow_def_input(upipe, flow_def);
+    if (unlikely(flow_def == NULL)) {
+        upipe_ffmt_store_flow_def_input(upipe, NULL);
+        return UBASE_ERR_ALLOC;
+    }
+
+    /** It is legal to have just "sound." in flow_def_wanted to avoid
+     * changing unnecessarily the sample format. */
+    const char *input_def = NULL;
+    uref_flow_get_def(upipe_ffmt->flow_def_input, &input_def);
+    if (input_def && !ubase_ncmp(input_def, UREF_SOUND_FLOW_DEF)) {
+        const char *wanted_def = NULL;
+        uref_flow_get_def(upipe_ffmt->flow_def_wanted, &wanted_def);
+        if (wanted_def && !strcmp(wanted_def, UREF_SOUND_FLOW_DEF))
+            uref_flow_set_def(flow_def, input_def);
+    }
+
+    upipe_ffmt_store_bin_input(upipe, NULL);
+    upipe_ffmt_store_bin_output(upipe, NULL);
+    uref_free(upipe_ffmt->flow_def_provided);
+    upipe_ffmt->flow_def_provided = NULL;
+    upipe_ffmt_require_flow_format(upipe, flow_def);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This handles data.
@@ -220,39 +266,9 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
-        if (upipe_ffmt->flow_def_input != NULL &&
-            upipe_ffmt->flow_def_input->udict != NULL && uref->udict != NULL &&
-            !udict_cmp(upipe_ffmt->flow_def_input->udict, uref->udict)) {
-            uref_free(uref);
-            return true;
-        }
-        uref_free(upipe_ffmt->flow_def_input);
-        uref_free(upipe_ffmt->flow_def_requested);
-        upipe_ffmt->flow_def_input = uref_dup(uref);
-        upipe_ffmt->flow_def_requested = NULL;
-        if (unlikely(upipe_ffmt->flow_def_input == NULL)) {
-            uref_free(uref);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return true;
-        }
-
-        /** It is legal to have just "sound." in flow_def_wanted to avoid
-         * changing unnecessarily the sample format. */
-        char *old_def = NULL;
-        if (!ubase_ncmp(def, "sound."))
-            old_def = strdup(def);
-        uref_attr_import(uref, upipe_ffmt->flow_def_wanted);
-        if (old_def != NULL &&
-            (!ubase_check(uref_flow_get_def(uref, &def)) ||
-             !strcmp(def, "sound.")))
-            uref_flow_set_def(uref, old_def);
-        free(old_def);
-
-        upipe_ffmt_store_bin_input(upipe, NULL);
-        upipe_ffmt_store_bin_output(upipe, NULL);
-        uref_free(upipe_ffmt->flow_def_provided);
-        upipe_ffmt->flow_def_provided = NULL;
-        upipe_ffmt_require_flow_format(upipe, uref);
+        int ret = upipe_ffmt_set_flow_def_real(upipe, uref);
+        if (unlikely(!ubase_check(ret)))
+            upipe_throw_fatal(upipe, ret);
         return true;
     }
 
@@ -1083,12 +1099,11 @@ static void upipe_ffmt_free(struct upipe *upipe)
     free(upipe_ffmt->hw_device);
     upipe_ffmt_clean_input(upipe);
     upipe_ffmt_clean_flow_format(upipe);
-    uref_free(upipe_ffmt->flow_def_input);
-    uref_free(upipe_ffmt->flow_def_wanted);
     uref_free(upipe_ffmt->flow_def_requested);
     uref_free(upipe_ffmt->flow_def_provided);
     upipe_ffmt_clean_proxy_probe(upipe);
     upipe_ffmt_clean_last_inner_probe(upipe);
+    upipe_ffmt_clean_flow_def(upipe);
     upipe_ffmt_clean_urefcount_real(upipe);
     upipe_ffmt_clean_urefcount(upipe);
     upipe_ffmt_free_flow(upipe);
