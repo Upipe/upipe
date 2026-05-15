@@ -31,8 +31,52 @@ UREF_ATTR_SMALL_UNSIGNED(sound_flow, planes, "s.planes", number of planes)
 UREF_ATTR_STRING_VA(sound_flow, channel, "s.channel[%" PRIu8"]",
         channel type, uint8_t plane, plane)
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, channels, "s.channels", number of channels)
-UREF_ATTR_SMALL_UNSIGNED(sound_flow, sample_size, "s.sample_size",
+UREF_ATTR_UNSIGNED(sound_flow, sample_size_storage, "s.sample_size",
         size in octets of a sample of an audio plane)
+static inline int uref_sound_flow_get_sample_size(struct uref *uref,
+                                                   uint16_t *p)
+{
+    uint64_t v;
+    UBASE_RETURN(uref_sound_flow_get_sample_size_storage(uref, &v));
+    *p = (uint16_t)v;
+    return UBASE_ERR_NONE;
+}
+static inline int uref_sound_flow_set_sample_size(struct uref *uref,
+                                                   uint16_t v)
+{
+    return uref_sound_flow_set_sample_size_storage(uref, v);
+}
+static UBASE_UNUSED inline int
+uref_sound_flow_delete_sample_size(struct uref *uref)
+{
+    return uref_sound_flow_delete_sample_size_storage(uref);
+}
+static UBASE_UNUSED inline int
+uref_sound_flow_copy_sample_size(struct uref *uref, struct uref *uref_src)
+{
+    return uref_sound_flow_copy_sample_size_storage(uref, uref_src);
+}
+static UBASE_UNUSED inline int
+uref_sound_flow_match_sample_size(struct uref *uref,
+                                   uint16_t min, uint16_t max)
+{
+    uint64_t v;
+    UBASE_RETURN(uref_sound_flow_get_sample_size_storage(uref, &v));
+    return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;
+}
+static UBASE_UNUSED inline int
+uref_sound_flow_cmp_sample_size(struct uref *uref1, struct uref *uref2)
+{
+    uint64_t v1 = 0, v2 = 0;
+    int err1 = uref_sound_flow_get_sample_size_storage(uref1, &v1);
+    int err2 = uref_sound_flow_get_sample_size_storage(uref2, &v2);
+    if (!ubase_check(err1) && !ubase_check(err2))
+        return 0;
+    if (!ubase_check(err1) || !ubase_check(err2))
+        return -1;
+    return (int64_t)v1 - (int64_t)v2 < 0 ? -1 :
+           (int64_t)v1 - (int64_t)v2 > 0 ? 1 : 0;
+}
 UREF_ATTR_SMALL_UNSIGNED(sound_flow, raw_sample_size, "s.sample_bits",
         size in bits of an audio sample)
 UREF_ATTR_UNSIGNED(sound_flow, rate, "s.rate", samples per second)
@@ -51,7 +95,7 @@ UREF_ATTR_SMALL_UNSIGNED(sound_flow, channel_idx, "s.channel_index", index of fi
 static inline struct uref *uref_sound_flow_alloc_def(struct uref_mgr *mgr,
                                                      const char *format,
                                                      uint8_t channels,
-                                                     uint8_t sample_size)
+                                                     uint16_t sample_size)
 {
     struct uref *uref = uref_alloc_control(mgr);
     if (unlikely(uref == NULL)) return NULL;
@@ -135,7 +179,8 @@ static inline int uref_sound_flow_copy_format(struct uref *uref_dst,
                                               struct uref *uref_src)
 {
     const char *def;
-    uint8_t planes, sample_size;
+    uint8_t planes;
+    uint16_t sample_size;
     UBASE_RETURN(uref_flow_get_def(uref_src, &def))
     UBASE_RETURN(uref_flow_set_def(uref_dst, def))
     UBASE_RETURN(uref_sound_flow_get_sample_size(uref_src, &sample_size))

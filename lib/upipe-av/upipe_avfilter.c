@@ -1041,7 +1041,7 @@ static int upipe_avfilt_avframe_from_uref_sound(struct upipe *upipe,
         goto inval;
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     UBASE_RETURN(uref_sound_size(uref, &size, &sample_size));
 
     unsigned i = 0;

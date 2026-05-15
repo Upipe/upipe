@@ -70,7 +70,7 @@ static void pic_fill_in(struct ubuf *ubuf)
 static void sound_fill_in(struct ubuf *ubuf)
 {
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
     int octets = size * sample_size;
 

@@ -73,7 +73,7 @@ struct upipe_audio_copy {
     /** input sample rate */
     uint64_t samplerate;
     /** sample size */
-    uint8_t sample_size;
+    uint16_t sample_size;
     /** input planes */
     uint8_t planes;
     /** remain from previous output */
@@ -228,7 +228,7 @@ static int upipe_audio_copy_set_flow_def_real(struct upipe *upipe,
 
     uint64_t rate = 0;
     uint8_t planes = 0;
-    uint8_t sample_size = 0;
+    uint16_t sample_size = 0;
     uint64_t input_latency = 0;
     uref_sound_flow_get_rate(flow_def, &rate);
     uref_sound_flow_get_planes(flow_def, &planes);
@@ -447,7 +447,7 @@ static bool upipe_audio_copy_handle(struct upipe *upipe,
     struct upipe_audio_copy *upipe_audio_copy =
         upipe_audio_copy_from_upipe(upipe);
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
 
     if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
         upipe_audio_copy_set_flow_def_real(upipe, uref);
@@ -510,7 +510,7 @@ static int upipe_audio_copy_set_flow_def(struct upipe *upipe,
 {
     uint64_t rate = 0;
     uint8_t planes = 0;
-    uint8_t sample_size = 0;
+    uint16_t sample_size = 0;
 
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW_DEF));
     UBASE_RETURN(uref_sound_flow_get_rate(flow_def, &rate));

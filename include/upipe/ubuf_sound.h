@@ -48,7 +48,7 @@ static inline struct ubuf *ubuf_sound_alloc(struct ubuf_mgr *mgr, int size)
  * @return an error code
  */
 static inline int ubuf_sound_size(struct ubuf *ubuf, size_t *size_p,
-                                  uint8_t *sample_size_p)
+                                  uint16_t *sample_size_p)
 {
     return ubuf_control(ubuf, UBUF_SIZE_SOUND, size_p, sample_size_p);
 }
@@ -266,7 +266,7 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
                                            int skip, int new_size)
 {
     size_t ubuf_size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     if (unlikely(!ubase_check(ubuf_sound_size(ubuf, &ubuf_size, &sample_size))
                  || skip >= (int)ubuf_size))
         return NULL;
@@ -281,7 +281,7 @@ static inline struct ubuf *ubuf_sound_copy(struct ubuf_mgr *mgr,
     if (unlikely(new_ubuf == NULL))
         return NULL;
 
-    uint8_t new_sample_size;
+    uint16_t new_sample_size;
     int extract_offset, extract_skip;
     int extract_size;
     if (unlikely(!ubase_check(ubuf_sound_size(new_ubuf, NULL,
@@ -345,7 +345,7 @@ ubuf_sound_copy_err:
  */
 static inline int ubuf_sound_interleave(struct ubuf *ubuf, uint8_t *buf,
                                         int offset, int samples,
-                                        uint8_t sample_size, uint8_t planes)
+                                        uint16_t sample_size, uint8_t planes)
 {
     int i, j, k;
     const uint8_t *buffers_p[planes];
