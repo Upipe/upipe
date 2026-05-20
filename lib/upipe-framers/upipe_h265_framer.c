@@ -894,7 +894,7 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
         uint32_t conf_win_top_offset = upipe_h26xf_stream_ue(s); /* top offset */
         uint32_t conf_win_bottom_offset = upipe_h26xf_stream_ue(s); /* bottom offset */
         uint8_t chroma_array_type = 0;
-        if (separate_colour_plane)
+        if (!separate_colour_plane)
             chroma_array_type = chroma_idc;
         if (!chroma_array_type) {
             hsize -= conf_win_left_offset + conf_win_right_offset;
