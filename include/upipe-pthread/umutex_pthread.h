@@ -28,6 +28,13 @@ extern "C" {
  */
 struct umutex *umutex_pthread_alloc(const pthread_mutexattr_t *mutexattr);
 
+/** @This tries to lock a mutex.
+ *
+ * @param umutex pointer to a umutex structure
+ * @return an error code, UBASE_ERR_BUSY for EBUSY
+ */
+int umutex_pthread_trylock(struct umutex *umutex);
+
 #ifdef __cplusplus
 }
 #endif
