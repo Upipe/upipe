@@ -196,8 +196,8 @@ static void upipe_ts_scte35d_insert_command(struct upipe *upipe,
         upipe_ts_scte35d_parse_descs(upipe, uref, scte35_get_descl(scte35),
                                      scte35_get_desclength(scte35));
 
-    uref_block_unmap(uref, 0);
     uref_ts_scte35_set_message(uref, scte35, size);
+    uref_block_unmap(uref, 0);
     ubuf_free(uref_detach_ubuf(uref));
 
     uref_ts_scte35_set_command_type(uref, SCTE35_INSERT_COMMAND);
@@ -284,8 +284,8 @@ static void upipe_ts_scte35d_time_signal_command(struct upipe *upipe,
     if (descl)
         upipe_ts_scte35d_parse_descs(upipe, uref, descl, desc_length);
 
-    uref_block_unmap(uref, 0);
     uref_ts_scte35_set_message(uref, scte35, size);
+    uref_block_unmap(uref, 0);
     ubuf_free(uref_detach_ubuf(uref));
 
     upipe_ts_scte35d_output(upipe, uref, upump_p);
@@ -326,8 +326,8 @@ static void upipe_ts_scte35d_null_command(struct upipe *upipe,
         upipe_ts_scte35d_parse_descs(upipe, uref, scte35_get_descl(scte35),
                                      scte35_get_desclength(scte35));
 
-    uref_block_unmap(uref, 0);
     uref_ts_scte35_set_message(uref, scte35, size);
+    uref_block_unmap(uref, 0);
     ubuf_free(uref_detach_ubuf(uref));
 
     uref_ts_scte35_set_command_type(uref, SCTE35_NULL_COMMAND);
