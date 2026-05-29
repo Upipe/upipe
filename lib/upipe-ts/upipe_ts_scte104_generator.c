@@ -128,15 +128,18 @@ static void upipe_ts_scte104_generator_input(struct upipe *upipe, struct uref *u
 static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
-    struct upipe_ts_scte104_generator *upipe_ts_scte104_generator = upipe_ts_scte104_generator_from_upipe(upipe);
+    struct upipe_ts_scte104_generator *upipe_ts_scte104_generator =
+        upipe_ts_scte104_generator_from_upipe(upipe);
 
     if (!upipe_ts_scte104_generator->ubuf_mgr)
         return false;
 
     uint8_t splice_insert_type;
-    uint8_t len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 /* num_opts */ + SCTE104O_HEADER_SIZE + SCTE104SRD_HEADER_SIZE;
-    uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0, cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0, pts_sys = 0;
+    uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0;
+    uint64_t cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0;
     uref_clock_get_pts_orig(uref, &pts_orig);
+    uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
+    uref_clock_get_duration(uref, &duration);
 
     if (ubase_check(uref_ts_scte35_get_cancel(uref)))
         splice_insert_type = SCTE104SRD_CANCEL;
@@ -145,56 +148,72 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     else
         splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_END_IMMEDIATE : SCTE104SRD_END_NORMAL;
 
+    uint32_t pre_roll_full = cr_dts_delay / (UCLOCK_FREQ / 1000);
+    if (unlikely(pre_roll_full > UINT16_MAX)) {
+        upipe_warn(upipe, "pre_roll_time overflow, clamping to 65535 ms");
+        pre_roll_full = UINT16_MAX;
+    }
+    uint16_t pre_roll_ms = (uint16_t)pre_roll_full;
+
+    uint32_t break_dur_full = duration != UINT64_MAX ?
+                              duration / (UCLOCK_FREQ / 10) : 0;
+    if (unlikely(break_dur_full > UINT16_MAX)) {
+        upipe_warn(upipe, "break_duration overflow, clamping to 65535 deciseconds");
+        break_dur_full = UINT16_MAX;
+    }
+
+    uint16_t len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 /* num_ops */ +
+                   SCTE104O_HEADER_SIZE + SCTE104SRD_HEADER_SIZE;
+
     struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_scte104_generator->ubuf_mgr, len);
+    if (unlikely(!ubuf)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref);
+        return true;
+    }
     int size = -1;
     uint8_t *buf;
     ubase_assert(ubuf_block_write(ubuf, 0, &size, &buf));
+    ubase_assert(size >= (int)len);
 
     uint8_t *ts = scte104m_get_timestamp(buf);
-    uint8_t *op;
+    uint8_t *op, *data;
 
     scte104_set_opid(buf, SCTE104_OPID_MULTIPLE);
     scte104_set_size(buf, len);
-
     scte104m_set_protocol(buf, 0);
     scte104m_set_as_index(buf, 0);
-    scte104m_set_message_number(buf, 1); /* arbitrary */
+    scte104m_set_message_number(buf, 1);
     scte104m_set_dpi_pid_index(buf, 0);
     scte104m_set_scte35_protocol(buf, 0);
-
     scte104t_set_type(ts, SCTE104T_TYPE_NONE);
     scte104m_set_num_ops(buf, 1);
 
     op = scte104m_get_op(buf, 0);
-
     scte104o_set_opid(op, SCTE104_OPID_SPLICE);
     scte104o_set_data_length(op, SCTE104SRD_HEADER_SIZE);
-    op = scte104o_get_data(op);
+    data = scte104o_get_data(op);
 
-    scte104srd_set_insert_type(op, splice_insert_type);
     uref_ts_scte35_get_event_id(uref, &event_id);
-    scte104srd_set_event_id(op, event_id);
     uref_ts_scte35_get_unique_program_id(uref, &unique_program_id);
-    scte104srd_set_unique_program_id(op, unique_program_id);
-    uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
-    scte104srd_set_pre_roll_time(op, cr_dts_delay / (UCLOCK_FREQ/1000));
-    uref_clock_get_duration(uref, &duration);
-    if (duration != UINT64_MAX)
-        scte104srd_set_break_duration(op, duration / (UCLOCK_FREQ/10));
-    scte104srd_set_avail_num(op, 0);
-    scte104srd_set_avails_expected(op, 0);
-    scte104srd_set_auto_return(op, ubase_check(uref_ts_scte35_get_auto_return(uref)));
+    scte104srd_set_insert_type(data, splice_insert_type);
+    scte104srd_set_event_id(data, event_id);
+    scte104srd_set_unique_program_id(data, unique_program_id);
+    scte104srd_set_pre_roll_time(data, pre_roll_ms);
+    scte104srd_set_break_duration(data, (uint16_t)break_dur_full);
+    scte104srd_set_avail_num(data, 0);
+    scte104srd_set_avails_expected(data, 0);
+    scte104srd_set_auto_return(data, ubase_check(uref_ts_scte35_get_auto_return(uref)));
 
     ubuf_block_unmap(ubuf, 0);
     uref_attach_ubuf(uref, ubuf);
 
-    /* SCTE-35 "PTS" is actually the splice time. Make SCTE-104 urefs use the real PTS */
-    pts_orig -= cr_dts_delay;
-    uref_clock_set_pts_orig(uref, pts_orig);
-    uref_clock_get_pts_prog(uref, &pts_prog);
-    pts_prog -= cr_dts_delay;
-    uref_clock_set_pts_prog(uref, pts_prog);
-    uref_clock_get_pts_sys(uref, &pts_sys);
+    /* SCTE-35 "PTS" is the splice time; adjust to arrival time */
+    if (pts_orig != UINT64_MAX && cr_dts_delay) {
+        uref_clock_set_pts_orig(uref, pts_orig - cr_dts_delay);
+        if (ubase_check(uref_clock_get_pts_prog(uref, &pts_prog)))
+            uref_clock_set_pts_prog(uref, pts_prog - cr_dts_delay);
+    }
 
     upipe_ts_scte104_generator_output(upipe, uref, upump_p);
     return true;
@@ -266,7 +285,7 @@ static int upipe_ts_scte104_generator_control(struct upipe *upipe,
     }
 }
 
-/** @internal @This allocates a s337_encaps pipe.
+/** @internal @This allocates a ts_scte104_generator pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
