@@ -145,7 +145,7 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     }
 
     uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0;
-    uint64_t cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0;
+    uint64_t cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0, pts_sys = 0;
     uref_clock_get_pts_orig(uref, &pts_orig);
     uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
     uref_clock_get_duration(uref, &duration);
@@ -394,6 +394,8 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
         uref_clock_set_pts_orig(uref, pts_orig - cr_dts_delay);
         if (ubase_check(uref_clock_get_pts_prog(uref, &pts_prog)))
             uref_clock_set_pts_prog(uref, pts_prog - cr_dts_delay);
+        if (ubase_check(uref_clock_get_pts_sys(uref, &pts_sys)))
+            uref_clock_set_pts_sys(uref, pts_sys - cr_dts_delay);
     }
 
     upipe_ts_scte104_generator_output(upipe, uref, upump_p);
