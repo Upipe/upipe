@@ -227,7 +227,7 @@ static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *
     int size = -1;
     uint8_t *buf;
     ubase_assert(ubuf_block_write(ubuf, 0, &size, &buf));
-    ubase_assert(size >= (int)len);
+    assert(size >= (int)len);
 
     uint8_t *ts = scte104m_get_timestamp(buf);
     uint8_t *op, *data;
