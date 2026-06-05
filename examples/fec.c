@@ -58,8 +58,8 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const char  *input = argv[1];
-    const char *output = argv[2];
+    char *input = argv[1];
+    char *output = argv[2];
     unsigned pt = 33; // MPEG-TS
     if (argc == 4)
         pt = atoi(argv[3]);
