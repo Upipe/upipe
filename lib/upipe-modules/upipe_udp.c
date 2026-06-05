@@ -190,7 +190,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
     if (string[0] == '[') {
         family = AF_INET6;
         node = string + 1;
-        end = strchr(node, ']');
+        end = strchr(string, ']');
         if (end == NULL) {
             upipe_warn_va(upipe, "invalid IPv6 address %s", _string);
             free(string);
@@ -198,7 +198,7 @@ static bool upipe_udp_parse_node_service(struct upipe *upipe,
         }
         *end++ = '\0';
 
-        char *intf = strrchr(node, '%');
+        char *intf = strrchr(string, '%');
         if (intf != NULL) {
             *intf++ = '\0';
             if (if_index != NULL) {
