@@ -352,6 +352,10 @@ tests += upipe_setrap_test
 upipe_setrap_test-src = upipe_setrap_test.c
 upipe_setrap_test-libs = libupipe libupipe_modules
 
+tests += upipe_setscan_test
+upipe_setscan_test-src = upipe_setscan_test.c
+upipe_setscan_test-libs = libupipe libupipe_modules
+
 tests += upipe_skip_test
 upipe_skip_test-src = upipe_skip_test.c
 upipe_skip_test-libs = libupipe libupipe_modules

@@ -62,6 +62,7 @@ libupipe_modules-includes = \
     upipe_setattr.h \
     upipe_setflowdef.h \
     upipe_setrap.h \
+    upipe_setscan.h \
     upipe_sine_wave_source.h \
     upipe_skip.h \
     upipe_stream_switcher.h \
@@ -146,6 +147,7 @@ libupipe_modules-src = \
     upipe_setattr.c \
     upipe_setflowdef.c \
     upipe_setrap.c \
+    upipe_setscan.c \
     upipe_sine_wave_source.c \
     upipe_skip.c \
     upipe_stream_switcher.c \
