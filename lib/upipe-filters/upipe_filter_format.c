@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -703,16 +704,21 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
 
         if (need_deint) {
             upipe_notice(upipe, "need deinterlace");
-            struct upipe *input = upipe_void_alloc(ffmt_mgr->deint_mgr,
-                    uprobe_pfx_alloc(
-                        need_sws ? uprobe_use(&upipe_ffmt->proxy_probe) :
-                                   uprobe_use(&upipe_ffmt->last_inner_probe),
-                        UPROBE_LOG_VERBOSE, "deint"));
-            if (unlikely(input == NULL))
-                upipe_warn_va(upipe, "couldn't allocate deinterlace");
-            else if (!need_sws)
-                upipe_ffmt_store_bin_output(upipe, upipe_use(input));
-            upipe_ffmt_store_bin_input(upipe, input);
+            struct upipe *input = upipe_flow_alloc(
+                ffmt_mgr->deint_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->proxy_probe),
+                                 UPROBE_LOG_VERBOSE, "deint"),
+                flow_def_dup);
+            if (unlikely(input == NULL)) {
+                input = upipe_void_alloc(
+                    ffmt_mgr->deint_mgr,
+                    uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->proxy_probe),
+                                     UPROBE_LOG_VERBOSE, "deint"));
+                if (unlikely(input == NULL))
+                    upipe_warn_va(upipe, "couldn't allocate deinterlace");
+            }
+            if (likely(input))
+                upipe_ffmt_store_bin_input(upipe, input);
         }
 
         if (need_sws) {
