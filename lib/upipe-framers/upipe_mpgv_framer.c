@@ -1082,10 +1082,17 @@ static struct uref *upipe_mpgvf_handle_frame(struct upipe *upipe)
         return NULL;
     }
 
+    if (unlikely(upipe_mpgvf->next_frame_offset == -1)) {
+        /* No picture start code was found (e.g. a trailing sequence or GOP
+         * header flushed at end of stream): this is not a decodable frame. */
+        upipe_mpgvf_consume_uref_stream(upipe, upipe_mpgvf->next_frame_size);
+        return NULL;
+    }
+
     /* The PTS can be updated up to the first octet of the picture start code,
      * so any preceding structure must be extracted before, so that the PTS
      * can be properly promoted and taken into account. */
-    if (upipe_mpgvf->next_frame_offset) {
+    if (upipe_mpgvf->next_frame_offset > 0) {
         uref = upipe_mpgvf_extract_uref_stream(upipe,
                 upipe_mpgvf->next_frame_offset);
         if (unlikely(uref == NULL)) {
@@ -1270,6 +1277,16 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
         if (!upipe_mpgvf_find(upipe, &start, &next))
             break;
 
+        if (unlikely(upipe_mpgvf->next_frame_size < 4)) {
+            /* The start code overlaps a previously flushed boundary (stale
+             * scan context): discard it and rescan from a clean state. */
+            upipe_warn(upipe, "discarding start code spanning a flush");
+            upipe_mpgvf->next_frame_size = 0;
+            upipe_mpgvf->scan_context = UINT32_MAX;
+            upipe_mpgvf_reset(upipe);
+            continue;
+        }
+
         if (unlikely(!upipe_mpgvf->acquired)) {
             bool discard = upipe_mpgvf->next_frame_size > 4;
             if (discard) {
@@ -1392,6 +1409,9 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
     struct uref *uref = upipe_mpgvf_handle_frame(upipe);
     upipe_mpgvf_reset(upipe);
     upipe_mpgvf->next_frame_size = 0;
+    /* The flush consumes up to the end of the stream, so the scan context
+     * must not be carried over to the next input uref. */
+    upipe_mpgvf->scan_context = UINT32_MAX;
 
     if (uref == NULL)
         return;
