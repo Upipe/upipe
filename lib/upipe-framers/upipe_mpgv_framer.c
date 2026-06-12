@@ -1386,7 +1386,7 @@ static void upipe_mpgvf_work(struct upipe *upipe, struct upump **upump_p)
         upipe_mpgvf_output_frame(upipe, uref, upump_p);
     }
 
-    if (!upipe_mpgvf->complete_input || !upipe_mpgvf->next_frame_size)
+    if (!upipe_mpgvf->complete_input || !upipe_mpgvf->next_frame_size || upipe_mpgvf->next_uref == NULL)
        return;
 
     struct uref *uref = upipe_mpgvf_handle_frame(upipe);
@@ -1606,7 +1606,7 @@ static void upipe_mpgvf_free(struct upipe *upipe)
     struct upipe_mpgvf *upipe_mpgvf = upipe_mpgvf_from_upipe(upipe);
 
     /* Output any buffered frame. */
-    if (upipe_mpgvf->next_frame_size) {
+    if (upipe_mpgvf->next_frame_size && upipe_mpgvf->next_uref != NULL) {
         struct uref *uref = upipe_mpgvf_handle_frame(upipe);
         if (uref != NULL)
             upipe_mpgvf_output_frame(upipe, uref, NULL);
