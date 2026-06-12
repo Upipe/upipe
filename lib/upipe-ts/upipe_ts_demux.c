@@ -1767,11 +1767,18 @@ static int upipe_ts_demux_program_pmtd_new_flow_def(
 
     upipe_ts_demux_program_build_flow_def(upipe);
 
-    const uint8_t *desc = NULL;
+    const uint8_t *desc_attr = NULL;
     size_t len = 0;
     bool dvb_cissa = false;
     int sysid = -1;
-    if (ubase_check(uref_ts_flow_get_descriptor(flow_def, &desc, &len, 0))) {
+    if (ubase_check(uref_ts_flow_get_descriptor(flow_def, &desc_attr, &len,
+                                                0))) {
+        /* desc_attr points inside flow_def's udict buffer, which the
+         * uref_ts_flow_set_* calls below may realloc, so parse a copy
+         * (len is bounded by PMT program_info_length) */
+        uint8_t descl_copy[len + 1];
+        memcpy(descl_copy, desc_attr, len);
+        const uint8_t *desc = descl_copy;
         while (len >= DESC_HEADER_SIZE) {
             uint16_t desc_len = desc_get_length(desc);
             if (desc_len + DESC_HEADER_SIZE > len)
@@ -1782,8 +1789,9 @@ static int upipe_ts_demux_program_pmtd_new_flow_def(
             case 0x9:
                 valid = desc09_validate(desc);
                 if (valid) {
-                    uref_ts_flow_set_capid(flow_def, desc09_get_pid(desc));
+                    uint16_t capid = desc09_get_pid(desc);
                     sysid = desc09_get_sysid(desc);
+                    uref_ts_flow_set_capid(flow_def, capid);
                     uref_ts_flow_set_sysid(flow_def, sysid);
                     switch (sysid) {
                         case 0x2610:
