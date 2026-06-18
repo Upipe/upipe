@@ -16,6 +16,7 @@
  *  - SMPTE 2016-3-2007 (VANC mapping of AFD and bar data)
  *  - SMPTE 334-1-2007 (VANC mapping of caption data)
  *  - SMPTE RDD-08 (teletext subtitles for HDTV/OP-47)
+ *  - SMPTE ST 2031:2015 (carriage of DVB/SCTE VBI data in VANC)
  *  - ETSI EN 300 775 V1.2.1 (2003-05) (carriage of VBI in DVB)
  *  - ETSI EN 300 743 V1.3.1 (2003-01) (teletext in DVB)
  */
@@ -53,6 +54,8 @@
 #define MAX_TELX_SIZE (1 + 34 * 46)
 /** from my dice */
 #define MAX_CEA708_SIZE 4096
+/** from my dice */
+#define MAX_ST2031_SIZE 4096
 
 /** @internal @This is the private context of an output of a vanc pipe */
 struct upipe_vanc_output {
@@ -112,6 +115,8 @@ struct upipe_vanc {
     struct upipe_vanc_output op47_subpipe;
     /** cea708 subpipe */
     struct upipe_vanc_output cea708_subpipe;
+    /** st2031 subpipe */
+    struct upipe_vanc_output st2031_subpipe;
 
     /* input data */
     /** input flow_def */
@@ -159,6 +164,18 @@ struct upipe_vanc {
     /** maximum write position */
     uint8_t *cea708_end;
 
+    /* ST2031 data */
+    /** uref to be sent at the end of this packet */
+    struct uref *st2031_uref;
+    /** beginning of the buffer */
+    uint8_t *st2031_begin;
+    /** current write position */
+    uint8_t *st2031_w;
+    /** maximum write position */
+    uint8_t *st2031_end;
+    /** currently signalled octet rate */
+    uint64_t st2031_octetrate;
+
     /** public structure */
     struct upipe upipe;
 };
@@ -178,6 +195,7 @@ UBASE_FROM_TO(upipe_vanc, upipe_vanc_output, afd_subpipe, afd_subpipe)
 UBASE_FROM_TO(upipe_vanc, upipe_vanc_output, scte104_subpipe, scte104_subpipe)
 UBASE_FROM_TO(upipe_vanc, upipe_vanc_output, op47_subpipe, op47_subpipe)
 UBASE_FROM_TO(upipe_vanc, upipe_vanc_output, cea708_subpipe, cea708_subpipe)
+UBASE_FROM_TO(upipe_vanc, upipe_vanc_output, st2031_subpipe, st2031_subpipe)
 
 /** @This is a table to reverse bits for teletext.
  * http://graphics.stanford.edu/~seander/bithacks.html#BitReverseTable */
@@ -267,6 +285,13 @@ static void upipe_vanc_output_build_flow_def(struct upipe *upipe)
 
         upipe_vanc_output_require_ubuf_mgr(upipe, flow_def);
 
+    } else if (upipe_vanc_output == upipe_vanc_to_st2031_subpipe(upipe_vanc)) {
+        UBASE_ERROR(upipe, uref_flow_set_def(flow_def, "block.dvb_teletext.pic.sub."))
+        if (upipe_vanc->st2031_octetrate)
+            UBASE_ERROR(upipe, uref_block_flow_set_octetrate(flow_def,
+                        upipe_vanc->st2031_octetrate))
+        upipe_vanc_output_require_ubuf_mgr(upipe, flow_def);
+
     } else {
         UBASE_ERROR(upipe, uref_flow_set_def(flow_def, "block.cea708.pic.sub."))
         upipe_vanc_output_require_ubuf_mgr(upipe, flow_def);
@@ -345,11 +370,13 @@ static struct upipe *_upipe_vanc_alloc(struct upipe_mgr *mgr,
     struct uprobe *uprobe_scte104 = va_arg(args, struct uprobe *);
     struct uprobe *uprobe_op47 = va_arg(args, struct uprobe *);
     struct uprobe *uprobe_cea708 = va_arg(args, struct uprobe *);
+    struct uprobe *uprobe_st2031 = va_arg(args, struct uprobe *);
 
     struct upipe_vanc *upipe_vanc = malloc(sizeof(struct upipe_vanc));
     if (unlikely(upipe_vanc == NULL)) {
         uprobe_release(uprobe_op47);
         uprobe_release(uprobe_cea708);
+        uprobe_release(uprobe_st2031);
         return NULL;
     }
 
@@ -367,6 +394,8 @@ static struct upipe *_upipe_vanc_alloc(struct upipe_mgr *mgr,
     upipe_vanc->telx_uref = NULL;
     upipe_vanc->telx_octetrate = 0;
     upipe_vanc->cea708_uref = NULL;
+    upipe_vanc->st2031_uref = NULL;
+    upipe_vanc->st2031_octetrate = 0;
 
     upipe_vanc_output_init(upipe_vanc_output_to_upipe(
                                 upipe_vanc_to_afd_subpipe(upipe_vanc)),
@@ -380,6 +409,9 @@ static struct upipe *_upipe_vanc_alloc(struct upipe_mgr *mgr,
     upipe_vanc_output_init(upipe_vanc_output_to_upipe(
                                 upipe_vanc_to_cea708_subpipe(upipe_vanc)),
                               &upipe_vanc->sub_mgr, uprobe_cea708);
+    upipe_vanc_output_init(upipe_vanc_output_to_upipe(
+                                upipe_vanc_to_st2031_subpipe(upipe_vanc)),
+                              &upipe_vanc->sub_mgr, uprobe_st2031);
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -680,6 +712,139 @@ static void upipe_vanc_process_op47sdp(struct upipe *upipe, struct uref *uref,
     }
 }
 
+/** @internal @This allocates an uref for st2031 data.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref incoming uref structure
+ */
+static void upipe_vanc_alloc_st2031(struct upipe *upipe, struct uref *uref)
+{
+    struct upipe_vanc *upipe_vanc = upipe_vanc_from_upipe(upipe);
+    struct upipe_vanc_output *upipe_vanc_st2031 =
+        upipe_vanc_to_st2031_subpipe(upipe_vanc);
+    struct ubuf *ubuf = ubuf_block_alloc(upipe_vanc_st2031->ubuf_mgr,
+                                         MAX_ST2031_SIZE);
+    if (unlikely(ubuf == NULL)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
+    upipe_vanc->st2031_uref = uref_fork(uref, ubuf);
+    if (unlikely(upipe_vanc->st2031_uref == NULL))
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+
+    int size = -1;
+    uint8_t *w;
+    if (unlikely(!ubase_check(uref_block_write(upipe_vanc->st2031_uref, 0,
+                                               &size, &w)))) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        uref_free(upipe_vanc->st2031_uref);
+        upipe_vanc->st2031_uref = NULL;
+        return;
+    }
+
+    w[0] = DVBVBI_DATA_IDENTIFIER;
+    upipe_vanc->st2031_begin = w;
+    upipe_vanc->st2031_w = w + 1;
+    upipe_vanc->st2031_end = w + size;
+}
+
+/** @internal @This completes an uref for st2031 data, and outputs it.
+ *
+ * @param upipe description structure of the pipe
+ * @param upump_p reference to upump structure
+ */
+static void upipe_vanc_output_st2031(struct upipe *upipe,
+                                     struct upump **upump_p)
+{
+    struct upipe_vanc *upipe_vanc = upipe_vanc_from_upipe(upipe);
+    struct upipe_vanc_output *upipe_vanc_st2031 =
+        upipe_vanc_to_st2031_subpipe(upipe_vanc);
+
+    uref_block_unmap(upipe_vanc->st2031_uref, 0);
+    uref_block_resize(upipe_vanc->st2031_uref, 0,
+                      upipe_vanc->st2031_w - upipe_vanc->st2031_begin);
+
+    /* Adjust flow def */
+    uint64_t octetrate =
+        ((upipe_vanc->st2031_w - upipe_vanc->st2031_begin) * upipe_vanc->fps.num +
+         upipe_vanc->fps.den - 1) / upipe_vanc->fps.den;
+    if (upipe_vanc->st2031_octetrate != octetrate) {
+        upipe_vanc->st2031_octetrate = octetrate;
+        upipe_vanc_output_build_flow_def(
+                upipe_vanc_output_to_upipe(upipe_vanc_st2031));
+    }
+
+    uref_block_set_start(upipe_vanc->st2031_uref);
+    uref_block_set_end(upipe_vanc->st2031_uref);
+    uref_clock_delete_duration(upipe_vanc->st2031_uref);
+    upipe_vanc_output_output(upipe_vanc_output_to_upipe(upipe_vanc_st2031),
+                             upipe_vanc->st2031_uref, upump_p);
+    upipe_vanc->st2031_uref = NULL;
+}
+
+/** @internal @This processes a SMPTE ST 2031 structure.
+ *
+ * Each VANC packet carries one VBI data_field() with a three-byte header:
+ * data_identifier, data_unit_id, data_unit_length. The data_field() bytes
+ * are appended verbatim into a DVB VBI block (ST 2031 s5, s6).
+ *
+ * @param upipe description structure of the pipe
+ * @param uref uref structure
+ * @param r pointer to UDW array (10-bit words, low 8 bits are data)
+ * @param size number of UDW words (equals DC from the ANC header)
+ */
+static void upipe_vanc_process_st2031(struct upipe *upipe, struct uref *uref,
+                                      const uint16_t *r, size_t size)
+{
+    struct upipe_vanc *upipe_vanc = upipe_vanc_from_upipe(upipe);
+
+    if (unlikely(size < 3)) {
+        upipe_warn_va(upipe, "ST2031 data too small (%zu)", size);
+        return;
+    }
+
+    uint8_t data_identifier  = r[0] & 0xff;
+    uint8_t data_unit_id     = r[1] & 0xff;
+    uint8_t data_unit_length = r[2] & 0xff;
+
+    /* data_identifier shall be 0x10-0x1F or 0x99 (ST 2031 s6) */
+    if (unlikely((data_identifier < 0x10 || data_identifier > 0x1f) &&
+                 data_identifier != 0x99)) {
+        upipe_warn_va(upipe, "invalid ST2031 data_identifier 0x%"PRIx8,
+                      data_identifier);
+        return;
+    }
+
+    if (unlikely(size < (size_t)(data_unit_length + 3))) {
+        upipe_warn_va(upipe, "ST2031 data_unit_length %"PRIu8" exceeds DC",
+                      data_unit_length);
+        return;
+    }
+
+    /* Skip MPEG stuffing (ST 2031 s5, Table 2) */
+    if (data_unit_id == DVBVBI_ID_STUFFING)
+        return;
+
+    if (unlikely(upipe_vanc->st2031_uref == NULL))
+        upipe_vanc_alloc_st2031(upipe, uref);
+    if (unlikely(upipe_vanc->st2031_uref == NULL))
+        return;
+
+    size_t unit_size = DVBVBI_UNIT_HEADER_SIZE + data_unit_length;
+    if (unlikely(unit_size >
+                 (size_t)(upipe_vanc->st2031_end - upipe_vanc->st2031_w))) {
+        upipe_warn(upipe, "too much ST2031 data");
+        return;
+    }
+
+    upipe_vanc->st2031_w[0] = data_unit_id;
+    upipe_vanc->st2031_w[1] = data_unit_length;
+    for (int j = 0; j < data_unit_length; j++)
+        upipe_vanc->st2031_w[2 + j] = r[3 + j] & 0xff;
+    upipe_vanc->st2031_w += unit_size;
+}
+
 /** @internal @This allocates an uref for cea708 data.
  *
  * @param upipe description structure of the pipe
@@ -807,6 +972,8 @@ static void upipe_vanc_process_line(struct upipe *upipe, struct uref *uref,
             upipe_vanc_process_op47sdp(upipe, uref, r, dc);
         else if (did == S291_CEA708_DID && sdid == S291_CEA708_SDID)
             upipe_vanc_process_cea708(upipe, uref, r, dc);
+        else if (did == S291_ST2031_DID && sdid == S291_ST2031_SDID)
+            upipe_vanc_process_st2031(upipe, uref, r, dc);
         else
             upipe_verbose_va(upipe, "unhandled ancillary 0x%"PRIx8"/0x%"PRIx8,
                              did, sdid);
@@ -835,6 +1002,8 @@ static bool upipe_vanc_handle(struct upipe *upipe, struct uref *uref,
         upipe_vanc_to_op47_subpipe(upipe_vanc);
     struct upipe_vanc_output *upipe_vanc_cea708 =
         upipe_vanc_to_cea708_subpipe(upipe_vanc);
+    struct upipe_vanc_output *upipe_vanc_st2031 =
+        upipe_vanc_to_st2031_subpipe(upipe_vanc);
     const char *def;
     if (unlikely(ubase_check(uref_flow_get_def(uref, &def)))) {
         uref_free(upipe_vanc->flow_def);
@@ -850,12 +1019,15 @@ static bool upipe_vanc_handle(struct upipe *upipe, struct uref *uref,
                 upipe_vanc_output_to_upipe(upipe_vanc_op47));
         upipe_vanc_output_build_flow_def(
                 upipe_vanc_output_to_upipe(upipe_vanc_cea708));
+        upipe_vanc_output_build_flow_def(
+                upipe_vanc_output_to_upipe(upipe_vanc_st2031));
         return true;
     }
 
     if (upipe_vanc_scte104->ubuf_mgr == NULL ||
         upipe_vanc_op47->ubuf_mgr == NULL ||
-        upipe_vanc_cea708->ubuf_mgr == NULL)
+        upipe_vanc_cea708->ubuf_mgr == NULL ||
+        upipe_vanc_st2031->ubuf_mgr == NULL)
         return false;
 
     /* Now process frames. */
@@ -885,6 +1057,8 @@ static bool upipe_vanc_handle(struct upipe *upipe, struct uref *uref,
         upipe_vanc_output_telx(upipe, upump_p);
     if (upipe_vanc->cea708_uref != NULL)
         upipe_vanc_output_cea708(upipe, upump_p);
+    if (upipe_vanc->st2031_uref != NULL)
+        upipe_vanc_output_st2031(upipe, upump_p);
     return true;
 }
 
@@ -985,6 +1159,14 @@ static int upipe_vanc_control(struct upipe *upipe, int command, va_list args)
                         upipe_vanc_from_upipe(upipe)));
             return UBASE_ERR_NONE;
         }
+        case UPIPE_VANC_GET_ST2031_SUB: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_VANC_SIGNATURE)
+            struct upipe **upipe_p = va_arg(args, struct upipe **);
+            *upipe_p = upipe_vanc_output_to_upipe(
+                    upipe_vanc_to_st2031_subpipe(
+                        upipe_vanc_from_upipe(upipe)));
+            return UBASE_ERR_NONE;
+        }
         default:
             return UBASE_ERR_UNHANDLED;
     }
@@ -1006,6 +1188,8 @@ static void upipe_vanc_free(struct upipe *upipe)
                 upipe_vanc_to_op47_subpipe(upipe_vanc)));
     upipe_vanc_output_clean(upipe_vanc_output_to_upipe(
                 upipe_vanc_to_cea708_subpipe(upipe_vanc)));
+    upipe_vanc_output_clean(upipe_vanc_output_to_upipe(
+                upipe_vanc_to_st2031_subpipe(upipe_vanc)));
 
     uref_free(upipe_vanc->flow_def);
 

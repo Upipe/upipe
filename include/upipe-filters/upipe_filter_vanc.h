@@ -36,7 +36,9 @@ enum upipe_vanc_command {
     /** returns the op47 subpipe (struct upipe **) */
     UPIPE_VANC_GET_OP47_SUB,
     /** returns the cea708 subpipe (struct upipe **) */
-    UPIPE_VANC_GET_CEA708_SUB
+    UPIPE_VANC_GET_CEA708_SUB,
+    /** returns the st2031 subpipe (struct upipe **) */
+    UPIPE_VANC_GET_ST2031_SUB
 };
 
 /** @This returns the management structure for all vanc pipes.
@@ -101,10 +103,24 @@ static inline int upipe_vanc_get_cea708_sub(struct upipe *upipe,
                          UPIPE_VANC_SIGNATURE, upipe_p);
 }
 
+/** @This returns the st2031 subpipe. The refcount is not incremented so you
+ * have to use it if you want to keep the pointer.
+ *
+ * @param upipe description structure of the super pipe
+ * @param upipe_p filled in with a pointer to the st2031 subpipe
+ * @return an error code
+ */
+static inline int upipe_vanc_get_st2031_sub(struct upipe *upipe,
+                                            struct upipe **upipe_p)
+{
+    return upipe_control(upipe, UPIPE_VANC_GET_ST2031_SUB,
+                         UPIPE_VANC_SIGNATURE, upipe_p);
+}
+
 /** @hidden */
-#define ARGS_DECL , struct uprobe *uprobe_afd, struct uprobe *uprobe_scte104, struct uprobe *uprobe_op47, struct uprobe *uprobe_cea708
+#define ARGS_DECL , struct uprobe *uprobe_afd, struct uprobe *uprobe_scte104, struct uprobe *uprobe_op47, struct uprobe *uprobe_cea708, struct uprobe *uprobe_st2031
 /** @hidden */
-#define ARGS , uprobe_afd, uprobe_scte104, uprobe_op47, uprobe_cea708
+#define ARGS , uprobe_afd, uprobe_scte104, uprobe_op47, uprobe_cea708, uprobe_st2031
 UPIPE_HELPER_ALLOC(vanc, UPIPE_VANC_SIGNATURE)
 #undef ARGS
 #undef ARGS_DECL
