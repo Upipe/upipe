@@ -1509,6 +1509,8 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
             goto end;
         }
 
+        upipe_avfilt_sub->latency = 0;
+
         const char *filter = NULL;
         switch (type) {
             case AVMEDIA_TYPE_VIDEO:
