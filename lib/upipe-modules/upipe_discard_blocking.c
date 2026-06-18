@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2019 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -48,6 +49,8 @@ struct upipe_disblo {
     unsigned max_urefs;
     /** blockers */
     struct uchain blockers;
+    /** next buffer should be marked for discontinuity? */
+    bool discontinuity;
 };
 
 bool upipe_disblo_handle(struct upipe *upipe, struct uref *uref,
@@ -87,6 +90,7 @@ static struct upipe *upipe_disblo_alloc(struct upipe_mgr *mgr,
 
     struct upipe_disblo *upipe_disblo = upipe_disblo_from_upipe(upipe);
     upipe_disblo->max_urefs = UPIPE_DISBLO_MAX_UREFS_DEFAULT;
+    upipe_disblo->discontinuity = false;
 
     upipe_throw_ready(upipe);
 
@@ -124,8 +128,13 @@ static void upipe_disblo_input(struct upipe *upipe,
     if (upipe_disblo->nb_urefs >= upipe_disblo->max_urefs) {
         upipe_warn(upipe, "dropping uref");
         uref_free(uref);
+        upipe_disblo->discontinuity = true;
     }
     else {
+        if (upipe_disblo->discontinuity) {
+            uref_flow_set_discontinuity(uref);
+            upipe_disblo->discontinuity = false;
+        }
         upipe_disblo_hold_input(upipe, uref);
         if (upipe_disblo->upump)
             upump_start(upipe_disblo->upump);
