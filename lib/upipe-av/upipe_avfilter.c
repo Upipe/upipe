@@ -1142,6 +1142,13 @@ static void upipe_avfilt_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))) &&
+        upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
+        upipe_warn(upipe, "got discontinuity");
+        upipe_avfilt->last_input_pts_prog = UINT64_MAX;
+        upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
+    }
+
     if (unlikely(!upipe_avfilt->configured)) {
         AVFrame *frame = av_frame_alloc();
         assert(frame);
@@ -2026,6 +2033,11 @@ static void upipe_avfilt_input(struct upipe *upipe,
         return;
     }
 
+    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))) &&
+        upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
+        upipe_warn(upipe, "got discontinuity");
+        upipe_avfilt_clean_filters(upipe);
+    }
     uref_free(upipe_avfilt->uref);
     upipe_avfilt->last_input_pts_prog = UINT64_MAX;
     uref_clock_get_pts_prog(uref, &upipe_avfilt->last_input_pts_prog);
