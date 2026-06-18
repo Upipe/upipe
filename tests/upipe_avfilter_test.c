@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2025 EasyTools
+ * Copyright (C) 2025-2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -12,9 +12,12 @@
 
 #undef NDEBUG
 
+#include "upipe/uclock.h"
 #include "upipe/umem_alloc.h"
 #include "upipe/udict_inline.h"
 #include "upipe/uref_std.h"
+#include "upipe/uref_dump.h"
+#include "upipe/uref_clock.h"
 #include "upipe/uref_pic.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_pic_flow_formats.h"
@@ -31,7 +34,9 @@
 
 #include <assert.h>
 
-static const unsigned count = 32;
+// count should not be divisible by 4 to correctly test reconfiguration on
+// discontinuity
+static const unsigned count = 22;
 static unsigned count_output = 0;
 
 static int catch_probe_uref(struct uprobe *uprobe, struct upipe *upipe,
@@ -43,6 +48,12 @@ static int catch_probe_uref(struct uprobe *uprobe, struct upipe *upipe,
 
     if (uprobe_probe_uref_check(event, args, &uref, &upump_p, &drop)) {
         count_output++;
+        return UBASE_ERR_NONE;
+    } else if (event == UPROBE_NEW_FLOW_DEF) {
+        struct uref *flow_def = va_arg(args, struct uref *);
+        uint64_t latency = 0;
+        uref_clock_get_latency(flow_def, &latency);
+        assert(latency == 120 * UCLOCK_FREQ / 1000);
         return UBASE_ERR_NONE;
     }
     return uprobe_throw_next(uprobe, upipe, event, args);
@@ -57,6 +68,8 @@ static void test_avfilt(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
     assert(upipe_null_mgr);
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(upipe_probe_uref_mgr);
+
+    count_output = 0;
 
     struct upipe *upipe_avfilt = upipe_void_alloc(
         upipe_avfilt_mgr,
@@ -74,7 +87,7 @@ static void test_avfilt(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
         uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE,  "null"));
     assert(upipe_null);
 
-    upipe_avfilt_set_filters_desc(upipe_avfilt, "copy");
+    upipe_avfilt_set_filters_desc(upipe_avfilt, "shuffleframes=3 2 1 0");
 
     {
         /* set pic flow def */
@@ -86,16 +99,35 @@ static void test_avfilt(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
         uref_free(flow_def);
     }
 
+    uint64_t pts = 0;
     for (unsigned i = 0; i < count; i++) {
         /* valid input */
         struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, 32, 32);
         assert(uref);
+        uref_clock_set_pts_prog(uref, pts);
+        uref_clock_set_pts_sys(uref, pts);
         upipe_input(upipe_avfilt, uref, NULL);
+        pts += UCLOCK_FREQ / 25;
+    }
+
+    uprobe_notice(uprobe, NULL, "discontinuity");
+
+    pts += UCLOCK_FREQ;
+    for (unsigned i = 0; i < count; i++) {
+        /* valid input */
+        struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, 32, 32);
+        assert(uref);
+        if (!i)
+            uref_flow_set_discontinuity(uref);
+        uref_clock_set_pts_prog(uref, pts);
+        uref_clock_set_pts_sys(uref, pts);
+        upipe_input(upipe_avfilt, uref, NULL);
+        pts += UCLOCK_FREQ / 25;
     }
 
     upump_mgr_run(upump_mgr, NULL);
 
-    assert(count_output == count);
+    assert(count_output == 2 * (count / 4) * 4);
 
     upipe_release(upipe_null);
     upipe_release(upipe_probe_uref);
@@ -114,6 +146,8 @@ static void test_avfilt_sub(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
     assert(upipe_null_mgr);
     struct upipe_mgr *upipe_probe_uref_mgr = upipe_probe_uref_mgr_alloc();
     assert(upipe_probe_uref_mgr);
+
+    count_output = 0;
 
     struct upipe *upipe_avfilt = upipe_void_alloc(
         upipe_avfilt_mgr,
@@ -149,7 +183,7 @@ static void test_avfilt_sub(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
         uprobe_pfx_alloc(uprobe_use(uprobe), UPROBE_LOG_VERBOSE,  "null"));
     assert(upipe_null);
 
-    upipe_avfilt_set_filters_desc(upipe_avfilt, "[in] copy [out]");
+    upipe_avfilt_set_filters_desc(upipe_avfilt, "[in] shuffleframes=3 2 1 0 [out]");
 
     {
         /* set pic flow def */
@@ -157,20 +191,39 @@ static void test_avfilt_sub(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
         assert(flow_def);
         ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
         ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
-        upipe_set_flow_def(upipe_avfilt, flow_def);
+        upipe_set_flow_def(upipe_avfilt_in, flow_def);
         uref_free(flow_def);
     }
 
+    uint64_t pts = UCLOCK_FREQ;
     for (unsigned i = 0; i < count; i++) {
         /* valid input */
         struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, 32, 32);
         assert(uref);
-        upipe_input(upipe_avfilt, uref, NULL);
+        uref_clock_set_pts_prog(uref, pts);
+        uref_clock_set_pts_sys(uref, pts);
+        upipe_input(upipe_avfilt_in, uref, NULL);
+        pts += UCLOCK_FREQ / 25;
+    }
+
+    uprobe_notice(uprobe, NULL, "discontinuity");
+
+    pts += UCLOCK_FREQ;
+    for (unsigned i = 0; i < count; i++) {
+        /* valid input */
+        struct uref *uref = uref_pic_alloc(uref_mgr, pic_mgr, 32, 32);
+        assert(uref);
+        if (!i)
+            uref_flow_set_discontinuity(uref);
+        uref_clock_set_pts_prog(uref, pts);
+        uref_clock_set_pts_sys(uref, pts);
+        upipe_input(upipe_avfilt_in, uref, NULL);
+        pts += UCLOCK_FREQ / 25;
     }
 
     upump_mgr_run(upump_mgr, NULL);
 
-    assert(count_output == count);
+    assert(count_output == 2 * (count / 4) * 4);
 
     upipe_release(upipe_null);
     upipe_release(upipe_probe_uref);
