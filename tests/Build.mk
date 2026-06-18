@@ -571,6 +571,10 @@ tests += uprobe_dejitter_test
 uprobe_dejitter_test-src = uprobe_dejitter_test.c
 uprobe_dejitter_test-libs = libupipe
 
+tests += uprobe_dup_test
+uprobe_dup_test-src = uprobe_dup_test.c
+uprobe_dup_test-libs = libupipe
+
 tests += uprobe_prefix_test.sh
 uprobe_prefix_test.sh-deps = uprobe_prefix_test
 

@@ -70,6 +70,7 @@ libupipe-includes = \
     upool.h \
     uprobe.h \
     uprobe_dejitter.h \
+    uprobe_dup.h \
     uprobe_helper.h \
     uprobe_helper_alloc.h \
     uprobe_helper_uprobe.h \
@@ -140,6 +141,7 @@ libupipe-src = \
     upipe_dump.c \
     uprobe.c \
     uprobe_dejitter.c \
+    uprobe_dup.c \
     uprobe_loglevel.c \
     uprobe_prefix.c \
     uprobe_select_flows.c \
