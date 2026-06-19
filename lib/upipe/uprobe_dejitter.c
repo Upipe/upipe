@@ -130,10 +130,10 @@ static int uprobe_dejitter_clock_ref(struct uprobe *uprobe, struct upipe *upipe,
     }
 
     /* phase-locked loop */
+    int64_t prog_delta = (int64_t)cr_prog - (int64_t)uprobe_dejitter->last_cr_prog;
     uint64_t real_cr_sys = uprobe_dejitter->last_cr_sys +
-                           (cr_prog - uprobe_dejitter->last_cr_prog) *
-                           uprobe_dejitter->drift_rate.num /
-                           uprobe_dejitter->drift_rate.den;
+                           (uint64_t)(prog_delta * (int64_t)uprobe_dejitter->drift_rate.num /
+                                      (int64_t)uprobe_dejitter->drift_rate.den);
     int64_t real_offset = (int64_t)real_cr_sys - (int64_t)cr_prog;
     int64_t error_offset = real_offset - wanted_offset;
 
