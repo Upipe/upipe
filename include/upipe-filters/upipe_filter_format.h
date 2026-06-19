@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -43,6 +44,7 @@ enum upipe_ffmt_mgr_command {
     UPIPE_FFMT_MGR_GET_SET_MGR(sws, SWS)
     UPIPE_FFMT_MGR_GET_SET_MGR(swr, SWR)
     UPIPE_FFMT_MGR_GET_SET_MGR(deint, DEINT)
+    UPIPE_FFMT_MGR_GET_SET_MGR(interlace, INTERLACE)
     UPIPE_FFMT_MGR_GET_SET_MGR(avfilter, AVFILTER)
 #undef UPIPE_FFMT_MGR_GET_SET_MGR
 };
@@ -80,6 +82,7 @@ static inline int                                                           \
 UPIPE_FFMT_MGR_GET_SET_MGR2(sws, SWS)
 UPIPE_FFMT_MGR_GET_SET_MGR2(swr, SWR)
 UPIPE_FFMT_MGR_GET_SET_MGR2(deint, DEINT)
+UPIPE_FFMT_MGR_GET_SET_MGR2(interlace, INTERLACE)
 UPIPE_FFMT_MGR_GET_SET_MGR2(avfilter, AVFILTER)
 #undef UPIPE_FFMT_MGR_GET_SET_MGR2
 

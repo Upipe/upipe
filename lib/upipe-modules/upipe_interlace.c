@@ -18,7 +18,7 @@
 #include "upipe/upipe_helper_ubuf_mgr.h"
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_urefcount.h"
-#include "upipe/upipe_helper_void.h"
+#include "upipe/upipe_helper_flow.h"
 #include "upipe/uref.h"
 #include "upipe/uref_clock.h"
 #include "upipe/uref_flow.h"
@@ -85,7 +85,7 @@ struct upipe_interlace {
 
 UPIPE_HELPER_UPIPE(upipe_interlace, upipe, UPIPE_INTERLACE_SIGNATURE)
 UPIPE_HELPER_UREFCOUNT(upipe_interlace, urefcount, upipe_interlace_free)
-UPIPE_HELPER_VOID(upipe_interlace)
+UPIPE_HELPER_FLOW(upipe_interlace, NULL)
 UPIPE_HELPER_OUTPUT(upipe_interlace, output, flow_def, output_state,
                     request_list)
 UPIPE_HELPER_UBUF_MGR(upipe_interlace, ubuf_mgr, flow_format, ubuf_mgr_request,
@@ -107,8 +107,9 @@ static struct upipe *upipe_interlace_alloc(struct upipe_mgr *mgr,
                                            struct uprobe *uprobe,
                                            uint32_t signature, va_list args)
 {
+    struct uref *flow_def = NULL;
     struct upipe *upipe =
-        upipe_interlace_alloc_void(mgr, uprobe, signature, args);
+        upipe_interlace_alloc_flow(mgr, uprobe, signature, args, &flow_def);
     if (unlikely(upipe == NULL))
         return NULL;
 
@@ -125,6 +126,17 @@ static struct upipe *upipe_interlace_alloc(struct upipe_mgr *mgr,
     upipe_interlace->lowpass = false;
 
     upipe_throw_ready(upipe);
+
+    if (likely(flow_def)) {
+        if (unlikely(!ubase_check(
+                uref_flow_match_def(flow_def, UREF_PIC_FLOW_DEF)))) {
+            uref_free(flow_def);
+            upipe_release(upipe);
+            return NULL;
+        }
+        uref_pic_get_tff(flow_def, &upipe_interlace->tff);
+    }
+    uref_free(flow_def);
 
     return upipe;
 }
@@ -145,7 +157,7 @@ static void upipe_interlace_free(struct upipe *upipe)
     upipe_interlace_clean_ubuf_mgr(upipe);
     upipe_interlace_clean_output(upipe);
     upipe_interlace_clean_urefcount(upipe);
-    upipe_interlace_free_void(upipe);
+    upipe_interlace_free_flow(upipe);
 }
 
 /** @internal @This copies a line in the output buffer.

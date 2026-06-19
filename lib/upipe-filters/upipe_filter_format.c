@@ -32,6 +32,7 @@
 #include "upipe/upipe_helper_bin_output.h"
 #include "upipe/upipe_helper_input.h"
 #include "upipe-modules/upipe_setflowdef.h"
+#include "upipe-modules/upipe_interlace.h"
 #include "upipe-filters/upipe_filter_format.h"
 #include "upipe-filters/upipe_filter_blend.h"
 #include "upipe-swscale/upipe_sws.h"
@@ -51,6 +52,8 @@ struct upipe_ffmt_mgr {
     struct upipe_mgr *sws_mgr;
     /** pointer to swresample manager */
     struct upipe_mgr *swr_mgr;
+    /** pointer to interlace manager */
+    struct upipe_mgr *interlace_mgr;
     /** pointer to deinterlace manager */
     struct upipe_mgr *deint_mgr;
     /** pointer to avfilter manager */
@@ -307,6 +310,24 @@ static void upipe_ffmt_input(struct upipe *upipe, struct uref *uref,
     }
 }
 
+/** @internal @This pushes a new pipe in the inner pipeline.
+ *
+ * @param upipe description structure of the pipe
+ * @param last_inner filled with last inner pipe in the pipeline
+ * @param input new pipe to push
+ */
+static void upipe_ffmt_push(struct upipe *upipe, struct upipe **last_inner,
+                            struct upipe *input)
+{
+    if (!*last_inner)
+        upipe_ffmt_store_bin_input(upipe, upipe_use(input));
+    else {
+        upipe_set_output(*last_inner, input);
+        upipe_release(*last_inner);
+    }
+    *last_inner = input;
+}
+
 /** @internal @This receives the result of a flow format request.
  *
  * @param upipe description structure of the pipe
@@ -383,6 +404,20 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool need_deint = ffmt_mgr->deint_mgr &&
             !uref_pic_check_progressive(flow_def) &&
             uref_pic_check_progressive(flow_def_dup);
+        bool need_interlace = ffmt_mgr->interlace_mgr &&
+            uref_pic_check_progressive(flow_def) &&
+            !uref_pic_check_progressive(flow_def_dup);
+        if (ffmt_mgr->deint_mgr && ffmt_mgr->interlace_mgr &&
+            !uref_pic_check_progressive(flow_def) &&
+            !uref_pic_check_progressive(flow_def_dup) &&
+            ubase_check(uref_pic_get_tff(flow_def_dup, NULL)) &&
+            ((uref_pic_check_tff(flow_def) &&
+              !uref_pic_check_tff(flow_def_dup)) ||
+             (!uref_pic_check_tff(flow_def) &&
+              uref_pic_check_tff(flow_def_dup)))) {
+            need_deint = true;
+            need_interlace = true;
+        }
         bool need_scale =
             uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
             uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
@@ -411,6 +446,8 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
         bool need_avfilter = ffmt_mgr->avfilter_mgr && (hw || need_tonemap) &&
             (need_deint || need_scale || need_format || need_hw_transfer ||
              need_derive || need_range || need_tonemap);
+
+        struct upipe *last_inner = NULL;
 
         if (need_avfilter) {
             const char *range_in =
@@ -688,8 +725,7 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                             avfilt, filters)))
                     upipe_err(upipe, "cannot set filters desc");
 
-                upipe_ffmt_store_bin_output(upipe, avfilt);
-                upipe_ffmt_store_bin_input(upipe, upipe_use(avfilt));
+                upipe_ffmt_push(upipe, &last_inner, avfilt);
             }
 
             need_deint = false;
@@ -698,11 +734,13 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
 
         if (need_deint) {
             upipe_notice(upipe, "need deinterlace");
+            struct uref *flow_def_deint = uref_dup(flow_def_dup);
+            uref_pic_set_progressive(flow_def_deint, true);
             struct upipe *input = upipe_flow_alloc(
                 ffmt_mgr->deint_mgr,
                 uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->proxy_probe),
                                  UPROBE_LOG_VERBOSE, "deint"),
-                flow_def_dup);
+                flow_def_deint);
             if (unlikely(input == NULL)) {
                 input = upipe_void_alloc(
                     ffmt_mgr->deint_mgr,
@@ -712,7 +750,21 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
                     upipe_warn_va(upipe, "couldn't allocate deinterlace");
             }
             if (likely(input))
-                upipe_ffmt_store_bin_input(upipe, input);
+                upipe_ffmt_push(upipe, &last_inner, input);
+            uref_free(flow_def_deint);
+        }
+
+        if (need_interlace) {
+            upipe_notice(upipe, "need interlace");
+            struct upipe *input = upipe_flow_alloc(
+                ffmt_mgr->interlace_mgr,
+                uprobe_pfx_alloc(uprobe_use(&upipe_ffmt->proxy_probe),
+                                 UPROBE_LOG_VERBOSE, "interlace"),
+                flow_def_dup);
+            if (unlikely(input == NULL))
+                upipe_warn_va(upipe, "couldn't allocate interlace");
+            else
+                upipe_ffmt_push(upipe, &last_inner, input);
         }
 
         if (need_sws) {
@@ -753,13 +805,12 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             if (unlikely(sws == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate swscale");
                 udict_dump(flow_def_dup->udict, upipe->uprobe);
-            } else if (need_deint)
-                upipe_set_output(upipe_ffmt->first_inner, sws);
-            upipe_ffmt_store_bin_output(upipe, sws);
-            if (!need_deint)
-                upipe_ffmt_store_bin_input(upipe, upipe_use(sws));
-            if (sws && upipe_ffmt->sws_flags)
-                upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
+            } else {
+                if (upipe_ffmt->sws_flags)
+                    upipe_sws_set_flags(sws, upipe_ffmt->sws_flags);
+
+                upipe_ffmt_push(upipe, &last_inner, sws);
+            }
         } else {
             struct upipe_mgr *setflowdef_mgr = upipe_setflowdef_mgr_alloc();
             struct upipe *setflowdef = upipe_void_alloc(setflowdef_mgr,
@@ -768,13 +819,12 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_mgr_release(setflowdef_mgr);
             if (unlikely(setflowdef == NULL)) {
                 upipe_warn_va(upipe, "couldn't allocate setflowdef");
-            } else if (need_deint || need_avfilter)
-                upipe_set_output(upipe_ffmt->first_inner, setflowdef);
-            upipe_ffmt_store_bin_output(upipe, setflowdef);
-            if (!need_deint && !need_avfilter)
-                upipe_ffmt_store_bin_input(upipe, upipe_use(setflowdef));
-            upipe_setflowdef_set_dict(setflowdef, flow_def_dup);
+            } else {
+                upipe_setflowdef_set_dict(setflowdef, flow_def_dup);
+                upipe_ffmt_push(upipe, &last_inner, setflowdef);
+            }
         }
+        upipe_ffmt_store_bin_output(upipe, last_inner);
 
     } else { /* sound. */
         if (!uref_sound_flow_compare_format(flow_def, flow_def_dup) ||
@@ -1130,6 +1180,7 @@ static void upipe_ffmt_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ffmt_mgr->swr_mgr);
     upipe_mgr_release(ffmt_mgr->sws_mgr);
     upipe_mgr_release(ffmt_mgr->deint_mgr);
+    upipe_mgr_release(ffmt_mgr->interlace_mgr);
     upipe_mgr_release(ffmt_mgr->avfilter_mgr);
 
     urefcount_clean(urefcount);
@@ -1169,6 +1220,7 @@ static int upipe_ffmt_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(sws, SWS)
         GET_SET_MGR(swr, SWR)
         GET_SET_MGR(deint, DEINT)
+        GET_SET_MGR(interlace, INTERLACE)
         GET_SET_MGR(avfilter, AVFILTER)
 #undef GET_SET_MGR
 
@@ -1191,6 +1243,7 @@ struct upipe_mgr *upipe_ffmt_mgr_alloc(void)
     ffmt_mgr->sws_mgr = NULL;
     ffmt_mgr->swr_mgr = NULL;
     ffmt_mgr->deint_mgr = upipe_filter_blend_mgr_alloc();
+    ffmt_mgr->interlace_mgr = upipe_interlace_mgr_alloc();
     ffmt_mgr->avfilter_mgr = NULL;
 
     urefcount_init(upipe_ffmt_mgr_to_urefcount(ffmt_mgr),

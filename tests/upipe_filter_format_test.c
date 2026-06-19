@@ -55,6 +55,9 @@ struct test {
 
 static void test_passthrough(struct uprobe *uprobe, struct uref_mgr *);
 static void test_deint(struct uprobe *uprobe, struct uref_mgr *);
+static void test_interlace(struct uprobe *uprobe, struct uref_mgr *);
+static void test_interlace_tff(struct uprobe *uprobe, struct uref_mgr *);
+static void test_interlace_bff(struct uprobe *uprobe, struct uref_mgr *);
 static void test_scale(struct uprobe *uprobe, struct uref_mgr *);
 static void test_format(struct uprobe *uprobe, struct uref_mgr *);
 static void test_scale_format(struct uprobe *uprobe, struct uref_mgr *);
@@ -63,6 +66,9 @@ static void test_reconfigure(struct uprobe *uprobe, struct uref_mgr *);
 static const struct test tests[] = {
     { "passthrough",    test_passthrough },
     { "deint",          test_deint },
+    { "interlace",      test_interlace },
+    { "interlace tff",  test_interlace_tff },
+    { "interlace bff",  test_interlace_bff },
     { "scale",          test_scale },
     { "format",         test_format },
     { "scale_format",   test_scale_format },
@@ -272,6 +278,138 @@ static void test_deint(struct uprobe *uprobe, struct uref_mgr *uref_mgr)
     assert(flow_def);
     ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
     ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+    upipe_release(ffmt);
+}
+
+/* interlace top field first */
+static void test_interlace(struct uprobe *uprobe, struct uref_mgr *uref_mgr)
+{
+    struct uref *flow_def_wanted = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def_wanted);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def_wanted, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def_wanted, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def_wanted, false));
+    ubase_assert(
+        uref_test_set_count(flow_def_wanted, 2 * NB_FRAMES + NB_FRAMES / 2));
+    struct upipe *ffmt = build_pipeline(uprobe, flow_def_wanted);
+    uref_free(flow_def_wanted);
+
+    /* progressive input */
+    struct uref *flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    /** tff input */
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, false));
+    ubase_assert(uref_pic_set_tff(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    /** bff input */
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, false));
+    ubase_assert(uref_pic_set_tff(flow_def, false));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+    upipe_release(ffmt);
+}
+
+/* interlace top field first */
+static void test_interlace_tff(struct uprobe *uprobe, struct uref_mgr *uref_mgr)
+{
+    struct uref *flow_def_wanted = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def_wanted);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def_wanted, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def_wanted, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def_wanted, false));
+    ubase_assert(uref_pic_set_tff(flow_def_wanted, true));
+    ubase_assert(uref_test_set_count(flow_def_wanted, 2 * NB_FRAMES));
+    struct upipe *ffmt = build_pipeline(uprobe, flow_def_wanted);
+    uref_free(flow_def_wanted);
+
+    /* progressive input */
+    struct uref *flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    /** tff input */
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, false));
+    ubase_assert(uref_pic_set_tff(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    /** bff input */
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, false));
+    ubase_assert(uref_pic_set_tff(flow_def, false));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+    upipe_release(ffmt);
+}
+
+/* interlace bottom field first */
+static void test_interlace_bff(struct uprobe *uprobe, struct uref_mgr *uref_mgr)
+{
+    struct uref *flow_def_wanted = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def_wanted);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def_wanted, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def_wanted, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def_wanted, false));
+    ubase_assert(uref_pic_set_tff(flow_def_wanted, false));
+    ubase_assert(uref_test_set_count(flow_def_wanted, 2 * NB_FRAMES));
+    struct upipe *ffmt = build_pipeline(uprobe, flow_def_wanted);
+    uref_free(flow_def_wanted);
+
+    /* progressive input */
+    struct uref *flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    /** tff input */
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, false));
+    ubase_assert(uref_pic_set_tff(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    /** bff input */
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 32));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 32));
+    ubase_assert(uref_pic_set_progressive(flow_def, false));
+    ubase_assert(uref_pic_set_tff(flow_def, false));
     send_frames(ffmt, flow_def);
     uref_free(flow_def);
     upipe_release(ffmt);
