@@ -13,17 +13,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ubuntu-amd64-gcc-14
+          - name: ubuntu-amd64-gcc-15
             os: ubuntu-26.04
             arch: amd64
             compiler: gcc
-            version: 14
+            version: 15
 
-          - name: ubuntu-amd64-gcc-14-static
+          - name: ubuntu-amd64-gcc-15-static
             os: ubuntu-26.04
             arch: amd64
             compiler: gcc
-            version: 14
+            version: 15
             static: true
 
           - name: ubuntu-amd64-clang-21
@@ -32,19 +32,19 @@ jobs:
             compiler: clang
             version: 21
 
-          - name: ubuntu-armhf-gcc-14
+          - name: ubuntu-armhf-gcc-15
             os: ubuntu-26.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
-            version: 14
+            version: 15
 
-          - name: ubuntu-arm64-gcc-14
+          - name: ubuntu-arm64-gcc-15
             os: ubuntu-26.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
-            version: 14
+            version: 15
 
           - name: macos-15-amd64-xcode
             os: macos-15-intel
@@ -162,7 +162,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/cisco/SSMAMTtools.git
           make -C SSMAMTtools/build/linux \
-            CC="$HOST_CC -fPIC" \
+            CC="gcc-14 -fPIC" \
             TARGET=libamt.a \
             WFLAGS=-Wno-int-conversion \
             $LIBAMT_PLATFORM
