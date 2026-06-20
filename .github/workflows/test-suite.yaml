@@ -14,33 +14,33 @@ jobs:
       matrix:
         include:
           - name: ubuntu-amd64-gcc-14
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             arch: amd64
             compiler: gcc
             version: 14
 
           - name: ubuntu-amd64-gcc-14-static
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             arch: amd64
             compiler: gcc
             version: 14
             static: true
 
           - name: ubuntu-amd64-clang-21
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             arch: amd64
             compiler: clang
             version: 21
 
           - name: ubuntu-armhf-gcc-14
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
             version: 14
 
           - name: ubuntu-arm64-gcc-14
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
@@ -89,7 +89,7 @@ jobs:
               CXX=${{ matrix.host }}-$CXX
               PKG=$PKG-${{ matrix.host }}
           fi
-          sudo apt-get install $PKG
+          sudo apt-get install --allow-downgrades $PKG
           set-env HOST_CC "$CC"
           set-env HOST_CXX "$CXX"
           if [ -n "${{ matrix.host }}" ]; then
@@ -107,7 +107,8 @@ jobs:
       - name: Install compiler (clang)
         if: runner.os == 'Linux' && matrix.compiler == 'clang'
         run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | \
+            sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
           sudo add-apt-repository -y "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc)-${{ matrix.version }} main"
           sudo apt-get update
           sudo apt-get install clang-${{ matrix.version }}
@@ -125,7 +126,7 @@ jobs:
           if [ "${{ matrix.arch }}" != "amd64" ]; then
             sudo apt-get install qemu-user-binfmt
           fi
-          sudo apt-get install valgrind nasm elfutils \
+          sudo apt-get install --allow-downgrades valgrind nasm elfutils \
             $(printf '%s:${{ matrix.arch }} ' libc6-dbg luajit) \
             $(printf 'lib%s-dev:${{ matrix.arch }} ' $LIBS)
           if [ -n "${{ matrix.host }}" ]; then
@@ -207,7 +208,7 @@ jobs:
           VERBOSE_TESTS=1
 
   coding-style:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
