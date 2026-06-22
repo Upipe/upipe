@@ -23,6 +23,7 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe_helper_flow.h"
 #include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_flow_def_check.h"
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_urefcount_real.h"
 #include "upipe/upipe_helper_flow_format.h"
@@ -149,6 +150,7 @@ UPIPE_HELPER_FLOW(upipe_ffmt, NULL)
 UPIPE_HELPER_UREFCOUNT(upipe_ffmt, urefcount, upipe_ffmt_no_ref)
 UPIPE_HELPER_UREFCOUNT_REAL(upipe_ffmt, urefcount_real, upipe_ffmt_free)
 UPIPE_HELPER_FLOW_DEF(upipe_ffmt, flow_def_input, flow_def_wanted)
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_ffmt, flow_def_provided)
 UPIPE_HELPER_INPUT(upipe_ffmt, urefs, nb_urefs, max_urefs, blockers,
                   upipe_ffmt_handle)
 UPIPE_HELPER_INNER(upipe_ffmt, first_inner)
@@ -185,12 +187,12 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt_init_flow_format(upipe);
     upipe_ffmt_init_input(upipe);
     upipe_ffmt_init_flow_def(upipe);
+    upipe_ffmt_init_flow_def_provided(upipe);
     upipe_ffmt_init_proxy_probe(upipe);
     upipe_ffmt_init_last_inner_probe(upipe);
     upipe_ffmt_init_bin_input(upipe);
     upipe_ffmt_init_bin_output(upipe);
 
-    upipe_ffmt->flow_def_provided = NULL;
     upipe_ffmt->sws_flags = 0;
     upipe_ffmt->deinterlace_vaapi_mode = NULL;
     upipe_ffmt->scale_vaapi_mode = NULL;
@@ -245,8 +247,7 @@ static int upipe_ffmt_set_flow_def_real(struct upipe *upipe,
 
     upipe_ffmt_store_bin_input(upipe, NULL);
     upipe_ffmt_store_bin_output(upipe, NULL);
-    uref_free(upipe_ffmt->flow_def_provided);
-    upipe_ffmt->flow_def_provided = NULL;
+    upipe_ffmt_store_flow_def_provided(upipe, NULL);
     upipe_ffmt_require_flow_format(upipe, flow_def);
     return UBASE_ERR_NONE;
 }
@@ -329,22 +330,20 @@ static void upipe_ffmt_push(struct upipe *upipe, struct upipe **last_inner,
  * @return an error code
  */
 static int upipe_ffmt_check_flow_format(struct upipe *upipe,
-                                        struct uref *flow_def_dup)
+                                        struct uref *flow_def_provided)
 {
     struct upipe_ffmt_mgr *ffmt_mgr = upipe_ffmt_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
     struct uref *flow_def_wanted = upipe_ffmt->flow_def_wanted;
-    if (flow_def_dup == NULL)
+    if (flow_def_provided == NULL)
         return UBASE_ERR_INVALID;
 
-    if (upipe_ffmt->flow_def_provided &&
-        !udict_cmp(upipe_ffmt->flow_def_provided->udict, flow_def_dup->udict)) {
-        uref_free(flow_def_dup);
+    if (upipe_ffmt_check_flow_def_provided(upipe, flow_def_provided)) {
+        uref_free(flow_def_provided);
         return UBASE_ERR_NONE;
     }
-
-    uref_free(upipe_ffmt->flow_def_provided);
-    upipe_ffmt->flow_def_provided = uref_dup(flow_def_dup);
+    upipe_ffmt_store_flow_def_provided(upipe, flow_def_provided);
+    struct uref *flow_def_dup = uref_dup(upipe_ffmt->flow_def_provided);
 
     struct uref *flow_def = uref_dup(upipe_ffmt->flow_def_input);
     UBASE_ALLOC_RETURN(flow_def)
@@ -1143,9 +1142,9 @@ static void upipe_ffmt_free(struct upipe *upipe)
     free(upipe_ffmt->hw_device);
     upipe_ffmt_clean_input(upipe);
     upipe_ffmt_clean_flow_format(upipe);
-    uref_free(upipe_ffmt->flow_def_provided);
     upipe_ffmt_clean_proxy_probe(upipe);
     upipe_ffmt_clean_last_inner_probe(upipe);
+    upipe_ffmt_clean_flow_def_provided(upipe);
     upipe_ffmt_clean_flow_def(upipe);
     upipe_ffmt_clean_urefcount_real(upipe);
     upipe_ffmt_clean_urefcount(upipe);
