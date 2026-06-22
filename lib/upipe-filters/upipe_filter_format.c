@@ -323,30 +323,23 @@ static void upipe_ffmt_push(struct upipe *upipe, struct upipe **last_inner,
     *last_inner = input;
 }
 
-/** @internal @This receives the result of a flow format request.
+/** @internal @This builds the filter format inner pipeline.
  *
  * @param upipe description structure of the pipe
- * @param flow_def_dup amended flow format
+ * @param flow_def input flow definition packet
+ * @param flow_def_dup output flow definition packet
  * @return an error code
  */
-static int upipe_ffmt_check_flow_format(struct upipe *upipe,
-                                        struct uref *flow_def_provided)
+static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
+                            struct uref *flow_def_dup)
 {
     struct upipe_ffmt_mgr *ffmt_mgr = upipe_ffmt_mgr_from_upipe_mgr(upipe->mgr);
     struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
     struct uref *flow_def_wanted = upipe_ffmt->flow_def_wanted;
-    if (flow_def_provided == NULL)
+
+    if (unlikely(!flow_def || !flow_def_dup))
         return UBASE_ERR_INVALID;
 
-    if (upipe_ffmt_check_flow_def_provided(upipe, flow_def_provided)) {
-        uref_free(flow_def_provided);
-        return UBASE_ERR_NONE;
-    }
-    upipe_ffmt_store_flow_def_provided(upipe, flow_def_provided);
-    struct uref *flow_def_dup = uref_dup(upipe_ffmt->flow_def_provided);
-
-    struct uref *flow_def = uref_dup(upipe_ffmt->flow_def_input);
-    UBASE_ALLOC_RETURN(flow_def)
     const char *def;
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
@@ -850,9 +843,33 @@ static int upipe_ffmt_check_flow_format(struct upipe *upipe,
             upipe_ffmt_store_bin_input(upipe, upipe_use(input));
         }
     }
-    uref_free(flow_def_dup);
 
-    int err = upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
+    return upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
+}
+
+
+/** @internal @This receives the result of a flow format request.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def_dup amended flow format
+ * @return an error code
+ */
+static int upipe_ffmt_check_flow_format(struct upipe *upipe,
+                                        struct uref *flow_def_provided)
+{
+    struct upipe_ffmt *upipe_ffmt = upipe_ffmt_from_upipe(upipe);
+    if (flow_def_provided == NULL)
+        return UBASE_ERR_INVALID;
+
+    if (upipe_ffmt_check_flow_def_provided(upipe, flow_def_provided)) {
+        uref_free(flow_def_provided);
+        return UBASE_ERR_NONE;
+    }
+    upipe_ffmt_store_flow_def_provided(upipe, flow_def_provided);
+    struct uref *flow_def_dup = uref_dup(upipe_ffmt->flow_def_provided);
+    struct uref *flow_def = uref_dup(upipe_ffmt->flow_def_input);
+    int err = upipe_ffmt_build(upipe, flow_def, flow_def_dup);
+    uref_free(flow_def_dup);
     uref_free(flow_def);
 
     if (!ubase_check(err)) {
