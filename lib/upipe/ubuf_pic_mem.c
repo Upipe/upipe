@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -440,11 +441,16 @@ static int ubuf_pic_mem_mgr_check(struct ubuf_mgr *mgr,
 
     UBASE_RETURN(uref_pic_flow_get_macropixel(flow_format, &macropixel))
     UBASE_RETURN(uref_pic_flow_get_planes(flow_format, &planes))
-    uref_pic_flow_get_hmprepend(flow_format, &hmprepend);
-    uref_pic_flow_get_hmappend(flow_format, &hmappend);
-    uref_pic_flow_get_vprepend(flow_format, &vprepend);
-    uref_pic_flow_get_vappend(flow_format, &vappend);
-    uref_pic_flow_get_align(flow_format, &align);
+    if (!ubase_check(uref_pic_flow_get_hmprepend(flow_format, &hmprepend)))
+        hmprepend = UBUF_DEFAULT_HPREPEND;
+    if (!ubase_check(uref_pic_flow_get_hmappend(flow_format, &hmappend)))
+        hmappend = UBUF_DEFAULT_HAPPEND;
+    if (!ubase_check(uref_pic_flow_get_vprepend(flow_format, &vprepend)))
+        vprepend = UBUF_DEFAULT_VPREPEND;
+    if (!ubase_check(uref_pic_flow_get_vappend(flow_format, &vappend)))
+        vappend = UBUF_DEFAULT_VAPPEND;
+    if (!ubase_check(uref_pic_flow_get_align(flow_format, &align)))
+        align = UBUF_DEFAULT_ALIGN;
     uref_pic_flow_get_align_hmoffset(flow_format, &align_hmoffset);
 
     struct ubuf_pic_common_mgr *common_mgr =
