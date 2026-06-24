@@ -1235,12 +1235,9 @@ static void upipe_avfilt_sub_input(struct upipe *upipe, struct uref *uref,
 static int upipe_avfilt_sub_set_flow_def(struct upipe *upipe,
                                          struct uref *flow_def)
 {
-    struct upipe_avfilt_sub *upipe_avfilt_sub =
-        upipe_avfilt_sub_from_upipe(upipe);
     struct upipe_avfilt *upipe_avfilt = upipe_avfilt_from_sub_mgr(upipe->mgr);
 
-    if (upipe_avfilt_sub->flow_def_input &&
-        !udict_cmp(upipe_avfilt_sub->flow_def_input->udict, flow_def->udict))
+    if (upipe_avfilt_sub_check_flow_def_input(upipe, flow_def))
         /* nothing changed */
         return UBASE_ERR_NONE;
 
@@ -1700,8 +1697,7 @@ static int upipe_avfilt_set_flow_def(struct upipe *upipe,
     if (upipe_avfilt->filters_desc == NULL)
         return UBASE_ERR_INVALID;
 
-    if (upipe_avfilt->flow_def_input &&
-        !udict_cmp(upipe_avfilt->flow_def_input->udict, flow_def->udict))
+    if (upipe_avfilt_check_flow_def_input(upipe, flow_def))
         /* nothing changed */
         return UBASE_ERR_NONE;
 
