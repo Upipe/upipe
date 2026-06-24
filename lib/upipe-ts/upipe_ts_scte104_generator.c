@@ -24,9 +24,12 @@
 #include "upipe/upipe_helper_input.h"
 #include "upipe/uclock.h"
 #include "upipe-ts/uref_ts_scte35.h"
+#include "upipe-ts/uref_ts_flow.h"
 
 #include "upipe-ts/upipe_ts_scte104_generator.h"
+#include <bitstream/scte/35.h>
 #include <bitstream/scte/104.h>
+#include <string.h>
 
 #define EXPECTED_FLOW_DEF "void.scte35."
 
@@ -128,73 +131,272 @@ static void upipe_ts_scte104_generator_input(struct upipe *upipe, struct uref *u
 static bool upipe_ts_scte104_generator_handle(struct upipe *upipe, struct uref *uref,
                                     struct upump **upump_p)
 {
-    struct upipe_ts_scte104_generator *upipe_ts_scte104_generator = upipe_ts_scte104_generator_from_upipe(upipe);
+    struct upipe_ts_scte104_generator *upipe_ts_scte104_generator =
+        upipe_ts_scte104_generator_from_upipe(upipe);
 
     if (!upipe_ts_scte104_generator->ubuf_mgr)
         return false;
 
-    uint8_t splice_insert_type;
-    uint8_t len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 /* num_opts */ + SCTE104O_HEADER_SIZE + SCTE104SRD_HEADER_SIZE;
-    uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0, cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0, pts_sys = 0;
-    uref_clock_get_pts_orig(uref, &pts_orig);
+    uint8_t command_type;
+    if (!ubase_check(uref_ts_scte35_get_command_type(uref, &command_type))) {
+        upipe_warn(upipe, "uref missing command type, dropping");
+        uref_free(uref);
+        return true;
+    }
 
-    if (ubase_check(uref_ts_scte35_get_cancel(uref)))
-        splice_insert_type = SCTE104SRD_CANCEL;
-    else if (ubase_check(uref_ts_scte35_get_out_of_network(uref)))
-        splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_START_IMMEDIATE : SCTE104SRD_START_NORMAL;
-    else
-        splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_END_IMMEDIATE : SCTE104SRD_END_NORMAL;
+    uint64_t pts_orig = UINT64_MAX, event_id = 0, unique_program_id = 0;
+    uint64_t cr_dts_delay = 0, duration = UINT64_MAX, pts_prog = 0, pts_sys = 0;
+    uref_clock_get_pts_orig(uref, &pts_orig);
+    uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
+    uref_clock_get_duration(uref, &duration);
+
+    /* determine main operation */
+    uint16_t main_opid;
+    uint16_t main_data_size;
+    switch (command_type) {
+        case SCTE35_NULL_COMMAND:
+            main_opid = SCTE104_OPID_SPLICE_NULL;
+            main_data_size = 0;
+            break;
+        case SCTE35_TIME_SIGNAL_COMMAND:
+            main_opid = SCTE104_OPID_TIME_SIGNAL;
+            main_data_size = SCTE104TSRD_HEADER_SIZE;
+            break;
+        case SCTE35_INSERT_COMMAND:
+            main_opid = SCTE104_OPID_SPLICE;
+            main_data_size = SCTE104SRD_HEADER_SIZE;
+            break;
+        default:
+            upipe_warn_va(upipe, "unsupported SCTE-35 command type 0x%02x, dropping",
+                          command_type);
+            uref_free(uref);
+            return true;
+    }
+
+    /* scan descriptors to calculate total message size */
+    uint64_t nb_descs = 0;
+    uref_ts_flow_get_descriptors(uref, &nb_descs);
+
+    uint8_t num_ops = 1;
+    uint16_t isdrd_ops_size = 0;
+    uint16_t idrd_descs_size = 0;
+    uint8_t idrd_count = 0;
+
+    for (uint64_t i = 0; i < nb_descs; i++) {
+        const uint8_t *desc = NULL;
+        size_t desc_len = 0;
+        if (!ubase_check(uref_ts_flow_get_descriptor(uref, &desc, &desc_len, i)) || !desc ||
+            desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE)
+            continue;
+        if (scte35_splice_desc_get_tag(desc) == SCTE35_SPLICE_DESC_TAG_SEG) {
+            if (desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE + SCTE35_SEG_DESC_HEADER_SIZE)
+                continue;
+            bool cancel_desc = scte35_seg_desc_has_cancel(desc);
+            uint8_t upid_length = cancel_desc ? 0 : scte35_seg_desc_get_upid_length(desc);
+            bool has_sub = cancel_desc ? false : scte35_seg_desc_has_sub_num(desc);
+            /* +1 for mandatory insert_sub_segment_info byte */
+            uint16_t isdrd_size = SCTE104ISDRD_HEADER_SIZE + upid_length + 1 +
+                                  (has_sub ? 2 : 0);
+            isdrd_ops_size += SCTE104O_HEADER_SIZE + isdrd_size;
+            num_ops++;
+        } else {
+            idrd_descs_size += (uint16_t)desc_len;
+            idrd_count++;
+        }
+    }
+    if (idrd_count)
+        num_ops++;
+
+    uint32_t pre_roll_full = cr_dts_delay / (UCLOCK_FREQ / 1000);
+    if (unlikely(pre_roll_full > UINT16_MAX)) {
+        upipe_warn(upipe, "pre_roll_time overflow, clamping to 65535 ms");
+        pre_roll_full = UINT16_MAX;
+    }
+    uint16_t pre_roll_ms = (uint16_t)pre_roll_full;
+
+    uint16_t len = SCTE104M_HEADER_SIZE + SCTE104T_HEADER_SIZE + 1 /* num_ops */ +
+                   SCTE104O_HEADER_SIZE + main_data_size + isdrd_ops_size +
+                   (idrd_count ? SCTE104O_HEADER_SIZE + SCTE104IDRD_HEADER_SIZE + idrd_descs_size : 0);
 
     struct ubuf *ubuf = ubuf_block_alloc(upipe_ts_scte104_generator->ubuf_mgr, len);
+    if (unlikely(!ubuf)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref);
+        return true;
+    }
     int size = -1;
     uint8_t *buf;
     ubase_assert(ubuf_block_write(ubuf, 0, &size, &buf));
+    assert(size >= (int)len);
 
     uint8_t *ts = scte104m_get_timestamp(buf);
-    uint8_t *op;
+    uint8_t *op, *data;
 
     scte104_set_opid(buf, SCTE104_OPID_MULTIPLE);
     scte104_set_size(buf, len);
-
     scte104m_set_protocol(buf, 0);
     scte104m_set_as_index(buf, 0);
-    scte104m_set_message_number(buf, 1); /* arbitrary */
+    scte104m_set_message_number(buf, 1);
     scte104m_set_dpi_pid_index(buf, 0);
     scte104m_set_scte35_protocol(buf, 0);
-
     scte104t_set_type(ts, SCTE104T_TYPE_NONE);
-    scte104m_set_num_ops(buf, 1);
+    scte104m_set_num_ops(buf, num_ops);
 
+    /* write main operation */
     op = scte104m_get_op(buf, 0);
+    scte104o_set_opid(op, main_opid);
+    scte104o_set_data_length(op, main_data_size);
+    data = scte104o_get_data(op);
 
-    scte104o_set_opid(op, SCTE104_OPID_SPLICE);
-    scte104o_set_data_length(op, SCTE104SRD_HEADER_SIZE);
-    op = scte104o_get_data(op);
+    if (command_type == SCTE35_INSERT_COMMAND) {
+        uint8_t splice_insert_type;
+        if (ubase_check(uref_ts_scte35_get_cancel(uref)))
+            splice_insert_type = SCTE104SRD_CANCEL;
+        else if (ubase_check(uref_ts_scte35_get_out_of_network(uref)))
+            splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_START_IMMEDIATE : SCTE104SRD_START_NORMAL;
+        else
+            splice_insert_type = pts_orig == UINT64_MAX ? SCTE104SRD_END_IMMEDIATE : SCTE104SRD_END_NORMAL;
 
-    scte104srd_set_insert_type(op, splice_insert_type);
-    uref_ts_scte35_get_event_id(uref, &event_id);
-    scte104srd_set_event_id(op, event_id);
-    uref_ts_scte35_get_unique_program_id(uref, &unique_program_id);
-    scte104srd_set_unique_program_id(op, unique_program_id);
-    uref_clock_get_cr_dts_delay(uref, &cr_dts_delay);
-    scte104srd_set_pre_roll_time(op, cr_dts_delay / (UCLOCK_FREQ/1000));
-    uref_clock_get_duration(uref, &duration);
-    if (duration != UINT64_MAX)
-        scte104srd_set_break_duration(op, duration / (UCLOCK_FREQ/10));
-    scte104srd_set_avail_num(op, 0);
-    scte104srd_set_avails_expected(op, 0);
-    scte104srd_set_auto_return(op, ubase_check(uref_ts_scte35_get_auto_return(uref)));
+        uint32_t break_dur_full = duration != UINT64_MAX ?
+                                  duration / (UCLOCK_FREQ / 10) : 0;
+        if (unlikely(break_dur_full > UINT16_MAX)) {
+            upipe_warn(upipe, "break_duration overflow, clamping to 65535 deciseconds");
+            break_dur_full = UINT16_MAX;
+        }
+
+        uref_ts_scte35_get_event_id(uref, &event_id);
+        uref_ts_scte35_get_unique_program_id(uref, &unique_program_id);
+        scte104srd_set_insert_type(data, splice_insert_type);
+        scte104srd_set_event_id(data, event_id);
+        scte104srd_set_unique_program_id(data, unique_program_id);
+        scte104srd_set_pre_roll_time(data, pre_roll_ms);
+        scte104srd_set_break_duration(data, (uint16_t)break_dur_full);
+        scte104srd_set_avail_num(data, 0);
+        scte104srd_set_avails_expected(data, 0);
+        scte104srd_set_auto_return(data, ubase_check(uref_ts_scte35_get_auto_return(uref)));
+    } else if (command_type == SCTE35_TIME_SIGNAL_COMMAND) {
+        data[0] = (pre_roll_ms >> 8) & 0xff;
+        data[1] = pre_roll_ms & 0xff;
+    }
+    /* SCTE35_NULL_COMMAND: no data */
+
+    /* write INSERT_SEGMENTATION_DESCRIPTOR ops for each SEG descriptor */
+    uint8_t op_idx = 1;
+    for (uint64_t i = 0; i < nb_descs; i++) {
+        const uint8_t *desc = NULL;
+        size_t desc_len = 0;
+        if (!ubase_check(uref_ts_flow_get_descriptor(uref, &desc, &desc_len, i)) || !desc ||
+            desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE)
+            continue;
+        if (scte35_splice_desc_get_tag(desc) != SCTE35_SPLICE_DESC_TAG_SEG)
+            continue;
+        if (desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE + SCTE35_SEG_DESC_HEADER_SIZE)
+            continue;
+
+        bool cancel = scte35_seg_desc_has_cancel(desc);
+        /* guard against reading beyond cancel descriptor body */
+        uint8_t upid_length = cancel ? 0 : scte35_seg_desc_get_upid_length(desc);
+        bool has_sub = cancel ? false : scte35_seg_desc_has_sub_num(desc);
+        /* +1 for mandatory insert_sub_segment_info byte */
+        uint16_t isdrd_size = SCTE104ISDRD_HEADER_SIZE + upid_length + 1 +
+                              (has_sub ? 2 : 0);
+
+        if (!cancel && !scte35_seg_desc_has_program_seg(desc))
+            upipe_warn(upipe, "component-mode segmentation descriptor: component data lost in SCTE-104");
+
+        op = scte104m_get_op(buf, op_idx++);
+        scte104o_set_opid(op, SCTE104_OPID_INSERT_SEGMENTATION_DESCRIPTOR);
+        scte104o_set_data_length(op, isdrd_size);
+        data = scte104o_get_data(op);
+
+        uint32_t seg_event_id = scte35_seg_desc_get_event_id(desc);
+        data[0] = (seg_event_id >> 24) & 0xff;
+        data[1] = (seg_event_id >> 16) & 0xff;
+        data[2] = (seg_event_id >>  8) & 0xff;
+        data[3] =  seg_event_id        & 0xff;
+        data[4] = cancel ? 1 : 0;
+
+        uint64_t seg_duration = 0;
+        if (!cancel && scte35_seg_desc_has_duration(desc))
+            seg_duration = scte35_seg_desc_get_duration(desc);
+        uint32_t dur_sec_full = seg_duration ? (uint32_t)(seg_duration / 90000) : 0;
+        if (unlikely(dur_sec_full > UINT16_MAX)) {
+            upipe_warn(upipe, "segmentation duration overflow, clamping to 65535 s");
+            dur_sec_full = UINT16_MAX;
+        }
+        data[5] = (dur_sec_full >> 8) & 0xff;
+        data[6] =  dur_sec_full       & 0xff;
+
+        data[7] = cancel ? 0 : scte35_seg_desc_get_upid_type(desc);
+        data[8] = upid_length;
+        if (upid_length) {
+            const uint8_t *upid = scte35_seg_desc_get_upid(desc);
+            if (upid)
+                memcpy(data + 9, upid, upid_length);
+        }
+
+        uint8_t *q = data + 9 + upid_length;
+        if (cancel) {
+            memset(q, 0, 10); /* type_id..device_restrictions + insert_sub_info */
+        } else {
+            q[0] = scte35_seg_desc_get_type_id(desc);
+            q[1] = scte35_seg_desc_get_num(desc);
+            q[2] = scte35_seg_desc_get_expected(desc);
+            q[3] = 0; /* duration_extension_frames */
+            bool delivery_not_restricted =
+                scte35_seg_desc_has_delivery_not_restricted(desc);
+            q[4] = delivery_not_restricted ? 1 : 0;
+            if (delivery_not_restricted) {
+                q[5] = 0;
+                q[6] = 0;
+                q[7] = 0;
+                q[8] = 0;
+            } else {
+                q[5] = scte35_seg_desc_has_web_delivery_allowed(desc) ? 1 : 0;
+                q[6] = scte35_seg_desc_has_no_regional_blackout(desc) ? 1 : 0;
+                q[7] = scte35_seg_desc_has_archive_allowed(desc) ? 1 : 0;
+                q[8] = scte35_seg_desc_get_device_restrictions(desc) & 0x03;
+            }
+            q[9] = has_sub ? 1 : 0;
+            if (has_sub) {
+                q[10] = scte35_seg_desc_get_sub_num(desc);
+                q[11] = scte35_seg_desc_get_sub_expected(desc);
+            }
+        }
+    }
+
+    /* write INSERT_DESCRIPTOR op bundling all non-SEG descriptors */
+    if (idrd_count) {
+        op = scte104m_get_op(buf, op_idx);
+        scte104o_set_opid(op, SCTE104_OPID_INSERT_DESCRIPTOR);
+        scte104o_set_data_length(op, SCTE104IDRD_HEADER_SIZE + idrd_descs_size);
+        data = scte104o_get_data(op);
+        data[0] = idrd_count;
+        uint8_t *image = data + 1;
+        for (uint64_t i = 0; i < nb_descs; i++) {
+            const uint8_t *desc = NULL;
+            size_t desc_len = 0;
+            if (!ubase_check(uref_ts_flow_get_descriptor(uref, &desc, &desc_len, i)) || !desc ||
+                desc_len < SCTE35_SPLICE_DESC_HEADER_SIZE)
+                continue;
+            if (scte35_splice_desc_get_tag(desc) == SCTE35_SPLICE_DESC_TAG_SEG)
+                continue;
+            memcpy(image, desc, desc_len);
+            image += desc_len;
+        }
+    }
 
     ubuf_block_unmap(ubuf, 0);
     uref_attach_ubuf(uref, ubuf);
 
-    /* SCTE-35 "PTS" is actually the splice time. Make SCTE-104 urefs use the real PTS */
-    pts_orig -= cr_dts_delay;
-    uref_clock_set_pts_orig(uref, pts_orig);
-    uref_clock_get_pts_prog(uref, &pts_prog);
-    pts_prog -= cr_dts_delay;
-    uref_clock_set_pts_prog(uref, pts_prog);
-    uref_clock_get_pts_sys(uref, &pts_sys);
+    /* SCTE-35 "PTS" is the splice time; adjust to arrival time */
+    if (pts_orig != UINT64_MAX && cr_dts_delay) {
+        uref_clock_set_pts_orig(uref, pts_orig - cr_dts_delay);
+        if (ubase_check(uref_clock_get_pts_prog(uref, &pts_prog)))
+            uref_clock_set_pts_prog(uref, pts_prog - cr_dts_delay);
+        if (ubase_check(uref_clock_get_pts_sys(uref, &pts_sys)))
+            uref_clock_set_pts_sys(uref, pts_sys - cr_dts_delay);
+    }
 
     upipe_ts_scte104_generator_output(upipe, uref, upump_p);
     return true;
@@ -266,7 +468,7 @@ static int upipe_ts_scte104_generator_control(struct upipe *upipe,
     }
 }
 
-/** @internal @This allocates a s337_encaps pipe.
+/** @internal @This allocates a ts_scte104_generator pipe.
  *
  * @param mgr common management structure
  * @param uprobe structure used to raise events
