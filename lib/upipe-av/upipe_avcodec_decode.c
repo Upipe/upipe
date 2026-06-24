@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
- * Copyright (C) 2025 EasyTools
+ * Copyright (C) 2025-2026 EasyTools
  *
  * Authors: Benjamin Cohen
  *          Christophe Massiot
@@ -1209,10 +1209,14 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     if (sub->num_rects) {
         uint8_t *buf;
         const char *chroma;
-        if (unlikely(!ubase_check(uref_pic_flow_get_chroma(flow_def,
-                            &chroma, 0)) ||
-                    !ubase_check(ubuf_pic_plane_write(uref->ubuf, chroma,
-                            0, 0, -1, -1, &buf)))) {
+        size_t stride;
+        uint8_t hsub, vsub, mpixel;
+        if (unlikely(
+                !ubase_check(uref_pic_flow_get_chroma(flow_def, &chroma, 0)) ||
+                !ubase_check(ubuf_pic_plane_size(uref->ubuf, chroma, &stride,
+                                                 &hsub, &vsub, &mpixel)) ||
+                !ubase_check(ubuf_pic_plane_write(uref->ubuf, chroma, 0, 0, -1,
+                                                  -1, &buf)))) {
             goto alloc_error;
         }
 
@@ -1243,7 +1247,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                 h = height - y;
             }
 
-            uint8_t *dst = buf + 4 * ((width * y) + x);
+            uint8_t *dst = buf + stride * y + x;
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
 
@@ -1258,7 +1262,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                     memcpy(&dst[j*4], &palette[idx*4], 4);
                 }
 
-                dst += width * 4;
+                dst += stride;
                 src += w;
             }
         }
