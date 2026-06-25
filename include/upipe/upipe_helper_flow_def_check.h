@@ -103,8 +103,11 @@ STRUCTURE##_check_##FLOW_DEF_CHECK(struct upipe *upipe,                     \
                                    struct uref *flow_def_check)             \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    return s->FLOW_DEF_CHECK != NULL &&                                     \
-           !udict_cmp(s->FLOW_DEF_CHECK->udict, flow_def_check->udict);     \
+    if (!s->FLOW_DEF_CHECK || !flow_def_check)                              \
+        return s->FLOW_DEF_CHECK == flow_def_check;                         \
+    if (!s->FLOW_DEF_CHECK->udict || !flow_def_check->udict)                \
+        return s->FLOW_DEF_CHECK->udict == flow_def_check->udict;           \
+    return !udict_cmp(s->FLOW_DEF_CHECK->udict, flow_def_check->udict);     \
 }                                                                           \
 /** @internal @This stores a flow def check uref.                           \
  *                                                                          \
