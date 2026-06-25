@@ -236,7 +236,7 @@ static void upipe_osx_audioqueue_sink_worker(struct upump *upump)
     }
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(uref_sound_size(uref, &size, &sample_size));
 
     const void *audios[1];
@@ -271,7 +271,7 @@ static int upipe_osx_audioqueue_sink_set_flow_def_real(struct upipe *upipe,
     uint8_t planes = 0;
     uint64_t sample_rate = 0; /* hush gcc */
     uint8_t channels = 0;
-    uint8_t sample_size = 0;
+    uint16_t sample_size = 0;
     OSStatus status;
 
     upipe_osx_audioqueue_sink_destroy(upipe);
@@ -421,7 +421,7 @@ static int upipe_osx_audioqueue_sink_set_flow_def(struct upipe *upipe,
     uint8_t planes = 0;
     uint64_t sample_rate = 0; /* hush gcc */
     uint8_t channels = 0;
-    uint8_t sample_size = 0;
+    uint16_t sample_size = 0;
 
     /* check flow format */
     UBASE_RETURN(uref_flow_match_def(flow, EXPECTED_FLOW_DEF));

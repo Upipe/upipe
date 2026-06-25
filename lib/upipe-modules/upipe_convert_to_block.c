@@ -217,7 +217,7 @@ static void upipe_tblk_handle_sound(struct upipe *upipe, struct uref *uref,
     if (unlikely(ubuf == NULL)) {
         /* We have to memcpy the thing. */
         size_t samples;
-        uint8_t sample_size;
+        uint16_t sample_size;
         if (unlikely(!ubase_check(uref_sound_size(uref, &samples,
                                                   &sample_size)))) {
             uref_free(uref);

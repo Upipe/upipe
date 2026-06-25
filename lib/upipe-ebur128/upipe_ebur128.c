@@ -113,7 +113,7 @@ static void upipe_ebur128_input(struct upipe *upipe, struct uref *uref,
     }
 
     size_t samples;
-    uint8_t sample_size;
+    uint16_t sample_size;
     if (unlikely(!ubase_check(uref_sound_size(uref, &samples, &sample_size)))) {
         upipe_warn(upipe, "invalid sound buffer");
         uref_free(uref);

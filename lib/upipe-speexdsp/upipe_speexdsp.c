@@ -323,7 +323,7 @@ static int upipe_speexdsp_provide_flow_format(struct upipe *upipe,
     UBASE_RETURN(uref_sound_flow_get_channels(request->uref, &channels))
     uint8_t planes;
     UBASE_RETURN(uref_sound_flow_get_planes(request->uref, &planes))
-    uint8_t sample_size;
+    uint16_t sample_size;
     UBASE_RETURN(uref_sound_flow_get_sample_size(request->uref, &sample_size))
 
     struct uref *flow = uref_dup(request->uref);

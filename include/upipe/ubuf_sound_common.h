@@ -59,7 +59,7 @@ struct ubuf_sound_common_mgr_plane {
  * members, common to sound managers. */
 struct ubuf_sound_common_mgr {
     /** number of octets per plane in a sample */
-    uint8_t sample_size;
+    uint16_t sample_size;
     /** number of planes to allocate */
     uint8_t nb_planes;
     /** planes description */
@@ -178,7 +178,7 @@ int ubuf_sound_common_plane_dup(struct ubuf *ubuf, struct ubuf *new_ubuf,
  * @return an error code
  */
 int ubuf_sound_common_size(struct ubuf *ubuf, size_t *size_p,
-                           uint8_t *sample_size_p);
+                           uint16_t *sample_size_p);
 
 /** @This iterates on sound planes channel types. Start by initializing
  * *channel_p to NULL. If *channel_p is NULL after running this function, there
@@ -232,7 +232,7 @@ void ubuf_sound_common_mgr_clean(struct ubuf_mgr *mgr);
  * ubuf_sound_common_mgr
  * @param sample_size size in octets of a sample
  */
-void ubuf_sound_common_mgr_init(struct ubuf_mgr *mgr, uint8_t sample_size);
+void ubuf_sound_common_mgr_init(struct ubuf_mgr *mgr, uint16_t sample_size);
 
 /** @This adds a new plane to a ubuf manager for sound formats.
  *
