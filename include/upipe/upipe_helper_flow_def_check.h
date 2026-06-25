@@ -98,12 +98,16 @@ static UBASE_UNUSED struct uref *                                           \
  * @param flow_def_check flow def check derived from new input flow def     \
  * @return false if the flow def check packets are different                \
  */                                                                         \
-static bool STRUCTURE##_check_##FLOW_DEF_CHECK(struct upipe *upipe,         \
-                                               struct uref *flow_def_check) \
+static UBASE_UNUSED bool                                                    \
+STRUCTURE##_check_##FLOW_DEF_CHECK(struct upipe *upipe,                     \
+                                   struct uref *flow_def_check)             \
 {                                                                           \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
-    return s->FLOW_DEF_CHECK != NULL &&                                     \
-           !udict_cmp(s->FLOW_DEF_CHECK->udict, flow_def_check->udict);     \
+    if (!s->FLOW_DEF_CHECK || !flow_def_check)                              \
+        return s->FLOW_DEF_CHECK == flow_def_check;                         \
+    if (!s->FLOW_DEF_CHECK->udict || !flow_def_check->udict)                \
+        return s->FLOW_DEF_CHECK->udict == flow_def_check->udict;           \
+    return !udict_cmp(s->FLOW_DEF_CHECK->udict, flow_def_check->udict);     \
 }                                                                           \
 /** @internal @This stores a flow def check uref.                           \
  *                                                                          \
