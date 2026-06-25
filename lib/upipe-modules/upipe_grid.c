@@ -38,6 +38,22 @@
 /** debug print periodicity */
 #define PRINT_PERIODICITY   (UCLOCK_FREQ * 600)
 
+/** @internal @This is the private structure of a flow format proxy for outputs.
+ */
+struct upipe_grid_out_flow_format_proxy {
+    /** public urequest structure */
+    struct urequest urequest;
+    /** last downstream flow format */
+    struct uref *flow_downstream_provided;
+    /** last upstreamed flow format */
+    struct uref *flow_upstream_provided;
+    /** proxified upstream urequest */
+    struct urequest *upstream;
+};
+
+/** @hidden */
+UBASE_FROM_TO(upipe_grid_out_flow_format_proxy, urequest, urequest, urequest);
+
 /** @internal @This is the private structure of a grid pipe. */
 struct upipe_grid {
     /** pipe public structure */
@@ -1081,6 +1097,165 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This provides the select input flow format attributes to the
+ * source.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_grid_out_update_source(struct upipe *upipe)
+{
+    struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
+    struct uref *source = upipe_grid_out->flow_def_input;
+    struct uref *selected = upipe_grid_out->flow_def_selected;
+
+    if (unlikely(!source || !selected))
+        return UBASE_ERR_INVALID;
+
+    if (!uref_pic_flow_compare_format(source, selected) ||
+        uref_pic_flow_cmp_hsize(source, selected) ||
+        uref_pic_flow_cmp_vsize(source, selected) ||
+        uref_pic_flow_cmp_overscan(source, selected) ||
+        uref_pic_flow_cmp_colour_primaries(source, selected) ||
+        uref_pic_flow_cmp_matrix_coefficients(source, selected) ||
+        uref_pic_flow_cmp_transfer_characteristics(source, selected) ||
+        uref_pic_flow_cmp_sar(source, selected) ||
+        uref_pic_flow_cmp_dar(source, selected) ||
+        uref_pic_flow_cmp_full_range(source, selected) ||
+        uref_pic_cmp_progressive(source, selected) ||
+        uref_pic_cmp_tff(source, selected)) {
+
+        struct uref *flow_format = uref_dup(source);
+        if (unlikely(!flow_format))
+            return UBASE_ERR_ALLOC;
+
+        uref_pic_flow_clear_format(flow_format);
+        uref_pic_flow_copy_format(flow_format, selected);
+        uref_pic_flow_copy_hsize(flow_format, selected);
+        uref_pic_flow_copy_vsize(flow_format, selected);
+        uref_pic_flow_copy_overscan(flow_format, selected);
+        uref_pic_flow_copy_colour_primaries(flow_format, selected);
+        uref_pic_flow_copy_matrix_coefficients(flow_format, selected);
+        uref_pic_flow_copy_transfer_characteristics(flow_format, selected);
+        uref_pic_flow_copy_sar(flow_format, selected);
+        uref_pic_flow_copy_dar(flow_format, selected);
+        uref_pic_flow_copy_full_range(flow_format, selected);
+        uref_pic_copy_progressive(flow_format, selected);
+        uref_pic_copy_tff(flow_format, selected);
+
+        struct uchain *uchain;
+        ulist_foreach(&upipe_grid_out->requests, uchain) {
+            struct urequest *urequest = urequest_from_uchain(uchain);
+            if (urequest->type != UREQUEST_FLOW_FORMAT)
+                continue;
+
+            struct upipe_grid_out_flow_format_proxy *proxy =
+                upipe_grid_out_flow_format_proxy_from_urequest(urequest);
+            uref_free(proxy->flow_upstream_provided);
+            proxy->flow_upstream_provided = uref_dup(flow_format);
+            urequest_provide_flow_format(proxy->upstream,
+                                         uref_dup(flow_format));
+        }
+
+        uref_free(flow_format);
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This provides the original downstream flow format attributes to
+ * the source.
+ *
+ * @param upipe description structure of the pipe
+ */
+static void upipe_grid_out_reset_source(struct upipe *upipe)
+{
+    struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
+
+    struct uchain *uchain;
+    ulist_foreach(&upipe_grid_out->requests, uchain)
+    {
+        struct urequest *urequest = urequest_from_uchain(uchain);
+        if (urequest->type != UREQUEST_FLOW_FORMAT)
+            continue;
+
+        struct upipe_grid_out_flow_format_proxy *proxy =
+            upipe_grid_out_flow_format_proxy_from_urequest(urequest);
+        uref_free(proxy->flow_upstream_provided);
+        proxy->flow_upstream_provided = NULL;
+        urequest_provide_flow_format(proxy->upstream,
+                                     uref_dup(proxy->flow_downstream_provided));
+    }
+}
+
+/** @internal @This checks a flow definition packet against the stored output
+ * flow def uref.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def flow definition packet to check
+ * @return false if the flow def packets are different
+ */
+static bool upipe_grid_out_check_flow_def(struct upipe *upipe,
+                                          struct uref *flow_def)
+{
+    struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
+
+    if (!upipe_grid_out->flow_def || !flow_def)
+        return upipe_grid_out->flow_def == flow_def;
+    if (!upipe_grid_out->flow_def->udict || !flow_def->udict)
+        return upipe_grid_out->flow_def->udict == flow_def->udict;
+    return !udict_cmp(upipe_grid_out->flow_def->udict, flow_def->udict);
+}
+
+/** @internal @This set grid output flow definition if needed.
+ *
+ * @param upipe description structure of the output pipe
+ * @param uref updated output flow format
+ * @return an error code
+ */
+static int upipe_grid_out_set_output_flow_def(struct upipe *upipe,
+                                              struct uref *flow_def)
+{
+    struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
+
+    if (likely(upipe_grid_out->flow_def_uptodate &&
+               upipe_grid_out_check_flow_def_selected(upipe, flow_def)))
+        return UBASE_ERR_NONE;
+
+    /* input has changed? */
+    struct uref *output_flow_def = uref_dup(upipe_grid_out->flow_def_input);
+    if (unlikely(!output_flow_def))
+        return UBASE_ERR_ALLOC;
+
+    /* has input? */
+    if (flow_def) {
+        flow_def = uref_dup(flow_def);
+        if (unlikely(!flow_def)) {
+            uref_free(output_flow_def);
+            return UBASE_ERR_ALLOC;
+        }
+        /* import input flow def */
+        upipe_grid_out_import_format(upipe, output_flow_def, flow_def);
+    }
+
+    upipe_grid_out->flow_def_uptodate = true;
+
+    if (upipe_grid_out_check_flow_def(upipe, output_flow_def)) {
+        /* nothing changed */
+        uref_free(flow_def);
+        uref_free(output_flow_def);
+    } else {
+        /* store new flow def */
+        upipe_notice(upipe, "change output flow def");
+        uref_dump_notice(output_flow_def, upipe->uprobe);
+        upipe_grid_out_store_flow_def(upipe, output_flow_def);
+        upipe_grid_out_store_flow_def_selected(upipe, flow_def);
+        upipe_grid_out_update_source(upipe);
+    }
+
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This handles grid output pipe input buffers.
  *
  * @param upipe description structure of the pipe
@@ -1117,35 +1292,12 @@ static void upipe_grid_out_input(struct upipe *upipe,
         return;
     }
 
-    /* input has changed? */
-    if (unlikely(
-            !upipe_grid_out->flow_def_uptodate ||
-            !upipe_grid_out_check_flow_def_selected(upipe, flow_def_selected))) {
-        struct uref *flow_def = uref_dup(upipe_grid_out->flow_def_input);
-        if (unlikely(!flow_def)) {
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            uref_free(uref);
-            return;
-        }
-        /* has input? */
-        if (flow_def_selected) {
-            flow_def_selected = uref_dup(flow_def_selected);
-            if (unlikely(!flow_def_selected)) {
-                upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-                uref_free(uref);
-                return;
-            }
-            /* import input flow def */
-            upipe_grid_out_import_format(
-                upipe, flow_def, flow_def_selected);
-        }
-
-        /* store new flow def */
-        upipe_dbg(upipe, "change output flow def");
-        uref_dump(flow_def, upipe->uprobe);
-        upipe_grid_out_store_flow_def(upipe, flow_def);
-        upipe_grid_out->flow_def_uptodate = true;
-        upipe_grid_out_store_flow_def_selected(upipe, flow_def_selected);
+    /* update output flow def */
+    ret = upipe_grid_out_set_output_flow_def(upipe, flow_def_selected);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref);
+        return;
     }
 
     upipe_grid_out_output(upipe, uref, upump_p);
@@ -1185,6 +1337,9 @@ static int upipe_grid_out_set_input_real(struct upipe *upipe,
     struct upipe_grid_out *upipe_grid_out =
         upipe_grid_out_from_upipe(upipe);
 
+    if (upipe_grid_out->input == input)
+        return UBASE_ERR_NONE;
+
     upipe_notice_va(upipe, "switch input %p -> %p",
                     upipe_grid_out->input, input);
     upipe_grid_out->input = input;
@@ -1193,6 +1348,7 @@ static int upipe_grid_out_set_input_real(struct upipe *upipe,
     upipe_grid_out->warn_no_input = true;
     upipe_grid_out->warn_no_input_flow_def = true;
     upipe_grid_out->warn_no_input_buffer = true;
+    upipe_grid_out_reset_source(upipe);
     return UBASE_ERR_NONE;
 }
 
@@ -1256,6 +1412,67 @@ static void upipe_grid_out_handle_input_removed(struct upipe *upipe,
         upipe_grid_out_set_input_real(upipe, NULL);
 }
 
+/** @internal @This is called when the downstream pipe wants to negotiate a flow
+ * format.
+ *
+ * @param urequest downstream request
+ * @param args optional arguments
+ * @return an error code
+ */
+static int upipe_grid_out_flow_format_proxy(struct urequest *urequest,
+                                            va_list args)
+{
+    struct upipe_grid_out_flow_format_proxy *proxy =
+        upipe_grid_out_flow_format_proxy_from_urequest(urequest);
+    struct uref *flow_format = va_arg(args, struct uref *);
+    uref_pic_flow_delete_surface_type(flow_format);
+    proxy->flow_downstream_provided = flow_format;
+    if (proxy->flow_upstream_provided)
+        return UBASE_ERR_NONE;
+    return urequest_provide_flow_format(proxy->upstream, uref_dup(flow_format));
+}
+
+/** @internal @This frees an output flow format proxy.
+ *
+ * @param urequest proxy flow format request to free
+ */
+static void upipe_grid_out_free_flow_format_proxy(struct urequest *urequest)
+{
+    struct upipe_grid_out_flow_format_proxy *proxy =
+        upipe_grid_out_flow_format_proxy_from_urequest(urequest);
+    uref_free(proxy->flow_downstream_provided);
+    uref_free(proxy->flow_upstream_provided);
+    free(proxy);
+}
+
+/** @internal @This allocates an output flow format proxy.
+ *
+ * @param upipe output pipe description
+ * @param urequest upstream request to proxified
+ * @return an error code
+ */
+static int upipe_grid_out_alloc_flow_format_proxy(struct upipe *upipe,
+                                                  struct urequest *urequest)
+{
+    struct upipe_grid_out_flow_format_proxy *proxy = malloc(sizeof(*proxy));
+    if (unlikely(!proxy))
+        return UBASE_ERR_ALLOC;
+    struct uref *uref = uref_dup(urequest->uref);
+    if (unlikely(!uref)) {
+        free(proxy);
+        return UBASE_ERR_ALLOC;
+    }
+
+    proxy->flow_downstream_provided = NULL;
+    proxy->flow_upstream_provided = NULL;
+    proxy->upstream = urequest;
+    urequest_set_opaque(&proxy->urequest, NULL);
+    urequest_init(&proxy->urequest, urequest->type, uref,
+                  upipe_grid_out_flow_format_proxy,
+                  upipe_grid_out_free_flow_format_proxy);
+    return upipe_grid_out_register_output_request(upipe, &proxy->urequest);
+}
+
 /** @internal @This handles control commands of the grid outputs.
  *
  * @param upipe description structure of the pipe
@@ -1266,6 +1483,19 @@ static void upipe_grid_out_handle_input_removed(struct upipe *upipe,
 static int upipe_grid_out_control(struct upipe *upipe,
                                   int command, va_list args)
 {
+    switch (command) {
+        case UPIPE_REGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            if (urequest->type == UREQUEST_FLOW_FORMAT)
+                return upipe_grid_out_alloc_flow_format_proxy(upipe, urequest);
+            return upipe_grid_out_alloc_output_proxy(upipe, urequest);
+        }
+        case UPIPE_UNREGISTER_REQUEST: {
+            struct urequest *urequest = va_arg(args, struct urequest *);
+            return upipe_grid_out_free_output_proxy(upipe, urequest);
+        }
+    }
+
     UBASE_HANDLED_RETURN(upipe_grid_out_control_output(upipe, command, args));
     UBASE_HANDLED_RETURN(upipe_grid_out_control_super(upipe, command, args));
 
