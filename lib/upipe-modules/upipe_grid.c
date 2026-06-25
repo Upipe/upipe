@@ -14,7 +14,7 @@
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_subpipe.h"
 #include "upipe/upipe_helper_output.h"
-#include "upipe/upipe_helper_flow_def.h"
+#include "upipe/upipe_helper_flow_def_check.h"
 #include "upipe/upipe_helper_uclock.h"
 #include "upipe/upipe_helper_upump_mgr.h"
 #include "upipe/upipe_helper_upump.h"
@@ -82,12 +82,10 @@ struct upipe_grid_in {
     struct uchain uchain;
     /** list of input urefs */
     struct uchain urefs;
-    /** input flow def */
+    /** current flow def */
     struct uref *flow_def;
-    /** current input flow def */
-    struct uref *current_flow_def;
-    /** flow def attr */
-    struct uref *flow_attr;
+    /** last input flow def received */
+    struct uref *flow_def_input;
     /** proxy probe */
     struct uprobe proxy;
     /** last received PTS */
@@ -120,7 +118,8 @@ UPIPE_HELPER_UREFCOUNT(upipe_grid_in, urefcount, upipe_grid_in_free);
 UPIPE_HELPER_VOID(upipe_grid_in);
 UPIPE_HELPER_SUBPIPE(upipe_grid, upipe_grid_in, input, in_mgr,
                      inputs, uchain);
-UPIPE_HELPER_FLOW_DEF(upipe_grid_in, flow_def, flow_attr);
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_grid_in, flow_def);
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_grid_in, flow_def_input);
 UPIPE_HELPER_UPUMP_MGR(upipe_grid_in, upump_mgr);
 UPIPE_HELPER_UPUMP(upipe_grid_in, upump, upump_mgr);
 
@@ -140,9 +139,7 @@ struct upipe_grid_out {
     /** refcount structure */
     struct urefcount urefcount;
     /** input flow def */
-    struct uref *input_flow_def;
-    /** input flow attributes */
-    struct uref *input_flow_attr;
+    struct uref *flow_def_input;
     /** output pipe */
     struct upipe *output;
     /** output flow def */
@@ -153,8 +150,8 @@ struct upipe_grid_out {
     struct uchain requests;
     /** inputs */
     struct uchain inputs;
-    /** flow def from current input or NULL */
-    struct uref *flow_def_input;
+    /** flow def from current selected input or NULL */
+    struct uref *flow_def_selected;
     /** selected input */
     struct upipe *input;
     /** true if flow def is up to date */
@@ -184,7 +181,8 @@ UPIPE_HELPER_OUTPUT(upipe_grid_out, output, flow_def, output_state,
                     requests);
 UPIPE_HELPER_SUBPIPE(upipe_grid, upipe_grid_out, output, out_mgr,
                      outputs, uchain);
-UPIPE_HELPER_FLOW_DEF(upipe_grid_out, input_flow_def, input_flow_attr);
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_grid_out, flow_def_input);
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_grid_out, flow_def_selected);
 
 /** @internal @This frees a grid input sub pipe.
  *
@@ -202,9 +200,9 @@ static void upipe_grid_in_free(struct upipe *upipe)
         ulist_delete(uchain);
         uref_free(uref_from_uchain(uchain));
     }
-    uref_free(upipe_grid_in->current_flow_def);
     upipe_grid_in_clean_upump(upipe);
     upipe_grid_in_clean_upump_mgr(upipe);
+    upipe_grid_in_clean_flow_def_input(upipe);
     upipe_grid_in_clean_flow_def(upipe);
     upipe_grid_in_clean_sub(upipe);
     upipe_grid_in_clean_urefcount(upipe);
@@ -232,6 +230,7 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     upipe_grid_in_init_urefcount(upipe);
     upipe_grid_in_init_sub(upipe);
     upipe_grid_in_init_flow_def(upipe);
+    upipe_grid_in_init_flow_def_input(upipe);
     upipe_grid_in_init_upump_mgr(upipe);
     upipe_grid_in_init_upump(upipe);
 
@@ -245,7 +244,6 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     upipe_grid_in->last_update_print = 0;
     upipe_grid_in->max_buffer = INT64_MIN;
     upipe_grid_in->min_buffer = INT64_MAX;
-    upipe_grid_in->current_flow_def = NULL;
 
     upipe_throw_ready(upipe);
 
@@ -300,8 +298,12 @@ static int upipe_grid_in_catch(struct uprobe *uprobe,
 static void upipe_grid_in_set_flow_def_real(struct upipe *upipe,
                                             struct uref *flow_def)
 {
-    upipe_grid_in_store_flow_def_input(upipe, flow_def);
-    upipe_throw_new_flow_def(upipe, flow_def);
+    if (upipe_grid_in_check_flow_def(upipe, flow_def))
+        uref_free(flow_def);
+    else {
+        upipe_grid_in_store_flow_def(upipe, flow_def);
+        upipe_throw_new_flow_def(upipe, flow_def);
+    }
 }
 
 /** @internal @This removes all past urefs from an input pipe.
@@ -521,10 +523,13 @@ static void upipe_grid_in_input(struct upipe *upipe,
 
     /* handle flow format */
     if (unlikely(ubase_check(uref_flow_get_def(uref, NULL)))) {
+        if (upipe_grid_in_check_flow_def_input(upipe, uref)) {
+            uref_free(uref);
+            return;
+        }
         upipe_grid_in->latency = 0;
         uref_clock_get_latency(uref, &upipe_grid_in->latency);
-        uref_free(upipe_grid_in->current_flow_def);
-        upipe_grid_in->current_flow_def = uref_dup(uref);
+        upipe_grid_in_store_flow_def_input(upipe, uref_dup(uref));
         if (!upipe_grid_in->flow_def)
             upipe_grid_in_set_flow_def_real(upipe, uref);
         else
@@ -554,7 +559,7 @@ static void upipe_grid_in_input(struct upipe *upipe,
     /* apply input latency */
     pts += upipe_grid_in->latency;
     if (upipe_grid_in->latency_frames) {
-        struct uref *flow_def = upipe_grid_in->current_flow_def;
+        struct uref *flow_def = upipe_grid_in->flow_def_input;
         struct urational fps = { 0, 0 };
         uint64_t rate = 0;
         uint64_t samples = 0;
@@ -593,7 +598,7 @@ static void upipe_grid_in_input(struct upipe *upipe,
 
     uint64_t duration = 0;
 
-    if (!ubase_check(uref_flow_match_def(upipe_grid_in->current_flow_def,
+    if (!ubase_check(uref_flow_match_def(upipe_grid_in->flow_def_input,
                                          UREF_PIC_SUB_FLOW_DEF)) &&
         upipe_grid_in->last_pts && upipe_grid_in->last_duration && duration) {
         uint64_t next_pts = upipe_grid_in->last_pts + upipe_grid_in->last_duration;
@@ -748,13 +753,10 @@ static int upipe_grid_in_control(struct upipe *upipe,
  */
 static void upipe_grid_out_free(struct upipe *upipe)
 {
-    struct upipe_grid_out *upipe_grid_out = upipe_grid_out_from_upipe(upipe);
-
     upipe_throw_dead(upipe);
 
-    uref_free(upipe_grid_out->flow_def_input);
-    upipe_grid_out->flow_def_input = NULL;
-    upipe_grid_out_clean_flow_def(upipe);
+    upipe_grid_out_clean_flow_def_selected(upipe);
+    upipe_grid_out_clean_flow_def_input(upipe);
     upipe_grid_out_clean_sub(upipe);
     upipe_grid_out_clean_output(upipe);
     upipe_grid_out_clean_urefcount(upipe);
@@ -783,14 +785,14 @@ static struct upipe *upipe_grid_out_alloc(struct upipe_mgr *mgr,
     upipe_grid_out_init_urefcount(upipe);
     upipe_grid_out_init_output(upipe);
     upipe_grid_out_init_sub(upipe);
-    upipe_grid_out_init_flow_def(upipe);
+    upipe_grid_out_init_flow_def_input(upipe);
+    upipe_grid_out_init_flow_def_selected(upipe);
 
     struct upipe_grid_out *upipe_grid_out =
         upipe_grid_out_from_upipe(upipe);
 
     ulist_init(&upipe_grid_out->inputs);
     upipe_grid_out->flow_def_uptodate = false;
-    upipe_grid_out->flow_def_input = NULL;
     upipe_grid_out->input = NULL;
     upipe_grid_out->last_input_pts = UINT64_MAX;
     upipe_grid_out->warn_no_input = true;
@@ -995,7 +997,7 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     }
 
     if (!e->uref || (e->duration && e->diff > max_diff)) {
-        if (ubase_check(uref_flow_match_def(upipe_grid_out->input_flow_def,
+        if (ubase_check(uref_flow_match_def(upipe_grid_out->flow_def_input,
                                             UREF_VOID_FLOW_DEF))) {
             uref_attach_ubuf(uref, NULL);
             return UBASE_ERR_NONE;
@@ -1079,21 +1081,6 @@ static int upipe_grid_out_extract_input(struct upipe *upipe, struct uref *uref,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This compares 2 flow def.
- *
- * @param a flow def to compare
- * @param b flow def to compare
- * @return 0 if the two flow def are identical
- */
-static int upipe_grid_flow_def_cmp(struct uref *a, struct uref *b)
-{
-    if (!a && !b)
-        return 0;
-    if (!a || !b)
-        return 1;
-    return udict_cmp(a->udict, b->udict);
-}
-
 /** @internal @This handles grid output pipe input buffers.
  *
  * @param upipe description structure of the pipe
@@ -1106,10 +1093,10 @@ static void upipe_grid_out_input(struct upipe *upipe,
 {
     struct upipe_grid_out *upipe_grid_out =
         upipe_grid_out_from_upipe(upipe);
-    struct uref *input_flow_def = NULL;
+    struct uref *flow_def_selected = NULL;
 
     /* check the input flow def */
-    if (unlikely(!upipe_grid_out->input_flow_def)) {
+    if (unlikely(!upipe_grid_out->flow_def_input)) {
         upipe_warn(upipe, "input flow def is no set");
         uref_free(uref);
         return;
@@ -1124,33 +1111,33 @@ static void upipe_grid_out_input(struct upipe *upipe,
     }
 
     /* extract from current input */
-    int ret = upipe_grid_out_extract_input(upipe, uref, &input_flow_def);
+    int ret = upipe_grid_out_extract_input(upipe, uref, &flow_def_selected);
     if (ubase_check(ret) && unlikely(!uref->ubuf)) {
         uref_free(uref);
         return;
     }
 
     /* input has changed? */
-    if (unlikely(!upipe_grid_out->flow_def_uptodate ||
-                 upipe_grid_flow_def_cmp(upipe_grid_out->flow_def_input,
-                                         input_flow_def))) {
-        struct uref *flow_def = uref_dup(upipe_grid_out->input_flow_def);
+    if (unlikely(
+            !upipe_grid_out->flow_def_uptodate ||
+            upipe_grid_out_check_flow_def_selected(upipe, flow_def_selected))) {
+        struct uref *flow_def = uref_dup(upipe_grid_out->flow_def_input);
         if (unlikely(!flow_def)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             uref_free(uref);
             return;
         }
         /* has input? */
-        if (input_flow_def) {
-            input_flow_def = uref_dup(input_flow_def);
-            if (unlikely(!input_flow_def)) {
+        if (flow_def_selected) {
+            flow_def_selected = uref_dup(flow_def_selected);
+            if (unlikely(!flow_def_selected)) {
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 uref_free(uref);
                 return;
             }
             /* import input flow def */
             upipe_grid_out_import_format(
-                upipe, flow_def, input_flow_def);
+                upipe, flow_def, flow_def_selected);
         }
 
         /* store new flow def */
@@ -1158,8 +1145,7 @@ static void upipe_grid_out_input(struct upipe *upipe,
         uref_dump(flow_def, upipe->uprobe);
         upipe_grid_out_store_flow_def(upipe, flow_def);
         upipe_grid_out->flow_def_uptodate = true;
-        uref_free(upipe_grid_out->flow_def_input);
-        upipe_grid_out->flow_def_input = input_flow_def;
+        upipe_grid_out_store_flow_def_selected(upipe, flow_def_selected);
     }
 
     upipe_grid_out_output(upipe, uref, upump_p);
@@ -1176,6 +1162,9 @@ static int upipe_grid_out_set_flow_def(struct upipe *upipe,
 {
     struct upipe_grid_out *upipe_grid_out =
         upipe_grid_out_from_upipe(upipe);
+
+    if (upipe_grid_out_check_flow_def_input(upipe, flow_def))
+        return UBASE_ERR_NONE;
 
     struct uref *flow_def_dup = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(flow_def_dup);
