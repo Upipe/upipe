@@ -184,11 +184,6 @@ struct upipe_grid_out {
     bool warn_no_input_buffer;
 };
 
-static void upipe_grid_out_handle_input_changed(struct upipe *upipe,
-                                                 struct upipe *input);
-static void upipe_grid_out_handle_input_removed(struct upipe *upipe,
-                                                 struct upipe *input);
-
 UPIPE_HELPER_UPIPE(upipe_grid_out, upipe, UPIPE_GRID_OUT_SIGNATURE);
 UPIPE_HELPER_UREFCOUNT(upipe_grid_out, urefcount,
                        upipe_grid_out_free);
@@ -200,6 +195,10 @@ UPIPE_HELPER_SUBPIPE(upipe_grid, upipe_grid_out, output, out_mgr,
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_grid_out, flow_def_input);
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_grid_out, flow_def_selected);
 
+/** @hidden */
+static int upipe_grid_out_set_input_real(struct upipe *upipe,
+                                         struct upipe *input);
+
 /** @internal @This frees a grid input sub pipe.
  *
  * @param upipe description structure of the pipe
@@ -208,10 +207,18 @@ static void upipe_grid_in_free(struct upipe *upipe)
 {
     struct upipe_grid_in *upipe_grid_in =
         upipe_grid_in_from_upipe(upipe);
+    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
+
+    struct uchain *uchain;
+    ulist_foreach(&upipe_grid->outputs, uchain) {
+        struct upipe_grid_out *out = upipe_grid_out_from_uchain(uchain);
+        if (unlikely(out->input == upipe))
+            upipe_grid_out_set_input_real(upipe_grid_out_to_upipe(out), NULL);
+    }
 
     upipe_throw_dead(upipe);
 
-    struct uchain *uchain, *uchain_tmp;
+    struct uchain *uchain_tmp;
     ulist_delete_foreach(&upipe_grid_in->urefs, uchain, uchain_tmp) {
         ulist_delete(uchain);
         uref_free(uref_from_uchain(uchain));
@@ -264,44 +271,6 @@ static struct upipe *upipe_grid_in_alloc(struct upipe_mgr *mgr,
     upipe_throw_ready(upipe);
 
     return upipe;
-}
-
-/** @internal @This catches events from a grid input pipe.
- *
- * @param uprobe structure used to raise events
- * @param upipe the grid input pipe description
- * @param event event raised
- * @param args optional arguments
- * @return an error code
- */
-static int upipe_grid_in_catch(struct uprobe *uprobe,
-                               struct upipe *upipe,
-                               int event, va_list args)
-{
-    if (unlikely(!upipe))
-        return uprobe_throw_next(uprobe, upipe, event, args);
-
-    struct upipe_grid *upipe_grid = upipe_grid_from_in_mgr(upipe->mgr);
-    struct upipe *super = upipe_grid_to_upipe(upipe_grid);
-
-    switch (event) {
-        case UPROBE_NEW_FLOW_DEF: {
-            struct upipe *output = NULL;
-            while (ubase_check(upipe_grid_iterate_output(super, &output)) &&
-                   output)
-                upipe_grid_out_handle_input_changed(output, upipe);
-            break;
-        }
-
-        case UPROBE_DEAD: {
-            struct upipe *output = NULL;
-            while (ubase_check(upipe_grid_iterate_output(super, &output)) &&
-                   output)
-                upipe_grid_out_handle_input_removed(output, upipe);
-            break;
-        }
-    }
-    return uprobe_throw_next(uprobe, upipe, event, args);
 }
 
 /** @internal @This sets the input flow def for real.
@@ -1382,36 +1351,6 @@ static int upipe_grid_out_iterate_input_real(struct upipe *upipe,
     return upipe_grid_iterate_input(super, input_p);
 }
 
-/** @internal @This handles an input changed.
- *
- * @param upipe output pipe description
- * @param input input pipe description
- */
-static void upipe_grid_out_handle_input_changed(struct upipe *upipe,
-                                                struct upipe *input)
-{
-    struct upipe_grid_out *upipe_grid_out =
-        upipe_grid_out_from_upipe(upipe);
-
-    if (unlikely(upipe_grid_out->input == input))
-        upipe_grid_out->flow_def_uptodate = false;
-}
-
-/** @internal @This is called when an input pipe is removed.
- *
- * @param upipe output pipe description
- * @param input input pipe description
- */
-static void upipe_grid_out_handle_input_removed(struct upipe *upipe,
-                                                struct upipe *input)
-{
-    struct upipe_grid_out *upipe_grid_out =
-        upipe_grid_out_from_upipe(upipe);
-
-    if (unlikely(upipe_grid_out->input == input))
-        upipe_grid_out_set_input_real(upipe, NULL);
-}
-
 /** @internal @This is called when the downstream pipe wants to negotiate a flow
  * format.
  *
@@ -1718,8 +1657,7 @@ struct upipe *upipe_grid_alloc_input(struct upipe *upipe,
                                      struct uprobe *uprobe)
 {
     struct upipe_grid *upipe_grid = upipe_grid_from_upipe(upipe);
-    return upipe_void_alloc(&upipe_grid->in_mgr,
-                            uprobe_alloc(upipe_grid_in_catch, uprobe));
+    return upipe_void_alloc(&upipe_grid->in_mgr, uprobe);
 }
 
 /** @This allocates a new grid output.
