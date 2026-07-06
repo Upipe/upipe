@@ -424,10 +424,6 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
         bool need_derive = pic_vaapi_in && pic_qsv_out;
         bool need_tonemap = ubase_check(uref_pic_flow_check_hdr10(flow_def)) &&
             ubase_check(uref_pic_flow_check_sdr(flow_def_dup));
-        bool need_avfilter =
-            (hw || need_tonemap) &&
-            (need_deint || need_scale || need_format || need_hw_transfer ||
-             need_derive || need_range || need_tonemap);
 
         const char *range_in =
             ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
@@ -482,10 +478,69 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
         if (need_tonemap)
             upipe_notice(upipe, "need tonemap hdr10 → sdr");
 
-        bool use_avfilter = need_avfilter && ffmt_mgr->avfilter_mgr;
-        bool use_deint = need_deint && ffmt_mgr->deint_mgr && !use_avfilter;
-        bool use_sws = need_sws && ffmt_mgr->sws_mgr && !use_avfilter;
-        bool use_interlace = need_interlace && ffmt_mgr->interlace_mgr;
+        bool use_avfilter = false;
+        bool use_deint = false;
+        bool use_sws = false;
+        bool use_interlace = false;
+
+        if (hw) {
+            if (need_deint || need_sws || need_hw_transfer || need_derive) {
+                if (ffmt_mgr->avfilter_mgr)
+                    use_avfilter = true;
+                else {
+                    upipe_warn(upipe, "hardware surfaces need avfilter");
+                    return UBASE_ERR_UNHANDLED;
+                }
+            }
+        }
+
+        if (need_tonemap) {
+            if (ffmt_mgr->avfilter_mgr)
+                use_avfilter = true;
+            else {
+                upipe_warn(upipe, "tonemap conversions need avfilter");
+                return UBASE_ERR_UNHANDLED;
+            }
+        }
+
+        if (need_sws) {
+            if (use_avfilter)
+                use_sws = false;
+            else if (ffmt_mgr->sws_mgr)
+                use_sws = true;
+            else if (ffmt_mgr->avfilter_mgr)
+                use_avfilter = true;
+            else {
+                upipe_warn(upipe, "no format conversion manager set");
+                return UBASE_ERR_UNHANDLED;
+            }
+        }
+
+        if (need_deint) {
+            if (use_avfilter)
+                use_deint = false;
+            else if (ffmt_mgr->deint_mgr)
+                use_deint = true;
+            else if (ffmt_mgr->avfilter_mgr)
+                use_avfilter = true;
+            else {
+                upipe_warn(upipe, "no deinterlace manager set");
+                return UBASE_ERR_UNHANDLED;
+            }
+        }
+
+        if (need_interlace) {
+            if (ffmt_mgr->interlace_mgr) {
+                if (hw_out) {
+                    upipe_warn(upipe, "hardware interlacing is not supported");
+                    return UBASE_ERR_UNHANDLED;
+                }
+                use_interlace = true;
+            } else {
+                upipe_warn(upipe, "no interlace manager set");
+                return UBASE_ERR_UNHANDLED;
+            }
+        }
 
         struct upipe *last_inner = NULL;
 
