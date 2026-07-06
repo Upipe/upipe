@@ -1082,6 +1082,15 @@ static struct uref *upipe_mpgvf_handle_frame(struct upipe *upipe)
         return NULL;
     }
 
+    /* No picture start code was found in the buffered data (e.g. a stream
+     * truncated in the middle of the headers). We cannot output a frame, and
+     * next_frame_offset is still -1, so drop the data instead of extracting a
+     * bogus (size_t)-1 length below. */
+    if (unlikely(upipe_mpgvf->next_frame_offset < 0)) {
+        upipe_mpgvf_consume_uref_stream(upipe, upipe_mpgvf->next_frame_size);
+        return NULL;
+    }
+
     /* The PTS can be updated up to the first octet of the picture start code,
      * so any preceding structure must be extracted before, so that the PTS
      * can be properly promoted and taken into account. */
