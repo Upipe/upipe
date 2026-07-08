@@ -22,6 +22,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define UBUF_POOL_DEPTH     1
 #define UBUF_PREPEND        2
@@ -1380,6 +1382,157 @@ int main(int argc, char **argv)
     ubuf_free(dst);
     ubuf_mgr_release(src_mgr);
     ubuf_mgr_release(dst_mgr);
+
+    /* Benchmark: repeatedly blit a full 1920x1080 yuv422p picture through a
+     * rectangular alpha mask and report the throughput. */
+    int calls = 0;
+    if (argc > 1)
+        calls = atoi(argv[1]);
+
+    /* First benchmark: 8-bit yuv422p. */
+    if (calls > 0) {
+        dst_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+        assert(dst_mgr != NULL);
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(dst_mgr, "y8", 1, 1, 1));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(dst_mgr, "u8", 2, 1, 1));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(dst_mgr, "v8", 2, 1, 1));
+
+        src_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+        assert(src_mgr != NULL);
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "y8", 1, 1, 1));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "u8", 2, 1, 1));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "v8", 2, 1, 1));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "a8", 1, 1, 1));
+
+        dst = ubuf_pic_alloc(dst_mgr, 1920, 1080);
+        assert(dst != NULL);
+        src = ubuf_pic_alloc(src_mgr, 1920, 1080);
+        assert(src != NULL);
+
+        /* dst: middle gray (all planes 128). */
+        ubase_assert(ubuf_pic_plane_set_color(dst, "y8", 0, 0, 1920, 1080,
+                (const uint8_t []){ 128 }, 1));
+        ubase_assert(ubuf_pic_plane_set_color(dst, "u8", 0, 0, 1920, 1080,
+                (const uint8_t []){ 128 }, 1));
+        ubase_assert(ubuf_pic_plane_set_color(dst, "v8", 0, 0, 1920, 1080,
+                (const uint8_t []){ 128 }, 1));
+
+        /* src: gradients on the colour planes; alpha zero everywhere except a
+         * 1280x120 opaque rectangle three quarters down and horizontally
+         * centered. */
+        fill_plane_gradient(src, "y8", 0, 0, 1920, 1080);
+        fill_plane_gradient(src, "u8", 0, 0, 1920, 1080);
+        fill_plane_gradient(src, "v8", 0, 0, 1920, 1080);
+        ubase_assert(ubuf_pic_plane_set_color(src, "a8", 0, 0, 1920, 1080,
+                (const uint8_t []){ 0 }, 1));
+        ubase_assert(ubuf_pic_plane_set_color(src, "a8", 320, 810, 1280, 120,
+                (const uint8_t []){ 255 }, 1));
+
+        {
+            struct timespec start, end;
+
+            alpha = 255;
+            threshold = 80;
+
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            for (int i = 0; i < calls; i++) {
+                ubase_assert(ubuf_pic_blit(dst, src, 0, 0, 0, 0, 1920, 1080,
+                                           alpha, threshold));
+                if ((i + 1) % 1000 == 0) {
+                    clock_gettime(CLOCK_MONOTONIC, &end);
+                    double ms = (end.tv_sec - start.tv_sec) * 1000.0
+                              + (end.tv_nsec - start.tv_nsec) / 1000000.0;
+                    printf("1000 yuv422p blits: %.3f ms (%.1f fps)\n",
+                           ms, 1000.0 / (ms / 1000.0));
+                    start = end;
+                }
+            }
+        }
+
+        ubuf_free(src);
+        ubuf_free(dst);
+        ubuf_mgr_release(src_mgr);
+        ubuf_mgr_release(dst_mgr);
+    }
+
+    /* Benchmark: repeatedly blit a full 1920x1080 yuv422p10le picture through a
+     * rectangular alpha mask and report the throughput. */
+    if (calls > 0) {
+        dst_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+        assert(dst_mgr != NULL);
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(dst_mgr, "y10l", 1, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(dst_mgr, "u10l", 2, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(dst_mgr, "v10l", 2, 1, 2));
+
+        src_mgr = ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_PREPEND, UBUF_APPEND,
+                                         UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+        assert(src_mgr != NULL);
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "y10l", 1, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "u10l", 2, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "v10l", 2, 1, 2));
+        ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, "a10l", 1, 1, 2));
+
+        dst = ubuf_pic_alloc(dst_mgr, 1920, 1080);
+        assert(dst != NULL);
+        src = ubuf_pic_alloc(src_mgr, 1920, 1080);
+        assert(src != NULL);
+
+        /* dst: middle gray (all planes 512 == 0x200). */
+        ubase_assert(ubuf_pic_plane_set_color(dst, "y10l", 0, 0, 1920, 1080,
+                (const uint8_t []){ 0x00, 0x02 }, 2));
+        ubase_assert(ubuf_pic_plane_set_color(dst, "u10l", 0, 0, 1920, 1080,
+                (const uint8_t []){ 0x00, 0x02 }, 2));
+        ubase_assert(ubuf_pic_plane_set_color(dst, "v10l", 0, 0, 1920, 1080,
+                (const uint8_t []){ 0x00, 0x02 }, 2));
+
+        /* src: gradients on the colour planes; alpha zero everywhere except a
+         * 1280x120 opaque rectangle three quarters down and horizontally
+         * centered. */
+        fill_plane_gradient16(src, "y10l", 0, 0, 1920, 1080);
+        fill_plane_gradient16(src, "u10l", 0, 0, 1920, 1080);
+        fill_plane_gradient16(src, "v10l", 0, 0, 1920, 1080);
+        ubase_assert(ubuf_pic_plane_set_color(src, "a10l", 0, 0, 1920, 1080,
+                (const uint8_t []){ 0x00, 0x00 }, 2));
+        ubase_assert(ubuf_pic_plane_set_color(src, "a10l", 320, 810, 1280, 120,
+                (const uint8_t []){ 0xff, 0x03 }, 2));
+
+        {
+            struct timespec start, end;
+
+            alpha = 1023;
+            threshold = 80;
+
+            clock_gettime(CLOCK_MONOTONIC, &start);
+            for (int i = 0; i < calls; i++) {
+                ubase_assert(ubuf_pic_blit(dst, src, 0, 0, 0, 0, 1920, 1080,
+                                           alpha, threshold));
+                if ((i + 1) % 1000 == 0) {
+                    clock_gettime(CLOCK_MONOTONIC, &end);
+                    double ms = (end.tv_sec - start.tv_sec) * 1000.0
+                              + (end.tv_nsec - start.tv_nsec) / 1000000.0;
+                    printf("1000 yuv422p10le blits: %.3f ms (%.1f fps)\n",
+                           ms, 1000.0 / (ms / 1000.0));
+                    start = end;
+                }
+            }
+        }
+
+        ubuf_free(src);
+        ubuf_free(dst);
+        ubuf_mgr_release(src_mgr);
+        ubuf_mgr_release(dst_mgr);
+    }
 
     umem_mgr_release(umem_mgr);
     return 0;
