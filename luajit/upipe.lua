@@ -858,7 +858,7 @@ local function default_probe(log_level)
         probe = probe .. uprobe.upump_mgr(upump_mgr)
     end
 
-    return probe, upump_mgr
+    return probe, upump_mgr, uref_mgr
 end
 
 return setmetatable({
