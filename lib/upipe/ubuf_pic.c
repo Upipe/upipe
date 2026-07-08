@@ -18,7 +18,7 @@
 #include <string.h>
 
 #if defined(__GNUC__) && defined(__x86_64__)
-#include <emmintrin.h>
+#include "ubuf_pic_blit_x86.h"
 #endif
 
 /** @This blits a picture ubuf to another ubuf.
@@ -266,6 +266,13 @@ int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
             uint16_t *real_dst = (uint16_t *)dest_buffer;
             const uint16_t *real_src = (const uint16_t *)src_buffer;
             const uint16_t *real_alpha = (const uint16_t *)(alpha_plane + alpha_stride * i * src_vsub);
+
+#if defined(__GNUC__) && defined(__x86_64__)
+            if (blit10_handle_cases(real_dst, real_src, real_alpha, alpha,
+                        threshold, plane_hsize, src_hsub))
+                /* Nothing to do */;
+            else
+#endif
 
             if ((!alpha_plane && alpha == 0x3ff) || threshold == 0) {
                 memcpy(dest_buffer, src_buffer, plane_hsize*2);
