@@ -124,6 +124,15 @@ int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
         int plane_vsize = extract_vsize / src_vsub;
 
         for (int i = 0; i < plane_vsize; i++) {
+
+#if defined(__GNUC__) && defined(__x86_64__)
+            if (in_planes == 1 && blit8_handle_cases(dest_buffer, in[0],
+                        alpha_plane + alpha_stride * (i * src_vsub),
+                        alpha, threshold, plane_hsize, src_hsub))
+                /* Nothing to do */;
+            else
+#endif
+
             if ((!alpha_plane && alpha == 0xff) || threshold == 0) {
                 if (in_planes == 1)
                     memcpy(dest_buffer, in[0], plane_hsize);
