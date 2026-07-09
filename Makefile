@@ -367,10 +367,9 @@ cmd-cc          = $(CC) $(_CPPFLAGS) $(_CFLAGS) -o $@ -c $<
 cmd-cxx         = $(CXX) $(_CPPFLAGS) $(_CXXFLAGS) -o $@ -c $<
 cmd-nasm        = $(NASM) $(_NASMFLAGS) -o $@ $<
 cmd-ld          = $(if $(_cxx),$(CXX),$(CC)) $(_LDFLAGS) -o $@$(_so_ver) \
-                  $(filter %.o,$^) $(filter %.a,$^) $(_LDLIBS) \
-                  $(if $(_so_ver), \
-                  && ln -sf $(notdir $@$(_so_ver)) $@$(_so_maj) \
-                  && ln -sf $(notdir $@$(_so_ver)) $@)
+                  $(filter %.o,$^) $(_LDLIBS) $(if $(_so_ver), \
+                    && ln -sf $(notdir $@$(_so_ver)) $@$(_so_maj) \
+                    && ln -sf $(notdir $@$(_so_ver)) $@)
 cmd-ar          = $(AR) crs $@ $^
 cmd-inst-dir    = $(INSTALL) -d $@
 cmd-inst-bin    = $(INSTALL) -m 755 $< $(_dest-bin)
@@ -756,11 +755,16 @@ _CPPFLAGS += -MD -MP
 -include $(_depfiles)
 
 _lib_deps = $(foreach l,$($1-libs) $($1-opt-libs),$(filter $l %/$l,$(_lib-targets)))
+_o_deps = $(call _tsubst,$1,$2.o) $(if $(have_shared),,\
+          $(foreach t,$(call _lib_deps,$1),\
+            $(if $(filter dynamic,$($t-opt)),,\
+              $(if $(have_static-pic),$t_pic.a) \
+              $(if $(have_static),$t.a))))
 
-$(_bin-targets): %: $$(call _tsubst,%,.o) | $$(call _lib_deps,%); $(call cmd,ld)
+$(_bin-targets): %: $$(call _o_deps,%) | $$(call _lib_deps,%); $(call cmd,ld)
 $(_lib-targets:=_pic.a): %_pic.a: $$(call _tsubst,%,-pic.o); $(call cmd,ar)
 $(_lib-targets:=.a): %.a: $$(call _tsubst,%,.o); $(call cmd,ar)
-$(_lib-targets:=.$(_so)): %.$(_so): $$(call _tsubst,%,-pic.o) | $$(call _lib_deps,%)
+$(_lib-targets:=.$(_so)): %.$(_so): $$(call _o_deps,%,-pic) | $$(call _lib_deps,%)
 	$(call cmd,ld)
 
 $(foreach d,$(_dirs),$(eval $(filter $d%,$(_out)): | $d))
