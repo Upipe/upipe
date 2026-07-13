@@ -2303,11 +2303,11 @@ uref_##group##_cmp_##attr(struct uref *uref1, struct uref *uref2)           \
 }
 
 /* @This allows to define accessors for a rational attribute, with a name
- * depending on prrationalf arguments.
+ * depending on printf arguments.
  *
  * @param group group of attributes
  * @param attr readable name of the attribute, for the function names
- * @param format prrationalf-style format of the attribute
+ * @param format printf-style format of the attribute
  * @param desc description of the attribute
  */
 #define UREF_ATTR_RATIONAL_VA(group, attr, format, desc, args_decl, args)   \
