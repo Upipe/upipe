@@ -76,7 +76,7 @@ struct upipe_interlace {
     struct uref *uref_last;
     /** current input width */
     uint64_t width;
-    /** current input heigth */
+    /** current input height */
     uint64_t height;
 
     /** public structure */
