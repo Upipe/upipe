@@ -43,7 +43,7 @@
 
 UREF_ATTR_VOID(test, input, "test.in", input test attribute)
 UREF_ATTR_VOID(test, output, "test.out", output test attribute)
-UREF_ATTR_VOID(test, wanted, "test.want", wanted test attibutes)
+UREF_ATTR_VOID(test, wanted, "test.want", wanted test attributes)
 UREF_ATTR_UNSIGNED(test, count, "test.count", expected number of frames)
 
 typedef void (*test_func)(struct uprobe *uprobe, struct uref_mgr *);

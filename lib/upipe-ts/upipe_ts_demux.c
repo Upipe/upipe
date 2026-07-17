@@ -314,7 +314,7 @@ struct upipe_ts_demux {
     /** list of EMMs */
     struct uchain emms;
 
-    /** mamager to create EMMs */
+    /** manager to create EMMs */
     struct upipe_mgr emm_mgr;
     /** manager to create programs */
     struct upipe_mgr program_mgr;
