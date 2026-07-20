@@ -946,7 +946,8 @@ static int upipe_ts_emmd_control(struct upipe *upipe, int command, va_list args)
             const char *private_key = va_arg(args, const char*);
             if (!private_key)
                 return UBASE_ERR_INVALID;
-            read_rsa_file(upipe, private_key);
+            if (read_rsa_file(upipe, private_key))
+                return UBASE_ERR_EXTERNAL;
             return UBASE_ERR_NONE;
         }
 
