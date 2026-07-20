@@ -199,11 +199,11 @@ static void upipe_ts_totd_input(struct upipe *upipe, struct uref *uref,
     }
 
     uref_block_unmap(uref, 0);
-    uref_free(uref);
 
     flow_def = upipe_ts_totd_store_flow_def_attr(upipe, flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref);
         return;
     }
     upipe_ts_totd_store_flow_def(upipe, flow_def);
@@ -214,6 +214,7 @@ static void upipe_ts_totd_input(struct upipe *upipe, struct uref *uref,
     time_t time = dvb_time_format_UTC(utc, NULL, date);
     upipe_dbg_va(upipe, "throw UTC clock (%s)", date);
     upipe_throw_clock_utc(upipe, uref, UCLOCK_FREQ * time);
+    uref_free(uref);
 }
 
 /** @internal @This receives an ubuf manager.
