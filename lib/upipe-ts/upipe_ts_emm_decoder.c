@@ -214,6 +214,8 @@ static struct upipe *upipe_ts_emmd_alloc(struct upipe_mgr *mgr,
     upipe_ts_psid_table_init(upipe_ts_emmd->next_emm);
     upipe_ts_emmd->aes_key_set[0] = false;
     upipe_ts_emmd->aes_key_set[1] = false;
+    upipe_ts_emmd->key = NULL;
+    memset(upipe_ts_emmd->ekid, 0, sizeof (upipe_ts_emmd->ekid));
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -744,6 +746,11 @@ static int decrypt(struct upipe *upipe, uint8_t *esd, size_t n)
 {
     struct upipe_ts_emmd *upipe_ts_emmd = upipe_ts_emmd_from_upipe(upipe);
     int ret = 1;
+
+    if (!upipe_ts_emmd->key) {
+        upipe_err_va(upipe, "no private key set");
+        return ret;
+    }
 
     gcry_sexp_t data;
     if (gcry_sexp_build(&data, NULL,
