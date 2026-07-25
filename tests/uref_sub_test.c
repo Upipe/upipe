@@ -21,6 +21,7 @@
 #include "upipe/ubuf_block_mem.h"
 #include "upipe/uref.h"
 #include "upipe/uref_std.h"
+#include "upipe/uref_flow.h"
 #include "upipe/uref_sub.h"
 
 #include <stdio.h>
@@ -135,13 +136,65 @@ int main(int argc, char **argv)
     ubase_nassert(uref_sub_replace_ubuf(uref, build_block(ubuf_mgr, 'X', 8),
                                         42));
 
-    /* detach an additional entry: following entries shift down */
+    /* extract an entry as a standalone uref: per-entry attributes become
+     * plain attributes again, visible to shorthand accessors */
+    uref->date_prog = 42;
+    struct uref *extracted = uref_sub_extract(uref, 1);
+    assert(extracted != NULL);
+    assert(uref_sub_count(extracted) == 1);
+    check_block(extracted->ubuf, 'B', 32);
+    assert(extracted->date_prog == 42);
+    ubase_assert(uref_flow_get_id(extracted, &v));
+    assert(v == 0x101);
+    ubase_assert(uref_flow_get_def(extracted, &def));
+    assert(!strcmp(def, "sound.s32."));
+    uref_free(extracted);
+
+    /* extract entry 0: its own namespace, without other entries' */
+    extracted = uref_sub_extract(uref, 0);
+    assert(extracted != NULL);
+    check_block(extracted->ubuf, 'V', 64);
+    ubase_assert(uref_flow_get_id(extracted, &v));
+    assert(v == 0x100);
+    ubase_nassert(uref_sub_get_flow_id(extracted, &v, 1));
+    uref_free(extracted);
+
+    assert(uref_sub_extract(uref, 42) == NULL);
+
+    /* merge a standalone uref as a new entry */
+    struct uref *sound = uref_alloc(mgr);
+    assert(sound != NULL);
+    ubase_nassert(uref_sub_merge(uref, sound, NULL)); /* no ubuf */
+    uref_attach_ubuf(sound, build_block(ubuf_mgr, 'M', 24));
+    ubase_assert(uref_flow_set_id(sound, 0x200));
+    ubase_assert(uref_flow_set_def(sound, "sound.s16."));
+    uint8_t merge_index = 0;
+    ubase_assert(uref_sub_merge(uref, sound, &merge_index));
+    assert(merge_index == 3);
+    assert(uref_sub_count(uref) == 4);
+    check_block(uref_sub_find_flow_id(uref, 0x200, &merge_index), 'M', 24);
+    assert(merge_index == 3);
+    ubase_assert(uref_sub_get_def(uref, &def, 3));
+    assert(!strcmp(def, "sound.s16."));
+
+    /* detach an additional entry: its attributes are deleted and following
+     * entries' attributes are renumbered */
     struct ubuf *detached = uref_sub_detach_ubuf(uref, 1);
     check_block(detached, 'B', 32);
     ubuf_free(detached);
-    assert(uref_sub_count(uref) == 2);
+    assert(uref_sub_count(uref) == 3);
     check_block(uref_sub_get(uref, 1), 'S', 16);
-    assert(uref_sub_detach_ubuf(uref, 2) == NULL);
+    ubase_assert(uref_sub_get_flow_id(uref, &v, 1));
+    assert(v == 0x102);
+    ubase_nassert(uref_sub_get_def(uref, &def, 1));
+    ubase_assert(uref_sub_get_flow_id(uref, &v, 2));
+    assert(v == 0x200);
+    ubase_assert(uref_sub_get_def(uref, &def, 2));
+    assert(!strcmp(def, "sound.s16."));
+    ubase_nassert(uref_sub_get_flow_id(uref, &v, 3));
+    assert(uref_sub_find_flow_id(uref, 0x101, NULL) == NULL);
+    check_block(uref_sub_find_flow_id(uref, 0x200, NULL), 'M', 24);
+    assert(uref_sub_detach_ubuf(uref, 3) == NULL);
 
     /* legacy detach only touches the primary ubuf */
     detached = uref_detach_ubuf(uref);
