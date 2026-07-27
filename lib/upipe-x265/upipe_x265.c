@@ -799,8 +799,15 @@ static void upipe_x265_build_flow_def(struct upipe *upipe)
         if (unlikely(ret < 0)) {
             upipe_warn(upipe, "unable to get encoder headers");
         } else {
+            /* keep only the leading non-VCL parameter set NALs (VPS/SPS/PPS) */
+            unsigned size = 0;
+            for (unsigned i = 0; i < nal_num; i++)
+                if (nals[i].type < H265NAL_TYPE_VPS)
+                    break;
+                else
+                    size += nals[i].sizeBytes;
             UBASE_FATAL(upipe,
-                uref_flow_set_headers(flow_def, nals[0].payload, ret));
+                uref_flow_set_headers(flow_def, nals[0].payload, size));
         }
     }
     UBASE_FATAL(upipe,
