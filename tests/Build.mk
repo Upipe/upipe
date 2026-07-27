@@ -238,6 +238,14 @@ test-targets += upipe_h264_framer_test_build
 upipe_h264_framer_test_build-src = upipe_h264_framer_test_build.c
 upipe_h264_framer_test_build-libs = libupipe libupipe_x264 bitstream
 
+tests += upipe_h265_framer_test
+upipe_h265_framer_test-src = upipe_h265_framer_test.c upipe_h265_framer_test.h
+upipe_h265_framer_test-libs = libupipe libupipe_framers bitstream
+
+test-targets += upipe_h265_framer_test_build
+upipe_h265_framer_test_build-src = upipe_h265_framer_test_build.c
+upipe_h265_framer_test_build-libs = libupipe libupipe_x265 bitstream
+
 tests += upipe_htons_test
 upipe_htons_test-src = upipe_htons_test.c
 upipe_htons_test-libs = libupipe libupipe_modules
