@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -37,6 +38,7 @@
 #include "upipe/upipe_helper_uprobe.h"
 #include "upipe/upipe_helper_inner.h"
 #include "upipe/upipe_helper_subpipe.h"
+#include "upipe/upipe_helper_sync.h"
 #include "upipe-modules/upipe_idem.h"
 #include "upipe-av/upipe_avformat_source.h"
 
@@ -151,6 +153,7 @@ UPIPE_HELPER_UCLOCK(upipe_avfsrc, uclock, uclock_request, NULL,
 
 UPIPE_HELPER_UPUMP_MGR(upipe_avfsrc, upump_mgr)
 UPIPE_HELPER_UPUMP(upipe_avfsrc, upump, upump_mgr)
+UPIPE_HELPER_SYNC(upipe_avfsrc, probed)
 
 UBASE_FROM_TO(upipe_avfsrc, urefcount, urefcount_real, urefcount_real)
 
@@ -467,6 +470,7 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc_init_upump_mgr(upipe);
     upipe_avfsrc_init_upump(upipe);
     upipe_avfsrc_init_uclock(upipe);
+    upipe_avfsrc_init_sync(upipe);
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->timestamp_highest = AV_CLOCK_MIN;
     upipe_avfsrc->systime_rap = UINT64_MAX;
@@ -475,7 +479,6 @@ static struct upipe *upipe_avfsrc_alloc(struct upipe_mgr *mgr,
     upipe_avfsrc->url = NULL;
     upipe_avfsrc->options = NULL;
     upipe_avfsrc->context = NULL;
-    upipe_avfsrc->probed = false;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -738,7 +741,7 @@ static int upipe_avfsrc_probe(struct upipe *upipe)
         return UBASE_ERR_EXTERNAL;
     }
 
-    upipe_avfsrc->probed = true;
+    upipe_avfsrc_sync_acquired(upipe);
     upipe_avfsrc->streams = calloc(context->nb_streams, sizeof(struct uref *));
 
     for (int i = 0; i < context->nb_streams; i++) {
@@ -821,7 +824,7 @@ static void upipe_avfsrc_close(struct upipe *upipe)
         upipe_avfsrc->streams = NULL;
     }
     ubase_clean_str(&upipe_avfsrc->url);
-    upipe_avfsrc->probed = false;
+    upipe_avfsrc_sync_lost(upipe);
     upipe_split_throw_update(upipe);
 }
 
@@ -1099,7 +1102,7 @@ static int upipe_avfsrc_set_uri(struct upipe *upipe, const char *url)
 #endif
     upipe_avfsrc->timestamp_offset = 0;
     upipe_avfsrc->url = strdup(url);
-    upipe_avfsrc->probed = false;
+    upipe_avfsrc_sync_lost(upipe);
     upipe_notice_va(upipe, "opening URL %s", upipe_avfsrc->url);
     return UBASE_ERR_NONE;
 }
@@ -1255,6 +1258,7 @@ static void upipe_avfsrc_free(struct urefcount *urefcount_real)
     av_dict_free(&upipe_avfsrc->options);
     free(upipe_avfsrc->url);
 
+    upipe_avfsrc_clean_sync(upipe);
     upipe_avfsrc_clean_uclock(upipe);
     upipe_avfsrc_clean_upump(upipe);
     upipe_avfsrc_clean_upump_mgr(upipe);
