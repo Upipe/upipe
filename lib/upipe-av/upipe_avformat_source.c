@@ -824,8 +824,10 @@ static void upipe_avfsrc_close(struct upipe *upipe)
         upipe_avfsrc->streams = NULL;
     }
     ubase_clean_str(&upipe_avfsrc->url);
+    bool acquired = upipe_avfsrc->probed;
     upipe_avfsrc_sync_lost(upipe);
-    upipe_split_throw_update(upipe);
+    if (acquired)
+        upipe_split_throw_update(upipe);
 }
 
 /** @internal @This reads data from the source and outputs it.
