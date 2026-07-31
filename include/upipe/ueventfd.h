@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -199,15 +200,18 @@ static inline bool ueventfd_write(struct ueventfd *fd)
  *
  * @param fd pointer to a ueventfd
  * @param readable true if the ueventfd must be initialized as readable
+ * @param blocking true if the ueventfd must be initialized as blocking
  * @return false in case of failure
  */
-static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
+static inline bool ueventfd_init_inner(struct ueventfd *fd, bool readable,
+                                       bool blocking)
 {
     int ret;
 
 #ifdef UPIPE_HAVE_EVENTFD
     fd->mode = UEVENTFD_MODE_EVENTFD;
-    fd->event_fd = eventfd(readable ? 1 : 0, EFD_NONBLOCK | EFD_CLOEXEC);
+    fd->event_fd =
+        eventfd(readable ? 1 : 0, (blocking ? 0 : EFD_NONBLOCK) | EFD_CLOEXEC);
     if (unlikely(fd->event_fd == -1)) { // try to eventfd() with no flags (ie. linux < 2.6.27)
         fd->event_fd = eventfd(readable ? 1 : 0, 0);
 
@@ -218,12 +222,14 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
         if (unlikely(ret < 0))
             return false;
 
-        ret = fcntl(fd->event_fd, F_GETFL);
-        if (unlikely(ret < 0))
-            return false;
-        ret = fcntl(fd->event_fd, F_SETFL | O_NONBLOCK);
-        if (unlikely(ret < 0))
-            return false;
+        if (!blocking) {
+            ret = fcntl(fd->event_fd, F_GETFL);
+            if (unlikely(ret < 0))
+                return false;
+            ret = fcntl(fd->event_fd, F_SETFL | O_NONBLOCK);
+            if (unlikely(ret < 0))
+                return false;
+        }
 
         if (unlikely(fd->event_fd == -1)) { // eventfd() fails, fallback to pipe()
 #endif
@@ -241,12 +247,14 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
                 if (unlikely(ret < 0))
                     return false;
 
-                ret = fcntl(fd->pipe_fds[i], F_GETFL);
-                if (unlikely(ret < 0))
-                    return false;
-                ret = fcntl(fd->pipe_fds[i], F_SETFL, ret | O_NONBLOCK);
-                if (unlikely(ret < 0))
-                    return false;
+                if (!blocking) {
+                    ret = fcntl(fd->pipe_fds[i], F_GETFL);
+                    if (unlikely(ret < 0))
+                        return false;
+                    ret = fcntl(fd->pipe_fds[i], F_SETFL, ret | O_NONBLOCK);
+                    if (unlikely(ret < 0))
+                        return false;
+                }
             }
 
             if (likely(readable))
@@ -257,6 +265,28 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
     }
     return (fd->event_fd != -1);
 #endif
+}
+
+/** @This initializes a ueventfd.
+ *
+ * @param fd pointer to a ueventfd
+ * @param readable true if the ueventfd must be initialized as readable
+ * @return false in case of failure
+ */
+static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
+{
+    return ueventfd_init_inner(fd, readable, false);
+}
+
+/** @This initializes a blocking ueventfd.
+ *
+ * @param fd pointer to a ueventfd
+ * @param readable true if the ueventfd must be initialized as readable
+ * @return false in case of failure
+ */
+static inline bool ueventfd_init_blocking(struct ueventfd *fd, bool readable)
+{
+    return ueventfd_init_inner(fd, readable, true);
 }
 
 /** @This releases any data and file descriptors associated with the ueventfd.
