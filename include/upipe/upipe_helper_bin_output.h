@@ -225,6 +225,7 @@ static void STRUCTURE##_clean_bin_output(struct upipe *upipe)               \
     }                                                                       \
     STRUCTURE##_clean_##LAST_INNER(upipe);                                  \
     upipe_release(s->OUTPUT);                                               \
+    s->OUTPUT = NULL;                                                       \
 }
 
 #ifdef __cplusplus
