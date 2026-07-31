@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -42,6 +43,8 @@ struct upipe_xfer_mgr {
 
     /** mutual exclusion primitives to access the remote event loop */
     struct umutex *mutex;
+    /** eventfd used when yielding */
+    struct ueventfd ueventfd;
     /** watcher */
     struct upump *upump;
     /** remote upump_mgr */
@@ -71,7 +74,9 @@ enum upipe_xfer_msg_type {
     /** release pipe */
     UPIPE_XFER_RELEASE,
     /** detach from remote upump_mgr */
-    UPIPE_XFER_DETACH
+    UPIPE_XFER_DETACH,
+    /** ask the remote upump_mgr to yield */
+    UPIPE_XFER_YIELD,
     /* values from @ref uprobe_xfer_event are also allowed (backwards) */
 };
 
@@ -497,6 +502,7 @@ static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
     upump_stop(xfer_mgr->upump);
     upump_free(xfer_mgr->upump);
     upump_mgr_release(xfer_mgr->upump_mgr);
+    ueventfd_clean(&xfer_mgr->ueventfd);
     uqueue_clean(&xfer_mgr->uqueue);
     umutex_release(xfer_mgr->mutex);
     upipe_xfer_mgr_vacuum(mgr);
@@ -533,6 +539,11 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
                 upipe_xfer_msg_free(mgr, msg);
                 upipe_xfer_mgr_free(mgr);
                 return;
+            case UPIPE_XFER_YIELD:
+                umutex_unlock(xfer_mgr->mutex);
+                ueventfd_read(&xfer_mgr->ueventfd);
+                umutex_lock(xfer_mgr->mutex);
+                break;
             default:
                 /* this should not happen */
                 break;
@@ -633,7 +644,13 @@ static inline int _upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
     upipe_mgr_use(mgr);
-    return umutex_lock(xfer_mgr->mutex);
+    union upipe_xfer_arg arg = { .pipe = NULL };
+    int ret = upipe_xfer_mgr_send(mgr, UPIPE_XFER_YIELD, NULL, arg);
+    if (unlikely(!ubase_check(ret)))
+        return ret;
+    ret = umutex_lock(xfer_mgr->mutex);
+    ueventfd_write(&xfer_mgr->ueventfd);
+    return ret;
 }
 
 /** @This thaws the remote event loop previously frozen by @ref
@@ -712,6 +729,7 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
     xfer_mgr->queue_length = queue_length;
     ulifo_init(&xfer_mgr->msg_pool, msg_pool_depth,
                xfer_mgr->extra + uqueue_sizeof(queue_length));
+    ueventfd_init_blocking(&xfer_mgr->ueventfd, false);
 
     struct upipe_mgr *mgr = upipe_xfer_mgr_to_upipe_mgr(xfer_mgr);
     urefcount_init(upipe_xfer_mgr_to_urefcount(xfer_mgr),
