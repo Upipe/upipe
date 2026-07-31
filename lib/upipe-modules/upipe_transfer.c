@@ -42,6 +42,10 @@ struct upipe_xfer_mgr {
 
     /** mutual exclusion primitives to access the remote event loop */
     struct umutex *mutex;
+    /** eventfd used to wait until a remote event loop has suspended */
+    struct ueventfd suspend_fd;
+    /** eventfd used to resume a remote event loop */
+    struct ueventfd resume_fd;
     /** watcher */
     struct upump *upump;
     /** remote upump_mgr */
@@ -68,6 +72,8 @@ enum upipe_xfer_msg_type {
     UPIPE_XFER_SET_URI,
     /** set output of a pipe */
     UPIPE_XFER_SET_OUTPUT,
+    /** ask the remote upump_mgr to suspend until resume_fd is signalled */
+    UPIPE_XFER_YIELD,
     /** release pipe */
     UPIPE_XFER_RELEASE,
     /** detach from remote upump_mgr */
@@ -497,6 +503,8 @@ static void upipe_xfer_mgr_free(struct upipe_mgr *mgr)
     upump_stop(xfer_mgr->upump);
     upump_free(xfer_mgr->upump);
     upump_mgr_release(xfer_mgr->upump_mgr);
+    ueventfd_clean(&xfer_mgr->suspend_fd);
+    ueventfd_clean(&xfer_mgr->resume_fd);
     uqueue_clean(&xfer_mgr->uqueue);
     umutex_release(xfer_mgr->mutex);
     upipe_xfer_mgr_vacuum(mgr);
@@ -525,6 +533,10 @@ static void upipe_xfer_mgr_worker(struct upump *upump)
             case UPIPE_XFER_SET_OUTPUT:
                 upipe_set_output(msg->upipe_remote, msg->arg.pipe);
                 upipe_release(msg->arg.pipe);
+                break;
+            case UPIPE_XFER_YIELD:
+                ueventfd_write(&xfer_mgr->suspend_fd);
+                ueventfd_read(&xfer_mgr->resume_fd);
                 break;
             case UPIPE_XFER_RELEASE:
                 upipe_release(msg->upipe_remote);
@@ -632,8 +644,14 @@ static int _upipe_xfer_mgr_attach(struct upipe_mgr *mgr,
 static inline int _upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
+    union upipe_xfer_arg arg = { .pipe = NULL };
+    int ret = upipe_xfer_mgr_send(mgr, UPIPE_XFER_YIELD, NULL, arg);
+    if (unlikely(!ubase_check(ret)))
+        return ret;
+    if (unlikely(!ueventfd_read(&xfer_mgr->suspend_fd)))
+        return UBASE_ERR_EXTERNAL;
     upipe_mgr_use(mgr);
-    return umutex_lock(xfer_mgr->mutex);
+    return UBASE_ERR_NONE;
 }
 
 /** @This thaws the remote event loop previously frozen by @ref
@@ -645,7 +663,9 @@ static inline int _upipe_xfer_mgr_freeze(struct upipe_mgr *mgr)
 static inline int _upipe_xfer_mgr_thaw(struct upipe_mgr *mgr)
 {
     struct upipe_xfer_mgr *xfer_mgr = upipe_xfer_mgr_from_upipe_mgr(mgr);
-    int err = umutex_unlock(xfer_mgr->mutex);
+    int err = UBASE_ERR_NONE;
+    if (unlikely(!ueventfd_write(&xfer_mgr->resume_fd)))
+        err = UBASE_ERR_EXTERNAL;
     upipe_mgr_release(mgr);
     return err;
 }
@@ -712,6 +732,23 @@ struct upipe_mgr *upipe_xfer_mgr_alloc(uint8_t queue_length,
     xfer_mgr->queue_length = queue_length;
     ulifo_init(&xfer_mgr->msg_pool, msg_pool_depth,
                xfer_mgr->extra + uqueue_sizeof(queue_length));
+
+    if (!ueventfd_init(&xfer_mgr->suspend_fd, false)) {
+        free(xfer_mgr);
+        return NULL;
+    }
+    if (!ueventfd_init(&xfer_mgr->resume_fd, false)) {
+        ueventfd_clean(&xfer_mgr->suspend_fd);
+        free(xfer_mgr);
+        return NULL;
+    }
+    if (!ueventfd_set_blocking(&xfer_mgr->suspend_fd, true) ||
+        !ueventfd_set_blocking(&xfer_mgr->resume_fd, true)) {
+        ueventfd_clean(&xfer_mgr->suspend_fd);
+        ueventfd_clean(&xfer_mgr->resume_fd);
+        free(xfer_mgr);
+        return NULL;
+    }
 
     struct upipe_mgr *mgr = upipe_xfer_mgr_to_upipe_mgr(xfer_mgr);
     urefcount_init(upipe_xfer_mgr_to_urefcount(xfer_mgr),
