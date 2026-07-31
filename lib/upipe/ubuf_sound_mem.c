@@ -195,7 +195,7 @@ static int _ubuf_sound_mem_get_shared(struct ubuf *ubuf,
     struct ubuf_sound_mem *sound_mem = ubuf_sound_mem_from_ubuf(ubuf);
     *shared_p = sound_mem->shared;
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     UBASE_RETURN(ubuf_sound_common_size(ubuf, &size, &sample_size))
     uint8_t *buffer;
     UBASE_RETURN(ubuf_sound_common_plane_map(ubuf, channel, 0, -1, &buffer))
@@ -221,7 +221,7 @@ static int ubuf_sound_mem_control(struct ubuf *ubuf, int command, va_list args)
         }
         case UBUF_SIZE_SOUND: {
             size_t *size_p = va_arg(args, size_t *);
-            uint8_t *sample_size_p = va_arg(args, uint8_t *);
+            uint16_t *sample_size_p = va_arg(args, uint16_t *);
             return ubuf_sound_common_size(ubuf, size_p, sample_size_p);
         }
         case UBUF_ITERATE_SOUND_PLANE: {
@@ -366,7 +366,7 @@ static int ubuf_sound_mem_mgr_check(struct ubuf_mgr *mgr,
     if (ubase_ncmp(def, "sound."))
         return UBASE_ERR_INVALID;
 
-    uint8_t sample_size;
+    uint16_t sample_size;
     uint8_t planes;
     uint64_t align = 0;
 
@@ -450,7 +450,7 @@ static void ubuf_sound_mem_mgr_free(struct urefcount *urefcount)
 struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          uint8_t sample_size,
+                                          uint16_t sample_size,
                                           uint64_t align)
 {
     assert(umem_mgr != NULL);

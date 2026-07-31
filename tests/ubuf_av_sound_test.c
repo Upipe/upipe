@@ -21,7 +21,7 @@
 static void fill_in(struct ubuf *ubuf)
 {
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
     int octets = size * sample_size;
 
@@ -43,7 +43,7 @@ int main(int argc, char **argv)
     struct ubuf *ubuf1, *ubuf2;
     const char *channel;
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     uint8_t *w;
     const uint8_t *r;
     AVFrame *frame;
