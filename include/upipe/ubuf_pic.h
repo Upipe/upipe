@@ -336,13 +336,26 @@ static inline int ubuf_pic_resize(struct ubuf *ubuf, int hskip, int vskip,
                         new_hsize, new_vsize);
 }
 
-/** @This blits a picture ubuf to another ubuf.
+/** @This blits a picture ubuf to another ubuf, optionally reading the
+ * underlying pixels from a third (background) ubuf.
+ *
+ * When bg is NULL, the blending reads the underlying pixels from dest and
+ * pixels not covered by the subpicture are left untouched (in-place blit).
+ * When bg is not NULL, the underlying pixels are read from bg and every pixel
+ * of the destination rectangle is written, so dest may be freshly allocated;
+ * this merges the copy of the background and the blit of the subpicture in a
+ * single pass.
  *
  * @param dest destination ubuf
+ * @param bg background ubuf, or NULL to blend in place into dest
  * @param src source ubuf
  * @param dest_hoffset number of pixels to seek at the beginning of each line of
  * dest
  * @param dest_voffset number of lines to seek at the beginning of dest
+ * @param bg_hoffset number of pixels to skip at the beginning of each line of
+ * bg (ignored if bg is NULL)
+ * @param bg_voffset number of lines to skip at the beginning of bg (ignored if
+ * bg is NULL)
  * @param src_hoffset number of pixels to skip at the beginning of each line of
  * src
  * @param src_voffset number of lines to skip at the beginning of src
@@ -358,15 +371,25 @@ static inline int ubuf_pic_resize(struct ubuf *ubuf, int hskip, int vskip,
  *      their alpha value is more than this value
  * @return an error code
  */
-static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
+static inline int ubuf_pic_blit_alpha_bg(struct ubuf *dest, struct ubuf *bg,
+                                struct ubuf *src,
                                 int dest_hoffset, int dest_voffset,
+                                int bg_hoffset, int bg_voffset,
                                 int src_hoffset, int src_voffset,
                                 int extract_hsize, int extract_vsize,
                                 const uint8_t *alpha_plane, int alpha_stride,
                                 const int alpha, const int threshold)
 {
-    if (alpha_plane == NULL && alpha < threshold && threshold != 0xff)
-        return UBASE_ERR_NONE; /* nothing to do */
+    if (alpha_plane == NULL && alpha < threshold && threshold != 0xff) {
+        if (bg == NULL)
+            return UBASE_ERR_NONE; /* nothing to do */
+        /* the subpicture is invisible: plain copy of the background */
+        return ubuf_pic_blit_alpha_bg(dest, NULL, bg,
+                                      dest_hoffset, dest_voffset, 0, 0,
+                                      bg_hoffset, bg_voffset,
+                                      extract_hsize, extract_vsize,
+                                      NULL, 0, 0xff, 0);
+    }
 
     uint8_t src_macropixel;
     UBASE_RETURN(ubuf_pic_size(src, NULL, NULL, &src_macropixel))
@@ -374,6 +397,12 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
     UBASE_RETURN(ubuf_pic_size(dest, NULL, NULL, &dest_macropixel))
     if (unlikely(dest_macropixel != src_macropixel))
         return UBASE_ERR_INVALID;
+    if (bg != NULL) {
+        uint8_t bg_macropixel;
+        UBASE_RETURN(ubuf_pic_size(bg, NULL, NULL, &bg_macropixel))
+        if (unlikely(bg_macropixel != dest_macropixel))
+            return UBASE_ERR_INVALID;
+    }
 
 #define MAX_PLANES  3
 
@@ -414,11 +443,33 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                             src_macropixel_size != dest_macropixel_size))
             return UBASE_ERR_INVALID;
 
+        size_t bg_stride = dest_stride;
+        if (bg != NULL) {
+            uint8_t bg_hsub, bg_vsub, bg_macropixel_size;
+            UBASE_RETURN(ubuf_pic_plane_size(bg, chroma, &bg_stride,
+                         &bg_hsub, &bg_vsub, &bg_macropixel_size))
+            if (unlikely(bg_hsub != dest_hsub || bg_vsub != dest_vsub ||
+                         bg_macropixel_size != dest_macropixel_size))
+                return UBASE_ERR_INVALID;
+        }
+
         uint8_t *dest_buffer;
+        const uint8_t *bg_buffer;
         const uint8_t *in[MAX_PLANES];
         UBASE_RETURN(ubuf_pic_plane_write(dest, chroma,
                     dest_hoffset, dest_voffset,
                     extract_hsize, extract_vsize, &dest_buffer))
+        if (bg != NULL) {
+            err = ubuf_pic_plane_read(bg, chroma, bg_hoffset, bg_voffset,
+                                      extract_hsize, extract_vsize,
+                                      &bg_buffer);
+            if (unlikely(!ubase_check(err))) {
+                ubuf_pic_plane_unmap(dest, chroma, dest_hoffset, dest_voffset,
+                                     extract_hsize, extract_vsize);
+                return err;
+            }
+        } else
+            bg_buffer = dest_buffer;
         for (unsigned i = 0; i < in_planes; i++) {
             err =
                 ubuf_pic_plane_read(src, in_chroma[i], src_hoffset, src_voffset,
@@ -428,6 +479,9 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                     ubuf_pic_plane_unmap(src, in_chroma[i - 1], src_hoffset,
                                          src_voffset, extract_hsize,
                                          extract_vsize);
+                if (bg != NULL)
+                    ubuf_pic_plane_unmap(bg, chroma, bg_hoffset, bg_voffset,
+                                         extract_hsize, extract_vsize);
                 ubuf_pic_plane_unmap(dest, chroma, dest_hoffset, dest_voffset,
                                      extract_hsize, extract_vsize);
                 return err;
@@ -452,13 +506,15 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                 for (int j = 0; j < plane_hsize; j++) {
                     for (int p = 0; p < in_planes; p++)
                         dest_buffer[j * in_planes + p] =
-                            (dest_buffer[j * in_planes + p] * (0xff - alpha) +
+                            (bg_buffer[j * in_planes + p] * (0xff - alpha) +
                              in[p][j] * alpha) /
                             0xff;
                 }
             } else if (threshold != 0xff) {
                 /* This is an on/off blending
-                 * if alpha is over the threshold, we use the subpicture pixel.
+                 * if alpha is over the threshold, we use the subpicture pixel,
+                 * otherwise the background pixel (left untouched when
+                 * blending in place).
                  */
                 if (alpha == 0xff) {
                     for (int j = 0; j < plane_hsize; j++) {
@@ -466,6 +522,10 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                         if (a > threshold) {
                             for (int p = 0; p < in_planes; p++)
                                 dest_buffer[j * in_planes + p] = in[p][j];
+                        } else if (bg != NULL) {
+                            for (int p = 0; p < in_planes; p++)
+                                dest_buffer[j * in_planes + p] =
+                                    bg_buffer[j * in_planes + p];
                         }
                     }
                 } else {
@@ -474,6 +534,10 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                         if (a > threshold) {
                             for (int p = 0; p < in_planes; p++)
                                 dest_buffer[j * in_planes + p] = in[p][j];
+                        } else if (bg != NULL) {
+                            for (int p = 0; p < in_planes; p++)
+                                dest_buffer[j * in_planes + p] =
+                                    bg_buffer[j * in_planes + p];
                         }
                     }
                 }
@@ -484,7 +548,7 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                         const uint8_t a = alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub];
                         for (int p = 0; p < in_planes; p++)
                             dest_buffer[j * in_planes + p] =
-                                (dest_buffer[j * in_planes + p] * (0xff - a) +
+                                (bg_buffer[j * in_planes + p] * (0xff - a) +
                                  in[p][j] * a) /
                                 0xff;
                     }
@@ -493,13 +557,14 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                         const uint8_t a = (uint16_t)alpha_plane[alpha_stride * (i * src_vsub) + j * src_hsub] * (uint16_t)alpha / 0xff;
                         for (int p = 0; p < in_planes; p++)
                             dest_buffer[j * in_planes + p] =
-                                (dest_buffer[j * in_planes + p] * (0xff - a) +
+                                (bg_buffer[j * in_planes + p] * (0xff - a) +
                                  in[p][j] * a) /
                                 0xff;
                     }
                 }
             }
             dest_buffer += dest_stride;
+            bg_buffer += bg_stride;
             for (int p = 0; p < in_planes; p++)
                 in[p] += src_stride;
         }
@@ -507,6 +572,10 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
         err = ubuf_pic_plane_unmap(dest, chroma,
                                    dest_hoffset, dest_voffset,
                                    extract_hsize, extract_vsize);
+        if (bg != NULL)
+            UBASE_RETURN(ubuf_pic_plane_unmap(bg, chroma, bg_hoffset,
+                                              bg_voffset, extract_hsize,
+                                              extract_vsize))
         for (int p = 0; p < in_planes; p++)
             UBASE_RETURN(ubuf_pic_plane_unmap(src, in_chroma[p], src_hoffset,
                                               src_voffset, extract_hsize,
@@ -519,16 +588,44 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
     return UBASE_ERR_NONE;
 }
 
-/** @see ubuf_pic_blit_alpha */
-static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
+/** @This blits a picture ubuf to another ubuf in place.
+ *
+ * @see ubuf_pic_blit_alpha_bg
+ */
+static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                                 int dest_hoffset, int dest_voffset,
                                 int src_hoffset, int src_voffset,
                                 int extract_hsize, int extract_vsize,
                                 const uint8_t *alpha_plane, int alpha_stride,
                                 const int alpha, const int threshold)
 {
-    if (alpha_plane == NULL && alpha < threshold && threshold != 0x3ff)
-        return UBASE_ERR_NONE; /* nothing to do */
+    return ubuf_pic_blit_alpha_bg(dest, NULL, src,
+                                  dest_hoffset, dest_voffset, 0, 0,
+                                  src_hoffset, src_voffset,
+                                  extract_hsize, extract_vsize,
+                                  alpha_plane, alpha_stride, alpha, threshold);
+}
+
+/** @see ubuf_pic_blit_alpha_bg */
+static inline int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
+                                struct ubuf *src,
+                                int dest_hoffset, int dest_voffset,
+                                int bg_hoffset, int bg_voffset,
+                                int src_hoffset, int src_voffset,
+                                int extract_hsize, int extract_vsize,
+                                const uint8_t *alpha_plane, int alpha_stride,
+                                const int alpha, const int threshold)
+{
+    if (alpha_plane == NULL && alpha < threshold && threshold != 0x3ff) {
+        if (bg == NULL)
+            return UBASE_ERR_NONE; /* nothing to do */
+        /* the subpicture is invisible: plain copy of the background */
+        return ubuf_pic_blit_alpha10_bg(dest, NULL, bg,
+                                        dest_hoffset, dest_voffset, 0, 0,
+                                        bg_hoffset, bg_voffset,
+                                        extract_hsize, extract_vsize,
+                                        NULL, 0, 0x3ff, 0);
+    }
 
     uint8_t src_macropixel;
     UBASE_RETURN(ubuf_pic_size(src, NULL, NULL, &src_macropixel))
@@ -536,6 +633,12 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
     UBASE_RETURN(ubuf_pic_size(dest, NULL, NULL, &dest_macropixel))
     if (unlikely(dest_macropixel != src_macropixel))
         return UBASE_ERR_INVALID;
+    if (bg != NULL) {
+        uint8_t bg_macropixel;
+        UBASE_RETURN(ubuf_pic_size(bg, NULL, NULL, &bg_macropixel))
+        if (unlikely(bg_macropixel != dest_macropixel))
+            return UBASE_ERR_INVALID;
+    }
 
     const char *chroma;
     ubuf_pic_foreach_plane(dest, chroma) {
@@ -554,15 +657,42 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
                      src_macropixel_size != dest_macropixel_size))
             return UBASE_ERR_INVALID;
 
+        size_t bg_stride = dest_stride;
+        if (bg != NULL) {
+            uint8_t bg_hsub, bg_vsub, bg_macropixel_size;
+            UBASE_RETURN(ubuf_pic_plane_size(bg, chroma, &bg_stride,
+                         &bg_hsub, &bg_vsub, &bg_macropixel_size))
+            if (unlikely(bg_hsub != dest_hsub || bg_vsub != dest_vsub ||
+                         bg_macropixel_size != dest_macropixel_size))
+                return UBASE_ERR_INVALID;
+        }
+
         uint8_t *dest_buffer;
+        const uint8_t *bg_buffer;
         const uint8_t *src_buffer;
         UBASE_RETURN(ubuf_pic_plane_write(dest, chroma,
                     dest_hoffset, dest_voffset,
                     extract_hsize, extract_vsize, &dest_buffer))
-        int err = ubuf_pic_plane_read(src, chroma, src_hoffset, src_voffset,
+        int err;
+        if (bg != NULL) {
+            err = ubuf_pic_plane_read(bg, chroma, bg_hoffset, bg_voffset,
                                       extract_hsize, extract_vsize,
-                                      &src_buffer);
+                                      &bg_buffer);
+            if (unlikely(!ubase_check(err))) {
+                ubuf_pic_plane_unmap(dest, chroma,
+                                     dest_hoffset, dest_voffset,
+                                     extract_hsize, extract_vsize);
+                return err;
+            }
+        } else
+            bg_buffer = dest_buffer;
+        err = ubuf_pic_plane_read(src, chroma, src_hoffset, src_voffset,
+                                  extract_hsize, extract_vsize,
+                                  &src_buffer);
         if (unlikely(!ubase_check(err))) {
+            if (bg != NULL)
+                ubuf_pic_plane_unmap(bg, chroma, bg_hoffset, bg_voffset,
+                                     extract_hsize, extract_vsize);
             ubuf_pic_plane_unmap(dest, chroma,
                                  dest_hoffset, dest_voffset,
                                  extract_hsize, extract_vsize);
@@ -575,6 +705,7 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
 
         for (int i = 0; i < plane_vsize; i++) {
             uint16_t *real_dst = (uint16_t *)dest_buffer;
+            const uint16_t *real_bg = (const uint16_t *)bg_buffer;
             const uint16_t *real_src = (const uint16_t *)src_buffer;
             const uint16_t *real_alpha = (const uint16_t *)(alpha_plane + alpha_stride * i * src_vsub);
 
@@ -582,21 +713,25 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
                 memcpy(dest_buffer, src_buffer, plane_hsize);
             } else if (!alpha_plane) {
                 for (int j = 0; j < plane_hsize/2; j++) {
-                    real_dst[j] = (real_dst[j] * (0x3ff - alpha) + real_src[j] * alpha) / 0x3ff;
+                    real_dst[j] = (real_bg[j] * (0x3ff - alpha) + real_src[j] * alpha) / 0x3ff;
                 }
             } else if (threshold != 0x3ff) {
                 /* This is an on/off blending
-                 * if alpha is over the threshold, we use the subpicture pixel.
+                 * if alpha is over the threshold, we use the subpicture pixel,
+                 * otherwise the background pixel (left untouched when
+                 * blending in place).
                  */
                 if (alpha == 0x3ff) {
                     for (int j = 0; j < plane_hsize/2; j++) {
                         const uint16_t a = real_alpha[j * src_hsub];
                         if (a > threshold) real_dst[j] = real_src[j];
+                        else if (bg != NULL) real_dst[j] = real_bg[j];
                     }
                 } else {
                     for (int j = 0; j < plane_hsize/2; j++) {
                         const uint16_t a = real_alpha[j * src_hsub] * alpha / 0x3ff;
                         if (a > threshold) real_dst[j] = real_src[j];
+                        else if (bg != NULL) real_dst[j] = real_bg[j];
                     }
                 }
             } else {
@@ -604,22 +739,27 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
                 if (alpha == 0x3ff) {
                     for (int j = 0; j < plane_hsize/2; j++) {
                         const uint16_t a = real_alpha[j * src_hsub];
-                        real_dst[j] = (real_dst[j] * (0x3ff - a) + real_src[j] * a) / 0x3ff;
+                        real_dst[j] = (real_bg[j] * (0x3ff - a) + real_src[j] * a) / 0x3ff;
                     }
                 } else {
                     for (int j = 0; j < plane_hsize/2; j++) {
                         const uint16_t a = real_alpha[j * src_hsub] * alpha / 0x3ff;
-                        real_dst[j] = (real_dst[j] * (0x3ff - a) + real_src[j] * a) / 0x3ff;
+                        real_dst[j] = (real_bg[j] * (0x3ff - a) + real_src[j] * a) / 0x3ff;
                     }
                 }
             }
             dest_buffer += dest_stride;
+            bg_buffer += bg_stride;
             src_buffer += src_stride;
         }
 
         err = ubuf_pic_plane_unmap(dest, chroma,
                                    dest_hoffset, dest_voffset,
                                    extract_hsize, extract_vsize);
+        if (bg != NULL)
+            UBASE_RETURN(ubuf_pic_plane_unmap(bg, chroma,
+                                              bg_hoffset, bg_voffset,
+                                              extract_hsize, extract_vsize))
         UBASE_RETURN(ubuf_pic_plane_unmap(src, chroma,
                                           src_hoffset, src_voffset,
                                           extract_hsize, extract_vsize))
@@ -628,13 +768,41 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
     return UBASE_ERR_NONE;
 }
 
-/** @This blits a picture ubuf to another ubuf.
+/** @see ubuf_pic_blit_alpha_bg */
+static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
+                                int dest_hoffset, int dest_voffset,
+                                int src_hoffset, int src_voffset,
+                                int extract_hsize, int extract_vsize,
+                                const uint8_t *alpha_plane, int alpha_stride,
+                                const int alpha, const int threshold)
+{
+    return ubuf_pic_blit_alpha10_bg(dest, NULL, src,
+                                    dest_hoffset, dest_voffset, 0, 0,
+                                    src_hoffset, src_voffset,
+                                    extract_hsize, extract_vsize,
+                                    alpha_plane, alpha_stride,
+                                    alpha, threshold);
+}
+
+/** @This blits a picture ubuf to another ubuf, optionally reading the
+ * underlying pixels from a third (background) ubuf.
+ *
+ * When bg is NULL, the blending reads the underlying pixels from dest
+ * (in-place blit). When bg is not NULL, the underlying pixels are read from
+ * bg and every pixel of the destination rectangle is written, so dest may be
+ * freshly allocated; this merges the copy of the background and the blit of
+ * the subpicture in a single pass.
  *
  * @param dest destination ubuf
+ * @param bg background ubuf, or NULL to blend in place into dest
  * @param src source ubuf
  * @param dest_hoffset number of pixels to seek at the beginning of each line of
  * dest
  * @param dest_voffset number of lines to seek at the beginning of dest
+ * @param bg_hoffset number of pixels to skip at the beginning of each line of
+ * bg (ignored if bg is NULL)
+ * @param bg_voffset number of lines to skip at the beginning of bg (ignored if
+ * bg is NULL)
  * @param src_hoffset number of pixels to skip at the beginning of each line of
  * src
  * @param src_voffset number of lines to skip at the beginning of src
@@ -644,8 +812,10 @@ static inline int ubuf_pic_blit_alpha10(struct ubuf *dest, struct ubuf *src,
  * @param threshold threshold parameter for alpha
  * @return an error code
  */
-static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
+static inline int ubuf_pic_blit_bg(struct ubuf *dest, struct ubuf *bg,
+                                struct ubuf *src,
                                 int dest_hoffset, int dest_voffset,
+                                int bg_hoffset, int bg_voffset,
                                 int src_hoffset, int src_voffset,
                                 int extract_hsize, int extract_vsize,
                                 const int alpha, const int threshold)
@@ -673,12 +843,16 @@ static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
 
         /* Perform blit. */
         if (i == 0)
-            ret = ubuf_pic_blit_alpha(dest, src, dest_hoffset, dest_voffset,
+            ret = ubuf_pic_blit_alpha_bg(dest, bg, src,
+                    dest_hoffset, dest_voffset,
+                    bg_hoffset, bg_voffset,
                     src_hoffset, src_voffset,
                     extract_hsize, extract_vsize,
                     alpha_plane, alpha_stride, alpha, threshold);
         else
-            ret = ubuf_pic_blit_alpha10(dest, src, dest_hoffset, dest_voffset,
+            ret = ubuf_pic_blit_alpha10_bg(dest, bg, src,
+                    dest_hoffset, dest_voffset,
+                    bg_hoffset, bg_voffset,
                     src_hoffset, src_voffset,
                     extract_hsize, extract_vsize,
                     alpha_plane, alpha_stride, alpha, threshold);
@@ -688,8 +862,8 @@ static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
     }
 
     /* Fallback to no alpha plane. */
-    ret = ubuf_pic_blit_alpha(dest, src, dest_hoffset, dest_voffset,
-            src_hoffset, src_voffset,
+    ret = ubuf_pic_blit_alpha_bg(dest, bg, src, dest_hoffset, dest_voffset,
+            bg_hoffset, bg_voffset, src_hoffset, src_voffset,
             extract_hsize, extract_vsize,
             NULL, 0, alpha, threshold);
 
@@ -698,6 +872,21 @@ end:
         ubuf_pic_plane_unmap(src, apn, 0, 0, -1, -1);
 
     return ret;
+}
+
+/** @This blits a picture ubuf to another ubuf in place.
+ *
+ * @see ubuf_pic_blit_bg
+ */
+static inline int ubuf_pic_blit(struct ubuf *dest, struct ubuf *src,
+                                int dest_hoffset, int dest_voffset,
+                                int src_hoffset, int src_voffset,
+                                int extract_hsize, int extract_vsize,
+                                const int alpha, const int threshold)
+{
+    return ubuf_pic_blit_bg(dest, NULL, src, dest_hoffset, dest_voffset, 0, 0,
+                            src_hoffset, src_voffset,
+                            extract_hsize, extract_vsize, alpha, threshold);
 }
 
 /** @This copies a picture ubuf to a newly allocated ubuf, and doesn't deal

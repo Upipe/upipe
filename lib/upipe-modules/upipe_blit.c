@@ -1086,24 +1086,82 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
         }
     }
 
+    /* Subpipe whose blit was merged with the copy, or NULL */
+    struct upipe_blit_sub *fused = NULL;
+
     if (!writable) {
         if (unlikely(!upipe_blit->ubuf_mgr)) {
             upipe_warn(upipe, "no ubuf manager set, dropping...");
             uref_free(uref);
             return UBASE_ERR_BUSY;
         }
-        struct ubuf *ubuf = ubuf_pic_copy(upipe_blit->ubuf_mgr,
-                                          uref->ubuf, 0, 0, -1, -1);
-        if (unlikely(ubuf == NULL)) {
-            uref_free(uref);
-            return UBASE_ERR_ALLOC;;
+        struct ubuf *old = uref->ubuf;
+        struct ubuf *ubuf = NULL;
+        size_t hsize, vsize;
+
+        /* Merge the copy and the blit of the bottom-most subpicture in a
+         * single pass: copy the four bands around the subpicture rectangle
+         * and compose the rectangle directly from the background and the
+         * subpicture, so that each pixel is written only once. */
+        if (ubase_check(ubuf_pic_size(old, &hsize, &vsize, NULL))) {
+            ulist_foreach (&upipe_blit->subs, uchain) {
+                struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
+                if (sub->ubuf != NULL &&
+                    sub->hposition + sub->hsize <= hsize &&
+                    sub->vposition + sub->vsize <= vsize) {
+                    fused = sub;
+                    break;
+                }
+            }
+        }
+
+        if (fused != NULL) {
+            int w = hsize, h = vsize;
+            int hp = fused->hposition, vp = fused->vposition;
+            int hs = fused->hsize, vs = fused->vsize;
+            ubuf = ubuf_pic_alloc(upipe_blit->ubuf_mgr, w, h);
+            if (ubuf != NULL) {
+                int err = UBASE_ERR_NONE;
+                if (vp > 0)
+                    err = ubuf_pic_blit(ubuf, old, 0, 0, 0, 0,
+                                        w, vp, 0xff, 0);
+                if (ubase_check(err) && vp + vs < h)
+                    err = ubuf_pic_blit(ubuf, old, 0, vp + vs, 0, vp + vs,
+                                        w, h - vp - vs, 0xff, 0);
+                if (ubase_check(err) && hp > 0)
+                    err = ubuf_pic_blit(ubuf, old, 0, vp, 0, vp,
+                                        hp, vs, 0xff, 0);
+                if (ubase_check(err) && hp + hs < w)
+                    err = ubuf_pic_blit(ubuf, old, hp + hs, vp, hp + hs, vp,
+                                        w - hp - hs, vs, 0xff, 0);
+                if (ubase_check(err))
+                    err = ubuf_pic_blit_bg(ubuf, old, fused->ubuf,
+                                           hp, vp, hp, vp, 0, 0, hs, vs,
+                                           fused->alpha,
+                                           fused->alpha_threshold);
+                if (unlikely(!ubase_check(err))) {
+                    /* Fall back to a full copy followed by a blit */
+                    ubuf_free(ubuf);
+                    ubuf = NULL;
+                }
+            }
+        }
+
+        if (ubuf == NULL) {
+            fused = NULL;
+            ubuf = ubuf_pic_copy(upipe_blit->ubuf_mgr, old, 0, 0, -1, -1);
+            if (unlikely(ubuf == NULL)) {
+                uref_free(uref);
+                return UBASE_ERR_ALLOC;
+            }
         }
         uref_attach_ubuf(uref, ubuf);
     }
 
     ulist_foreach (&upipe_blit->subs, uchain) {
         struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
-        upipe_blit_sub_work(upipe_blit_sub_to_upipe(sub), uref);
+        if (sub != fused)
+            upipe_blit_sub_work(upipe_blit_sub_to_upipe(sub), uref);
     }
 
     upipe_blit_output(upipe, uref, upump_p);
