@@ -1120,7 +1120,7 @@ static void upipe_grid_out_input(struct upipe *upipe,
     /* input has changed? */
     if (unlikely(
             !upipe_grid_out->flow_def_uptodate ||
-            upipe_grid_out_check_flow_def_selected(upipe, flow_def_selected))) {
+            !upipe_grid_out_check_flow_def_selected(upipe, flow_def_selected))) {
         struct uref *flow_def = uref_dup(upipe_grid_out->flow_def_input);
         if (unlikely(!flow_def)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
