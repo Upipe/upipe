@@ -1095,6 +1095,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             uint8_t *dst = buf + stride * y + 4 * x;
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
+            const int src_stride = r->linesize[0];
 
             for (int i = 0; i < h; i++) {
                 for (int j = 0; j < w; j++) {
@@ -1108,7 +1109,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                 }
 
                 dst += stride;
-                src += w;
+                src += src_stride;
             }
         }
 
