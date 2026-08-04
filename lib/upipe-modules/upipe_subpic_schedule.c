@@ -22,7 +22,6 @@
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_subpipe.h"
-#include "upipe-ts/uref_ts_flow.h"
 #include "upipe-modules/upipe_subpic_schedule.h"
 
 #include <stdlib.h>
@@ -87,9 +86,6 @@ struct upipe_subpic_schedule_sub {
     enum upipe_helper_output_state output_state;
     /** list of output requests */
     struct uchain request_list;
-
-    /** if this stream is teletext */
-    bool teletext;
 
     /** structure for double-linked lists */
     struct uchain uchain;
@@ -188,8 +184,6 @@ static int upipe_subpic_schedule_sub_control(struct upipe *upipe, int command, v
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
-            upipe_subpic_schedule_sub->teletext =
-                ubase_check(uref_ts_flow_get_telx_type(uref, NULL, 0));
             struct uref *flow_def = uref_dup(uref);
             if (unlikely(flow_def == NULL))
                 return UBASE_ERR_ALLOC;
@@ -342,8 +336,6 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
 
     struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_sub_mgr(upipe->mgr);
 
-    const bool teletext = upipe_subpic_schedule_sub->teletext;
-
     struct uchain *uchain, *uchain_tmp;
     ulist_delete_foreach(&upipe_subpic_schedule_sub->subpics, uchain, uchain_tmp) {
         struct upipe_subpic_schedule_subpic *subpic =
@@ -356,9 +348,10 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         if (date_uref > date) /* The next subpicture is in advance */
             break;
 
-        if (teletext && uchain->next != &upipe_subpic_schedule_sub->subpics) {
-            /* For teletext, the next subpicture replaces the previous one.
-             * There can not be multiple active subpictures. */
+        if (uchain->next != &upipe_subpic_schedule_sub->subpics) {
+            /* A subpicture carries the whole page, for teletext and dvb
+             * subtitles alike, so the next one replaces it.  There can not be
+             * multiple active subpictures. */
             struct upipe_subpic_schedule_subpic *subpic_next =
                 upipe_subpic_schedule_subpic_from_uchain(uchain->next);
 
