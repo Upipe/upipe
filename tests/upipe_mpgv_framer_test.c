@@ -1,13 +1,31 @@
 /*
  * Copyright (C) 2013-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 Open Broadcast Systems Ltd.
  *
  * Authors: Christophe Massiot
+ *          Kieran Kunhya
  *
  * SPDX-License-Identifier: MIT
  */
 
 /** @file
  * @short unit tests for MPEG-2 video framer module
+ *
+ * The final two cases are regression tests for flushing a buffered frame
+ * whose next_frame_offset is still its -1 sentinel (no picture start code seen
+ * yet) when the pipe is destroyed. Such a frame used to be handed to
+ * upipe_mpgvf_extract_uref_stream() with a (size_t)-1 length, draining the
+ * uref stream to NULL and tripping assert(next_uref != NULL) in
+ * upipe_mpgvf_free(). They enter upipe_mpgvf_handle_frame() through the two
+ * sides of its first guard:
+ *
+ *   - a complete I-frame followed by a lone GOP header, so the sequence header
+ *     is already stored and next_frame_sequence is false;
+ *   - only a sequence header (+ extension) truncated before any picture, so
+ *     next_frame_sequence is true and no sequence header is stored.
+ *
+ * Both must run to completion without aborting, dropping the picture-less
+ * buffered frame instead of extracting it.
  */
 
 #undef NDEBUG
@@ -35,6 +53,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 #include <bitstream/mpeg/mp2v.h>
@@ -180,6 +199,24 @@ static struct upipe_mgr test_mgr = {
     .upipe_control = test_control
 };
 
+/** helper phony pipe: just count and drop output frames, for the flush
+ * regression cases which only care about not aborting */
+static void test_flush_input(struct upipe *upipe, struct uref *uref,
+                             struct upump **upump_p)
+{
+    assert(uref != NULL);
+    nb_packets++;
+    uref_free(uref);
+}
+
+/** helper phony pipe */
+static struct upipe_mgr test_flush_mgr = {
+    .refcount = NULL,
+    .upipe_alloc = test_alloc,
+    .upipe_input = test_flush_input,
+    .upipe_control = test_control
+};
+
 static void write_seq(uint8_t *buffer)
 {
     mp2vseq_init(buffer);
@@ -232,6 +269,14 @@ static void write_slice(uint8_t *buffer)
 static void write_end(uint8_t *buffer)
 {
     mp2vend_init(buffer);
+}
+
+static void write_gop(uint8_t *buffer)
+{
+    mp2vgop_init(buffer);
+    /* mp2vgop_init() leaves the time code bytes (4-6) uninitialised; set them
+     * so the framer's start-code scan does not read uninitialised memory. */
+    mp2vgop_set_timecode(buffer, 0);
 }
 
 int main(int argc, char *argv[])
@@ -516,6 +561,121 @@ int main(int argc, char *argv[])
 
     upipe_release(upipe_mpgvf);
     test_free(upipe_sink);
+
+    /* Regression: flush a trailing partial frame with no picture start code.
+     * A complete I-frame (with sequence header so sync is acquired and the
+     * sequence header stored) immediately followed by a lone GOP header that
+     * is never completed with a picture. On free the GOP header is the
+     * buffered frame with next_frame_offset == -1 and next_frame_sequence
+     * false; it must be dropped rather than extracted with a (size_t)-1
+     * length. */
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.pic.");
+    assert(uref != NULL);
+
+    upipe_sink = upipe_void_alloc(&test_flush_mgr, uprobe_use(uprobe_stdio));
+    assert(upipe_sink != NULL);
+
+    upipe_mpgvf = upipe_void_alloc(upipe_mpgvf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgvf 5"));
+    assert(upipe_mpgvf != NULL);
+    need_global = false;
+    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgvf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr,
+            MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
+            MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4 +
+            MP2VGOP_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE +
+            MP2VPIC_HEADER_SIZE + MP2VPICX_HEADER_SIZE + 4 +
+            MP2VGOP_HEADER_SIZE);
+
+    write_seq(buffer);
+    buffer += MP2VSEQ_HEADER_SIZE;
+
+    write_seqx(buffer);
+    buffer += MP2VSEQX_HEADER_SIZE;
+
+    write_pic(buffer, 0, MP2VPIC_TYPE_I);
+    buffer += MP2VPIC_HEADER_SIZE;
+
+    write_picx(buffer);
+    buffer += MP2VPICX_HEADER_SIZE;
+
+    write_slice(buffer);
+    buffer += 4;
+
+    write_gop(buffer);
+    buffer += MP2VGOP_HEADER_SIZE;
+
+    uref_block_unmap(uref, 0);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    nb_packets = 0;
+    upipe_input(upipe_mpgvf, uref, NULL);
+    /* The complete I-frame is output; the trailing GOP header is buffered. */
+    assert(nb_packets == 1);
+    /* Destroying the pipe must flush the dangling GOP header without crashing,
+     * and emit no extra frame. */
+    upipe_release(upipe_mpgvf);
+    assert(nb_packets == 1);
+    test_free(upipe_sink);
+
+    /* Regression: flush a sequence-header-only buffered frame. A sequence
+     * header and its extension, truncated before any picture start code, so
+     * the buffered frame is flushed with next_frame_sequence == true, no
+     * stored sequence header, and next_frame_offset still at -1 -- the other
+     * side of the first guard in upipe_mpgvf_handle_frame(). */
+    uref = uref_block_flow_alloc_def(uref_mgr, "mpeg2video.pic.");
+    assert(uref != NULL);
+
+    upipe_sink = upipe_void_alloc(&test_flush_mgr, uprobe_use(uprobe_stdio));
+    assert(upipe_sink != NULL);
+
+    upipe_mpgvf = upipe_void_alloc(upipe_mpgvf_mgr,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "mpgvf 6"));
+    assert(upipe_mpgvf != NULL);
+    need_global = false;
+    ubase_assert(upipe_set_flow_def(upipe_mpgvf, uref));
+    ubase_assert(upipe_set_output(upipe_mpgvf, upipe_sink));
+    uref_free(uref);
+
+    uref = uref_block_alloc(uref_mgr, ubuf_mgr,
+            MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE);
+    assert(uref != NULL);
+    size = -1;
+    ubase_assert(uref_block_write(uref, 0, &size, &buffer));
+    assert(size == MP2VSEQ_HEADER_SIZE + MP2VSEQX_HEADER_SIZE);
+
+    write_seq(buffer);
+    buffer += MP2VSEQ_HEADER_SIZE;
+
+    write_seqx(buffer);
+    buffer += MP2VSEQX_HEADER_SIZE;
+
+    uref_block_unmap(uref, 0);
+    uref_clock_set_dts_orig(uref, 27000000);
+    uref_clock_set_dts_pts_delay(uref, 0);
+    uref_clock_set_cr_sys(uref, 84);
+    uref_clock_set_rap_sys(uref, 42);
+    nb_packets = 0;
+    upipe_input(upipe_mpgvf, uref, NULL);
+    /* No complete frame, so nothing is output. */
+    assert(nb_packets == 0);
+    /* Destroying the pipe must flush the buffered sequence header without
+     * crashing, and emit no frame. */
+    upipe_release(upipe_mpgvf);
+    assert(nb_packets == 0);
+    test_free(upipe_sink);
+
     upipe_mgr_release(upipe_mpgvf_mgr);
     uref_mgr_release(uref_mgr);
     ubuf_mgr_release(ubuf_mgr);
