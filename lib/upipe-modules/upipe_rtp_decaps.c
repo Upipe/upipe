@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014-2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -138,6 +139,8 @@ struct upipe_rtpd {
 
     /* number of packets lost */
     uint64_t lost;
+    /** warn once for unexpected payload type */
+    bool warn_unexpected_payload;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -186,6 +189,7 @@ static struct upipe *upipe_rtpd_alloc(struct upipe_mgr *mgr,
     upipe_rtpd->next_uref = NULL;
     upipe_rtpd->next_uref_size = 0;
     upipe_rtpd->next_uref_nal = 0;
+    upipe_rtpd->warn_unexpected_payload = true;
 
     upipe_throw_ready(upipe);
     return upipe;
@@ -638,8 +642,20 @@ static inline void upipe_rtpd_input(struct upipe *upipe, struct uref *uref,
     uref_block_resize(uref, offset, -1);
 
     if (type >= 72 && type <= 95 && marker) {
-        upipe_warn_va(upipe, "Payload type %d is probably RTCP, dropping",
-            type + 128);
+        if (unlikely(upipe_rtpd->warn_unexpected_payload)) {
+            upipe_warn_va(upipe, "Payload type %d is probably RTCP, dropping",
+                          type + 128);
+            upipe_rtpd->warn_unexpected_payload = false;
+        }
+        uref_free(uref);
+        return;
+    }
+
+    if (upipe_rtpd->mode_config == UPIPE_RTPD_MP2T && type != RTP_TYPE_MP2T) {
+        if (unlikely(upipe_rtpd->warn_unexpected_payload)) {
+            upipe_warn(upipe, "Payload is probably FEC, dropping");
+            upipe_rtpd->warn_unexpected_payload = false;
+        }
         uref_free(uref);
         return;
     }
@@ -792,6 +808,7 @@ static int upipe_rtpd_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     }
     upipe_rtpd->mode_config = i;
     upipe_rtpd->type = UINT8_MAX;
+    upipe_rtpd->warn_unexpected_payload = true;
 
     upipe_rtpd->rate = 0;
     uref_sound_flow_get_rate(flow_def, &upipe_rtpd->rate);
