@@ -1091,7 +1091,8 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                 h = height - y;
             }
 
-            uint8_t *dst = buf + stride * y + x;
+            /* 4 octets per pixel */
+            uint8_t *dst = buf + stride * y + 4 * x;
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
 
