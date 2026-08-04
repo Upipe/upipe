@@ -910,6 +910,54 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             return;
     }
 
+    /* Crop to the bounding box of the rects: the subpicture is rescaled and
+     * blended downstream for every frame it stays on screen, and the canvas
+     * is mostly transparent.  The paddings describe where the box sits in
+     * the canvas, so flow format providers (@see upipe_blit) keep the scale
+     * and position of the full canvas. */
+    int crop_x0 = width, crop_y0 = height, crop_x1 = 0, crop_y1 = 0;
+    for (int i = 0; i < sub->num_rects; i++) {
+        const AVSubtitleRect *r = sub->rects[i];
+        if (r->type != SUBTITLE_BITMAP ||
+            r->data[0] == NULL || r->data[1] == NULL)
+            continue;
+        int x = r->x, y = r->y, w = r->w, h = r->h;
+        if (x < 0 || y < 0 || x >= width || y >= height)
+            continue;
+        if (x + w > width)
+            w = width - x;
+        if (y + h > height)
+            h = height - y;
+        if (x < crop_x0)
+            crop_x0 = x;
+        if (y < crop_y0)
+            crop_y0 = y;
+        if (x + w > crop_x1)
+            crop_x1 = x + w;
+        if (y + h > crop_y1)
+            crop_y1 = y + h;
+    }
+    if (crop_x1 <= crop_x0 || crop_y1 <= crop_y0) {
+        /* No bitmap: a minimal transparent picture still replaces the
+         * previous subpicture downstream. */
+        crop_x0 = crop_y0 = 0;
+        crop_x1 = width < 16 ? width : 16;
+        crop_y1 = height < 16 ? height : 16;
+    } else {
+        /* Keep offsets and sizes even for the chroma siting of a possible
+         * 4:2:0 conversion downstream. */
+        crop_x0 &= ~1;
+        crop_y0 &= ~1;
+        crop_x1 += crop_x1 & 1;
+        crop_y1 += crop_y1 & 1;
+        if (crop_x1 > width)
+            crop_x1 = width;
+        if (crop_y1 > height)
+            crop_y1 = height;
+    }
+    const int crop_hsize = crop_x1 - crop_x0;
+    const int crop_vsize = crop_y1 - crop_y0;
+
     struct uref *flow_def = uref_dup(upipe_avcdec->flow_def_provided);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
@@ -917,10 +965,14 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     }
     if (unlikely(
             !ubase_check(uref_pic_flow_set_align(flow_def, alignment)) ||
-            !ubase_check(uref_pic_flow_set_hsize(flow_def, width)) ||
-            !ubase_check(uref_pic_flow_set_vsize(flow_def, height)) ||
-            !ubase_check(uref_pic_flow_set_hsize_visible(flow_def, width)) ||
-            !ubase_check(uref_pic_flow_set_vsize_visible(flow_def, height))
+            !ubase_check(uref_pic_flow_set_hsize(flow_def, crop_hsize)) ||
+            !ubase_check(uref_pic_flow_set_vsize(flow_def, crop_vsize)) ||
+            !ubase_check(uref_pic_flow_set_hsize_visible(flow_def, crop_hsize)) ||
+            !ubase_check(uref_pic_flow_set_vsize_visible(flow_def, crop_vsize)) ||
+            !ubase_check(uref_pic_set_lpadding(flow_def, crop_x0)) ||
+            !ubase_check(uref_pic_set_rpadding(flow_def, width - crop_x1)) ||
+            !ubase_check(uref_pic_set_tpadding(flow_def, crop_y0)) ||
+            !ubase_check(uref_pic_set_bpadding(flow_def, height - crop_y1))
             )) {
         upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
         return;
@@ -972,7 +1024,8 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
     }
 
     /* Allocate a ubuf */
-    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr, width, height);
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_avcdec->ubuf_mgr,
+                                       crop_hsize, crop_vsize);
     if (unlikely(ubuf == NULL)) {
         uref_free(flow_def);
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
@@ -1020,12 +1073,12 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
 
             int x = r->x, y = r->y, w = r->w, h = r->h;
 
-            if (x >= width) {
+            if (x < 0 || x >= width) {
                 upipe_warn_va(upipe, "x (%i/%i) is out of the picture",
                               x, width);
                 continue;
             }
-            if (y >= height) {
+            if (y < 0 || y >= height) {
                 upipe_warn_va(upipe, "y (%i/%i) is out of the picture",
                               y, height);
                 continue;
@@ -1043,7 +1096,10 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             }
 
             /* 4 octets per pixel */
-            uint8_t *dst = buf + stride * y + 4 * x;
+            uint8_t *dst = buf + stride * (y - crop_y0) + 4 * (x - crop_x0);
+
+            /* Source row stride; may exceed the (possibly cropped) blit width,
+             * so advance src by the real stride rather than by w. */
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
             const int src_stride = r->linesize[0];
