@@ -302,6 +302,16 @@ static int upipe_vblk_set_flow_def(struct upipe *upipe,
     struct uref *input_flow_def = uref_dup(flow_def);
     UBASE_ALLOC_RETURN(input_flow_def);
 
+    struct urational fps;
+    uint64_t duration = 0;
+    if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) &&
+        ubase_check(uref_clock_get_duration(flow_def, &duration)) && duration) {
+        fps.num = UCLOCK_FREQ;
+        fps.den = duration;
+        urational_simplify(&fps);
+        uref_pic_flow_set_fps(input_flow_def, fps);
+    }
+
     struct uref *flow_format = NULL;
     if (ubase_check(uref_flow_match_def(flow_def, UREF_VOID_FLOW_DEF))) {
         flow_format = upipe_vblk_store_flow_def_input(upipe, input_flow_def);
