@@ -44,7 +44,7 @@ static inline int uref_uri_delete(struct uref *uref)
 
 static inline int uref_uri_copy(struct uref *uref, struct uref *from)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_uri_copy_scheme,
         uref_uri_copy_userinfo,
         uref_uri_copy_host,
@@ -53,7 +53,7 @@ static inline int uref_uri_copy(struct uref *uref, struct uref *from)
         uref_uri_copy_query,
         uref_uri_copy_fragment,
     };
-    return uref_attr_copy_list(uref, from, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, from, attrs);
 }
 
 #ifdef __cplusplus
