@@ -43,7 +43,7 @@ static inline int uref_m3u_playlist_flow_delete(struct uref *uref)
 static inline int uref_m3u_playlist_flow_copy(struct uref *uref,
                                               struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_flow_copy_type,
         uref_m3u_playlist_flow_copy_target_duration,
         uref_m3u_playlist_flow_copy_media_sequence,
@@ -51,7 +51,7 @@ static inline int uref_m3u_playlist_flow_copy(struct uref *uref,
         uref_m3u_playlist_flow_copy_endlist,
     };
 
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 #ifdef __cplusplus

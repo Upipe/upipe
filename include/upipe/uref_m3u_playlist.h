@@ -111,27 +111,27 @@ static inline int uref_m3u_playlist_delete(struct uref *uref)
 static inline int uref_m3u_playlist_key_copy(struct uref *uref,
                                              struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_key_copy_method,
         uref_m3u_playlist_key_copy_uri,
         uref_m3u_playlist_key_copy_iv,
     };
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 static inline int uref_m3u_playlist_map_copy(struct uref *uref,
                                              struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_map_copy_uri,
     };
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 static inline int uref_m3u_playlist_daterange_copy(struct uref *uref,
                                                    struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_daterange_copy_id,
         uref_m3u_playlist_daterange_copy_start_date,
         uref_m3u_playlist_daterange_copy_end_date,
@@ -141,13 +141,13 @@ static inline int uref_m3u_playlist_daterange_copy(struct uref *uref,
         uref_m3u_playlist_daterange_copy_scte35_out,
         uref_m3u_playlist_daterange_copy_scte35_in,
     };
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 static inline int uref_m3u_playlist_copy(struct uref *uref,
                                          struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_m3u_playlist_copy_seq_duration,
         uref_m3u_playlist_copy_byte_range_len,
         uref_m3u_playlist_copy_byte_range_off,
@@ -158,7 +158,7 @@ static inline int uref_m3u_playlist_copy(struct uref *uref,
         uref_m3u_playlist_map_copy,
         uref_m3u_playlist_daterange_copy,
     };
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 #ifdef __cplusplus

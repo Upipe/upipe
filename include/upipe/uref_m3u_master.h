@@ -51,7 +51,7 @@ static inline int uref_m3u_master_delete(struct uref *uref)
 static inline int uref_m3u_master_copy(struct uref *uref,
                                        struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_m3u_master_copy_bandwidth,
         uref_m3u_master_copy_codecs,
         uref_m3u_master_copy_resolution,
@@ -62,7 +62,7 @@ static inline int uref_m3u_master_copy(struct uref *uref,
         uref_m3u_master_copy_media_name,
         uref_m3u_master_copy_media_group,
     };
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 static inline int uref_m3u_master_iterate_codecs(struct uref *uref,

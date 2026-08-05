@@ -29,12 +29,12 @@ static inline int uref_aes_delete(struct uref *uref)
 
 static inline int uref_aes_copy(struct uref *uref, struct uref *uref_src)
 {
-    int (*list[])(struct uref *, struct uref *) = {
+    int (*attrs[])(struct uref *, struct uref *) = {
         uref_aes_copy_method,
         uref_aes_copy_key,
         uref_aes_copy_iv,
     };
-    return uref_attr_copy_list(uref, uref_src, list, UBASE_ARRAY_SIZE(list));
+    return uref_attr_copy_array(uref, uref_src, attrs);
 }
 
 #ifdef __cplusplus

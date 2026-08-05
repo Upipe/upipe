@@ -58,6 +58,10 @@ static inline int uref_attr_copy_list(struct uref *uref, struct uref *uref_src,
     return err;
 }
 
+/** @This is an helper to copy an array of attributes from an uref to another */
+#define uref_attr_copy_array(uref_dst, uref_src, array) \
+    uref_attr_copy_list(uref_dst, uref_src, array, UBASE_ARRAY_SIZE(array))
+
 /** @This deletes an attribute.
  *
  * @param uref pointer to the uref
