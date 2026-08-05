@@ -855,6 +855,60 @@ static void upipe_avcdec_build_flow_def_sub(struct upipe *upipe,
     upipe_avcdec_store_flow_def(upipe, flow_def);
 }
 
+/** @internal @This finds the bounding box of the visible pixels of a
+ * palettized subtitle rect.
+ *
+ * @param r subtitle rect
+ * @param w width to scan
+ * @param h height to scan
+ * @param x0_p filled in with the left edge of the box, in rect coordinates
+ * @param y0_p filled in with the top edge of the box
+ * @param x1_p filled in with the right edge of the box, excluded
+ * @param y1_p filled in with the bottom edge of the box, excluded
+ * @return false if no pixel of the rect is visible
+ */
+static bool upipe_avcdec_sub_rect_bbox(const AVSubtitleRect *r, int w, int h,
+                                       int *x0_p, int *y0_p,
+                                       int *x1_p, int *y1_p)
+{
+    const uint8_t *src = r->data[0];
+    const uint8_t *palette = r->data[1];
+    const int src_stride = r->linesize[0];
+    /* the palette has the octet order of the output pixels */
+#ifdef UBASE_BIGENDIAN
+    const int a = 0;
+#else
+    const int a = 3;
+#endif
+    bool visible[256] = { false };
+    for (int i = 0; i < r->nb_colors && i < 256; i++)
+        visible[i] = palette[4 * i + a] != 0;
+
+    int x0 = w, y0 = h, x1 = 0, y1 = 0;
+    for (int i = 0; i < h; i++) {
+        const uint8_t *line = src + (size_t)src_stride * i;
+        for (int j = 0; j < w; j++) {
+            if (!visible[line[j]])
+                continue;
+            if (j < x0)
+                x0 = j;
+            if (j >= x1)
+                x1 = j + 1;
+            if (i < y0)
+                y0 = i;
+            y1 = i + 1;
+        }
+    }
+    if (x1 <= x0)
+        return false;
+
+    *x0_p = x0;
+    *y0_p = y0;
+    *x1_p = x1;
+    *y1_p = y1;
+    return true;
+}
+
 /** @internal @This outputs subtitles.
  *
  * @param upipe description structure of the pipe
@@ -910,11 +964,13 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             return;
     }
 
-    /* Crop to the bounding box of the rects: the subpicture is rescaled and
-     * blended downstream for every frame it stays on screen, and the canvas
-     * is mostly transparent.  The paddings describe where the box sits in
-     * the canvas, so flow format providers (@see upipe_blit) keep the scale
-     * and position of the full canvas. */
+    /* Crop to the bounding box of the visible pixels: the subpicture is
+     * rescaled and blended downstream for every frame it stays on screen, and
+     * the canvas is mostly transparent.  The paddings describe where the box
+     * sits in the canvas, so flow format providers (@see upipe_blit) keep the
+     * scale and position of the full canvas.  The rects are no bound on what
+     * is visible - teletext renders the whole page into a single rect - so
+     * scan the pixels. */
     int crop_x0 = width, crop_y0 = height, crop_x1 = 0, crop_y1 = 0;
     for (int i = 0; i < sub->num_rects; i++) {
         const AVSubtitleRect *r = sub->rects[i];
@@ -928,17 +984,20 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             w = width - x;
         if (y + h > height)
             h = height - y;
-        if (x < crop_x0)
-            crop_x0 = x;
-        if (y < crop_y0)
-            crop_y0 = y;
-        if (x + w > crop_x1)
-            crop_x1 = x + w;
-        if (y + h > crop_y1)
-            crop_y1 = y + h;
+        int x0, y0, x1, y1;
+        if (!upipe_avcdec_sub_rect_bbox(r, w, h, &x0, &y0, &x1, &y1))
+            continue;
+        if (x + x0 < crop_x0)
+            crop_x0 = x + x0;
+        if (y + y0 < crop_y0)
+            crop_y0 = y + y0;
+        if (x + x1 > crop_x1)
+            crop_x1 = x + x1;
+        if (y + y1 > crop_y1)
+            crop_y1 = y + y1;
     }
     if (crop_x1 <= crop_x0 || crop_y1 <= crop_y0) {
-        /* No bitmap: a minimal transparent picture still replaces the
+        /* Nothing visible: a minimal transparent picture still replaces the
          * previous subpicture downstream. */
         crop_x0 = crop_y0 = 0;
         crop_x1 = width < 16 ? width : 16;
@@ -1095,6 +1154,21 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
                 h = height - y;
             }
 
+            /* The crop box only covers the visible pixels, so it may be
+             * tighter than the rect. */
+            const int skip_x = crop_x0 > x ? crop_x0 - x : 0;
+            const int skip_y = crop_y0 > y ? crop_y0 - y : 0;
+            if (x + w > crop_x1)
+                w = crop_x1 - x;
+            if (y + h > crop_y1)
+                h = crop_y1 - y;
+            w -= skip_x;
+            h -= skip_y;
+            if (w <= 0 || h <= 0)
+                continue;
+            x += skip_x;
+            y += skip_y;
+
             /* 4 octets per pixel */
             uint8_t *dst = buf + stride * (y - crop_y0) + 4 * (x - crop_x0);
 
@@ -1103,6 +1177,7 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
             uint8_t *src = r->data[0];
             uint8_t *palette = r->data[1];
             const int src_stride = r->linesize[0];
+            src += (size_t)src_stride * skip_y + skip_x;
 
             for (int i = 0; i < h; i++) {
                 for (int j = 0; j < w; j++) {
