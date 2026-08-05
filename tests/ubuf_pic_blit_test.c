@@ -393,6 +393,221 @@ static unsigned long check_yuv420p10le_blit(struct ubuf *dst, struct ubuf *src,
     return checks;
 }
 
+/** @internal @This fills a rectangular region of a plane with a pattern whose
+ * neighbouring samples all differ, so that a blit which mixes up the order of
+ * the samples in a vector, or the compaction of a subsampled alpha plane,
+ * cannot pass unnoticed. */
+static void fill_plane_pattern(struct ubuf *ubuf, const char *chroma,
+                               int hsize, int vsize, unsigned seed)
+{
+    uint8_t macropixel;
+    ubase_assert(ubuf_pic_size(ubuf, NULL, NULL, &macropixel));
+
+    size_t stride;
+    uint8_t hsub, vsub, macropixel_size;
+    ubase_assert(ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub,
+                                     &macropixel_size));
+    int cols = hsize * macropixel_size / hsub / macropixel;
+    int rows = vsize / vsub;
+
+    uint8_t *buffer;
+    ubase_assert(ubuf_pic_plane_write(ubuf, chroma, 0, 0, hsize, vsize,
+                                      &buffer));
+    for (int y = 0; y < rows; y++) {
+        for (int x = 0; x < cols; x++)
+            buffer[x] = (x * 37 + y * 101 + seed) & 0xff;
+        buffer += stride;
+    }
+    ubase_assert(ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, hsize, vsize));
+}
+
+/** @internal @This is fill_plane_pattern() for 16-bit samples, kept inside the
+ * 10-bit range. */
+static void fill_plane_pattern16(struct ubuf *ubuf, const char *chroma,
+                                 int hsize, int vsize, unsigned seed)
+{
+    uint8_t macropixel;
+    ubase_assert(ubuf_pic_size(ubuf, NULL, NULL, &macropixel));
+
+    size_t stride;
+    uint8_t hsub, vsub, macropixel_size;
+    ubase_assert(ubuf_pic_plane_size(ubuf, chroma, &stride, &hsub, &vsub,
+                                     &macropixel_size));
+    int cols = hsize * macropixel_size / hsub / macropixel / 2;
+    int rows = vsize / vsub;
+
+    uint8_t *buffer;
+    ubase_assert(ubuf_pic_plane_write(ubuf, chroma, 0, 0, hsize, vsize,
+                                      &buffer));
+    for (int y = 0; y < rows; y++) {
+        uint16_t *words = (uint16_t *)buffer;
+        for (int x = 0; x < cols; x++)
+            words[x] = (x * 37 + y * 101 + seed) & 0x3ff;
+        buffer += stride;
+    }
+    ubase_assert(ubuf_pic_plane_unmap(ubuf, chroma, 0, 0, hsize, vsize));
+}
+
+/** @internal @This compares every sample of a blitted plane against
+ * expected_blit()/expected_blit10() applied to the background and source
+ * samples the blit was given, and returns the number of checks performed. */
+static unsigned long check_blit_plane(struct ubuf *dst, struct ubuf *bg,
+                                      struct ubuf *src, const char *chroma,
+                                      const char *alpha_chroma, bool ten_bit,
+                                      int hsize, int vsize,
+                                      int alpha, int threshold,
+                                      const char *what)
+{
+    size_t dst_stride, bg_stride, src_stride, a_stride;
+    uint8_t hsub, vsub, macropixel_size;
+    const uint8_t *dst_buffer, *bg_buffer, *src_buffer, *a_buffer;
+    unsigned long checks = 0;
+
+    ubase_assert(ubuf_pic_plane_size(dst, chroma, &dst_stride, &hsub, &vsub,
+                                     &macropixel_size));
+    ubase_assert(ubuf_pic_plane_size(bg, chroma, &bg_stride, NULL, NULL, NULL));
+    ubase_assert(ubuf_pic_plane_size(src, chroma, &src_stride, NULL, NULL,
+                                     NULL));
+    ubase_assert(ubuf_pic_plane_size(src, alpha_chroma, &a_stride, NULL, NULL,
+                                     NULL));
+    ubase_assert(ubuf_pic_plane_read(dst, chroma, 0, 0, hsize, vsize,
+                                     &dst_buffer));
+    ubase_assert(ubuf_pic_plane_read(bg, chroma, 0, 0, hsize, vsize,
+                                     &bg_buffer));
+    ubase_assert(ubuf_pic_plane_read(src, chroma, 0, 0, hsize, vsize,
+                                     &src_buffer));
+    ubase_assert(ubuf_pic_plane_read(src, alpha_chroma, 0, 0, hsize, vsize,
+                                     &a_buffer));
+
+    for (int y = 0; y < vsize / vsub; y++) {
+        for (int x = 0; x < hsize / hsub; x++) {
+            if (ten_bit) {
+                uint16_t a =
+                    ((const uint16_t *)(a_buffer + y * a_stride))[x * hsub];
+                uint16_t b =
+                    ((const uint16_t *)(bg_buffer + y * bg_stride))[x];
+                uint16_t s =
+                    ((const uint16_t *)(src_buffer + y * src_stride))[x];
+                uint16_t got =
+                    ((const uint16_t *)(dst_buffer + y * dst_stride))[x];
+                uint16_t exp = expected_blit10(b, s, a, alpha, threshold);
+                if (got != exp)
+                    fprintf(stderr, "mismatch on %s %s at (%d, %d) hsize %d "
+                            "alpha %d threshold %d: got %u, expected %u\n",
+                            chroma, what, x, y, hsize, alpha, threshold,
+                            got, exp);
+                assert(got == exp);
+            } else {
+                uint8_t a = a_buffer[y * a_stride + x * hsub];
+                uint8_t b = bg_buffer[y * bg_stride + x];
+                uint8_t s = src_buffer[y * src_stride + x];
+                uint8_t got = dst_buffer[y * dst_stride + x];
+                uint8_t exp = expected_blit(b, s, a, alpha, threshold);
+                if (got != exp)
+                    fprintf(stderr, "mismatch on %s %s at (%d, %d) hsize %d "
+                            "alpha %d threshold %d: got %u, expected %u\n",
+                            chroma, what, x, y, hsize, alpha, threshold,
+                            got, exp);
+                assert(got == exp);
+            }
+            checks++;
+        }
+    }
+
+    ubase_assert(ubuf_pic_plane_unmap(src, alpha_chroma, 0, 0, hsize, vsize));
+    ubase_assert(ubuf_pic_plane_unmap(src, chroma, 0, 0, hsize, vsize));
+    ubase_assert(ubuf_pic_plane_unmap(bg, chroma, 0, 0, hsize, vsize));
+    ubase_assert(ubuf_pic_plane_unmap(dst, chroma, 0, 0, hsize, vsize));
+    return checks;
+}
+
+/** @internal @This blits a whole single-plane picture twice: once composing
+ * into a fresh destination out of a separate background, the way upipe_blit
+ * does when the input picture is not writable, and once blending in place. The
+ * two must agree with the same scalar reference.
+ *
+ * The plane geometry is what picks the code path: hsub selects between the
+ * hsub1 and hsub2 kernels, the sample size between the 8-bit and 10-bit ones,
+ * and the width decides how much of a line the vector loop covers and how much
+ * is left to the scalar tail.
+ *
+ * @return the number of samples checked
+ */
+static unsigned long check_blit_geometry(struct umem_mgr *umem_mgr,
+                                         const char *chroma,
+                                         const char *alpha_chroma,
+                                         uint8_t hsub, bool ten_bit,
+                                         int hsize, int vsize,
+                                         int alpha, int threshold)
+{
+    uint8_t macropixel_size = ten_bit ? 2 : 1;
+    unsigned long checks = 0;
+
+    struct ubuf_mgr *pic_mgr =
+        ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                               UBUF_PREPEND, UBUF_APPEND,
+                               UBUF_PREPEND, UBUF_APPEND,
+                               UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+    assert(pic_mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(pic_mgr, chroma, hsub, 1,
+                                            macropixel_size));
+
+    struct ubuf_mgr *src_mgr =
+        ubuf_pic_mem_mgr_alloc(UBUF_POOL_DEPTH, UBUF_POOL_DEPTH, umem_mgr, 1,
+                               UBUF_PREPEND, UBUF_APPEND,
+                               UBUF_PREPEND, UBUF_APPEND,
+                               UBUF_ALIGN, UBUF_ALIGN_HOFFSET);
+    assert(src_mgr != NULL);
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, chroma, hsub, 1,
+                                            macropixel_size));
+    ubase_assert(ubuf_pic_mem_mgr_add_plane(src_mgr, alpha_chroma, 1, 1,
+                                            macropixel_size));
+
+    struct ubuf *dst = ubuf_pic_alloc(pic_mgr, hsize, vsize);
+    assert(dst != NULL);
+    struct ubuf *bg = ubuf_pic_alloc(pic_mgr, hsize, vsize);
+    assert(bg != NULL);
+    struct ubuf *src = ubuf_pic_alloc(src_mgr, hsize, vsize);
+    assert(src != NULL);
+
+    if (ten_bit) {
+        fill_plane_pattern16(bg, chroma, hsize, vsize, 11);
+        fill_plane_pattern16(src, chroma, hsize, vsize, 173);
+        fill_plane_pattern16(src, alpha_chroma, hsize, vsize, 61);
+        /* A destination value that appears nowhere else, so that a sample the
+         * blit fails to write is reported instead of matching by luck. */
+        ubase_assert(ubuf_pic_plane_set_color(dst, chroma, 0, 0, hsize, vsize,
+                (const uint8_t []){ 0x55, 0x01 }, 2));
+    } else {
+        fill_plane_pattern(bg, chroma, hsize, vsize, 11);
+        fill_plane_pattern(src, chroma, hsize, vsize, 173);
+        fill_plane_pattern(src, alpha_chroma, hsize, vsize, 61);
+        ubase_assert(ubuf_pic_plane_set_color(dst, chroma, 0, 0, hsize, vsize,
+                (const uint8_t []){ 0x5a }, 1));
+    }
+
+    /* Compose out of the background into the untouched destination. */
+    ubase_assert(ubuf_pic_blit_bg(dst, bg, src, 0, 0, 0, 0, 0, 0,
+                                  hsize, vsize, alpha, threshold));
+    checks += check_blit_plane(dst, bg, src, chroma, alpha_chroma, ten_bit,
+                               hsize, vsize, alpha, threshold, "background");
+
+    /* Then the same blit in place, over a copy of that background. */
+    ubase_assert(ubuf_pic_blit(dst, bg, 0, 0, 0, 0, hsize, vsize,
+                               ten_bit ? 0x3ff : 0xff, 0));
+    ubase_assert(ubuf_pic_blit(dst, src, 0, 0, 0, 0, hsize, vsize,
+                               alpha, threshold));
+    checks += check_blit_plane(dst, bg, src, chroma, alpha_chroma, ten_bit,
+                               hsize, vsize, alpha, threshold, "in place");
+
+    ubuf_free(src);
+    ubuf_free(bg);
+    ubuf_free(dst);
+    ubuf_mgr_release(src_mgr);
+    ubuf_mgr_release(pic_mgr);
+    return checks;
+}
+
 int main(int argc, char **argv)
 {
     struct umem_mgr *umem_mgr = umem_alloc_mgr_alloc();
@@ -1375,6 +1590,57 @@ int main(int argc, char **argv)
     ubuf_free(dst);
     ubuf_mgr_release(src_mgr);
     ubuf_mgr_release(dst_mgr);
+
+    /* Whole-plane blits over a single-plane picture, checked sample by sample
+     * both when composing out of a separate background and when blending in
+     * place. The widths straddle the point where the SIMD kernels take over
+     * (32 samples for 8-bit, 16 for 10-bit) and are mostly not multiples of a
+     * vector, so their scalar tails run as well. */
+    {
+        static const struct {
+            const char *chroma, *alpha_chroma;
+            uint8_t hsub;
+            bool ten_bit;
+            int widths[9];
+        } geometries[] = {
+            { "y8",   "a8",   1, false, {  2,  30,  32,  34,  40,  62,  64,  70, 100 } },
+            { "u8",   "a8",   2, false, {  4,  60,  64,  68,  80, 124, 128, 140, 200 } },
+            { "y10l", "a10l", 1, true,  {  2,  14,  16,  18,  24,  30,  34,  50, 100 } },
+            { "u10l", "a10l", 2, true,  {  4,  28,  32,  36,  48,  60,  68, 100, 200 } },
+        };
+        /* threshold 0 is the copy and the saturated threshold is the smooth
+         * blending; everything else is the on/off blending the kernels
+         * implement. A non saturated alpha multiplier scales the alpha plane
+         * sample first, which they leave to the caller. */
+        static const struct { int alpha8, threshold8, alpha10, threshold10; }
+        cases[] = {
+            { 0xff, 0,    0x3ff, 0 },
+            { 0xff, 20,   0x3ff, 80 },
+            { 0xff, 80,   0x3ff, 300 },
+            { 0xff, 128,  0x3ff, 512 },
+            { 0xff, 200,  0x3ff, 1000 },
+            { 0xff, 254,  0x3ff, 1022 },
+            { 0xff, 0xff, 0x3ff, 0x3ff },
+            { 200,  80,   800,   300 },
+            { 128,  0xff, 512,   0x3ff },
+        };
+
+        checks = 0;
+        for (size_t g = 0; g < UBASE_ARRAY_SIZE(geometries); g++)
+            for (size_t w = 0; w < UBASE_ARRAY_SIZE(geometries[g].widths); w++)
+                for (size_t c = 0; c < UBASE_ARRAY_SIZE(cases); c++) {
+                    alpha = geometries[g].ten_bit ? cases[c].alpha10
+                                                  : cases[c].alpha8;
+                    threshold = geometries[g].ten_bit ? cases[c].threshold10
+                                                      : cases[c].threshold8;
+                    checks += check_blit_geometry(umem_mgr,
+                            geometries[g].chroma, geometries[g].alpha_chroma,
+                            geometries[g].hsub, geometries[g].ten_bit,
+                            geometries[g].widths[w], 4, alpha, threshold);
+                }
+        printf("%lu whole-plane background and in-place blit checks passed\n",
+               checks);
+    }
 
     /* Benchmark: repeatedly blit a full 1920x1080 yuv422p picture through a
      * rectangular alpha mask and report the throughput. */
