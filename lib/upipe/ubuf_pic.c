@@ -18,7 +18,7 @@
 #include <string.h>
 
 #if defined(__GNUC__) && defined(__x86_64__)
-#include <emmintrin.h>
+#include "ubuf_pic_blit_x86.h"
 #endif
 
 /** @This blits a picture ubuf to another ubuf, optionally reading the
@@ -178,6 +178,17 @@ int ubuf_pic_blit_alpha_bg(struct ubuf *dest, struct ubuf *bg,
         int plane_vsize = extract_vsize / src_vsub;
 
         for (int i = 0; i < plane_vsize; i++) {
+
+#if defined(__GNUC__) && defined(__x86_64__)
+            if (in_planes == 1 && blit8_handle_cases(dest_buffer, bg_buffer,
+                        in[0],
+                        alpha_plane ? alpha_plane + alpha_stride * (i * src_vsub)
+                                    : NULL,
+                        alpha, threshold, plane_hsize, src_hsub))
+                /* Nothing to do */;
+            else
+#endif
+
             if ((!alpha_plane && alpha == 0xff) || threshold == 0) {
                 if (in_planes == 1)
                     memcpy(dest_buffer, in[0], plane_hsize);
@@ -375,6 +386,13 @@ int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
             const uint16_t *real_bg = (const uint16_t *)bg_buffer;
             const uint16_t *real_src = (const uint16_t *)src_buffer;
             const uint16_t *real_alpha = (const uint16_t *)(alpha_plane + alpha_stride * i * src_vsub);
+
+#if defined(__GNUC__) && defined(__x86_64__)
+            if (blit10_handle_cases(real_dst, real_bg, real_src, real_alpha,
+                        alpha, threshold, plane_hsize, src_hsub))
+                /* Nothing to do */;
+            else
+#endif
 
             if ((!alpha_plane && alpha == 0x3ff) || threshold == 0) {
                 memcpy(dest_buffer, src_buffer, plane_hsize*2);
