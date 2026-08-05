@@ -366,11 +366,11 @@ int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
             return err;
         }
 
-        int plane_hsize = extract_hsize / src_hsub / src_macropixel *
+        size_t plane_hsize = extract_hsize / src_hsub / src_macropixel *
                           src_macropixel_size / 2;
-        int plane_vsize = extract_vsize / src_vsub;
+        size_t plane_vsize = extract_vsize / src_vsub;
 
-        for (int i = 0; i < plane_vsize; i++) {
+        for (size_t i = 0; i < plane_vsize; i++) {
             uint16_t *real_dst = (uint16_t *)dest_buffer;
             const uint16_t *real_bg = (const uint16_t *)bg_buffer;
             const uint16_t *real_src = (const uint16_t *)src_buffer;
@@ -379,7 +379,7 @@ int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
             if ((!alpha_plane && alpha == 0x3ff) || threshold == 0) {
                 memcpy(dest_buffer, src_buffer, plane_hsize*2);
             } else if (!alpha_plane) {
-                for (int j = 0; j < plane_hsize; j++) {
+                for (size_t j = 0; j < plane_hsize; j++) {
                     real_dst[j] = (real_bg[j] * (0x3ff - alpha) + real_src[j] * alpha) / 0x3ff;
                 }
             } else if (threshold != 0x3ff) {
@@ -389,13 +389,13 @@ int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
                  * blending in place).
                  */
                 if (alpha == 0x3ff) {
-                    for (int j = 0; j < plane_hsize; j++) {
+                    for (size_t j = 0; j < plane_hsize; j++) {
                         const uint16_t a = real_alpha[j * src_hsub];
                         if (a > threshold) real_dst[j] = real_src[j];
                         else if (bg != NULL) real_dst[j] = real_bg[j];
                     }
                 } else {
-                    for (int j = 0; j < plane_hsize; j++) {
+                    for (size_t j = 0; j < plane_hsize; j++) {
                         const uint16_t a = real_alpha[j * src_hsub] * alpha / 0x3ff;
                         if (a > threshold) real_dst[j] = real_src[j];
                         else if (bg != NULL) real_dst[j] = real_bg[j];
@@ -404,12 +404,12 @@ int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
             } else {
                 /* smooth and slow blending */
                 if (alpha == 0x3ff) {
-                    for (int j = 0; j < plane_hsize; j++) {
+                    for (size_t j = 0; j < plane_hsize; j++) {
                         const uint16_t a = real_alpha[j * src_hsub];
                         real_dst[j] = (real_bg[j] * (0x3ff - a) + real_src[j] * a) / 0x3ff;
                     }
                 } else {
-                    for (int j = 0; j < plane_hsize; j++) {
+                    for (size_t j = 0; j < plane_hsize; j++) {
                         const uint16_t a = real_alpha[j * src_hsub] * alpha / 0x3ff;
                         real_dst[j] = (real_bg[j] * (0x3ff - a) + real_src[j] * a) / 0x3ff;
                     }
