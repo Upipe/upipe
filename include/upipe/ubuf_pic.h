@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012-2016 OpenHeadend S.A.R.L.
- * Copyright (C) 2025 EasyTools
+ * Copyright (C) 2025-2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -445,11 +445,7 @@ static inline int ubuf_pic_blit_alpha(struct ubuf *dest, struct ubuf *src,
                 else {
                     for (int j = 0; j < plane_hsize; j++) {
                         for (int p = 0; p < in_planes; p++)
-                            dest_buffer[j * in_planes + p] =
-                                (dest_buffer[j * in_planes + p] *
-                                     (0xff - alpha) +
-                                 in[p][j] * alpha) /
-                                0xff;
+                            dest_buffer[j * in_planes + p] = in[p][j];
                     }
                 }
             } else if (!alpha_plane) {
