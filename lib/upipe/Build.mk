@@ -129,6 +129,7 @@ libupipe-src = \
     ubuf_mem.c \
     ubuf_mem_common.c \
     ubuf_pic.c \
+    ubuf_pic_blit_x86.h \
     ubuf_pic_common.c \
     ubuf_pic_mem.c \
     ubuf_sound_common.c \
