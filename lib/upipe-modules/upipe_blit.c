@@ -89,6 +89,8 @@ struct upipe_blit {
 
     /** last received uref */
     struct uref *uref;
+    /** controls duplicating before blit in _upipe_blit_prepare */
+    bool dup_uref_before_blit;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -930,6 +932,8 @@ static struct upipe *upipe_blit_alloc(struct upipe_mgr *mgr,
     upipe_blit_init_ubuf_mgr(upipe);
     upipe_blit->hsize = upipe_blit->vsize = UINT64_MAX;
     upipe_blit->uref = NULL;
+    upipe_blit->dup_uref_before_blit = true;
+
     urequest_init(&upipe_blit->flow_format_proxy, UREQUEST_FLOW_FORMAT,
                   NULL, upipe_blit_provide_upstream_flow_format,
                   (urequest_free_func)free);
@@ -1056,7 +1060,13 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
     struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
     if (unlikely(upipe_blit->uref == NULL))
         return UBASE_ERR_INVALID;
-    struct uref *uref = uref_dup(upipe_blit->uref);
+    struct uref *uref = upipe_blit->uref;
+    if (upipe_blit->dup_uref_before_blit) {
+        uref = uref_dup(uref);
+        UBASE_ALLOC_RETURN(uref);
+    } else {
+        upipe_blit->uref = NULL;
+    }
 
     struct uchain *uchain;
     bool subpic = false;
@@ -1253,6 +1263,24 @@ static int upipe_blit_unregister_flow_format_provider(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This processes options on a blit pipe.
+ *
+ * @param upipe description structure of the pipe
+ * @param key name of option
+ * @param val value of option
+ * @return an error code
+ */
+static int upipe_blit_set_option(struct upipe *upipe, const char *key, const char * val)
+{
+    struct upipe_blit *upipe_blit = upipe_blit_from_upipe(upipe);
+
+    if (!strcmp(key, "dup_uref_before_blit"))
+        upipe_blit->dup_uref_before_blit = !!atoi(val);
+    else
+        return UBASE_ERR_INVALID;
+    return UBASE_ERR_NONE;
+}
+
 /** @internal @This processes control commands on a file source pipe, and
  * checks the status of the pipe afterwards.
  *
@@ -1309,6 +1337,12 @@ static int upipe_blit_control_real(struct upipe *upipe,
         case UPIPE_ATTACH_UPUMP_MGR:
             upipe_blit_set_idler(upipe, NULL);
             return upipe_blit_attach_upump_mgr(upipe);
+
+        case UPIPE_SET_OPTION: {
+            const char *key = va_arg(args, const char *);
+            const char *val = va_arg(args, const char *);
+            return upipe_blit_set_option(upipe, key, val);
+        }
 
         default:
             return UBASE_ERR_UNHANDLED;
