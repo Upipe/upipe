@@ -195,6 +195,30 @@ static inline bool ueventfd_write(struct ueventfd *fd)
     }
 }
 
+/** @This makes the ueventfd blocking or non-blocking.
+ *
+ * @param fd pointer to a ueventfd
+ * @param blocking whether to set or unset the flag
+ * @return false in case of failure
+ */
+static inline bool ueventfd_set_blocking(struct ueventfd *fd, bool blocking)
+{
+    int ret = fcntl(fd->event_fd, F_GETFL);
+    if (unlikely(ret < 0))
+        return false;
+
+    if (blocking)
+        ret &= ~O_NONBLOCK;
+    else
+        ret |= O_NONBLOCK;
+
+    ret = fcntl(fd->event_fd, F_SETFL, ret);
+    if (unlikely(ret < 0))
+        return false;
+
+    return true;
+}
+
 /** @This initializes a ueventfd.
  *
  * @param fd pointer to a ueventfd
@@ -218,11 +242,7 @@ static inline bool ueventfd_init(struct ueventfd *fd, bool readable)
         if (unlikely(ret < 0))
             return false;
 
-        ret = fcntl(fd->event_fd, F_GETFL);
-        if (unlikely(ret < 0))
-            return false;
-        ret = fcntl(fd->event_fd, F_SETFL | O_NONBLOCK);
-        if (unlikely(ret < 0))
+        if (!ueventfd_set_blocking(fd, false))
             return false;
 
         if (unlikely(fd->event_fd == -1)) { // eventfd() fails, fallback to pipe()
