@@ -1767,6 +1767,61 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
 
     upipe_notice_va(upipe, "configuring filter %s", upipe_avfilt->filters_desc);
 
+#if LIBAVFILTER_VERSION_INT >= AV_VERSION_INT(9, 1, 100)
+    int err;
+    AVFilterGraphSegment *seg;
+    if ((err = avfilter_graph_segment_parse(upipe_avfilt->filter_graph,
+                                            upipe_avfilt->filters_desc,
+                                            0,
+                                            &seg)) < 0) {
+        upipe_err_va(upipe, "cannot parse filter graph: %s", av_err2str(err));
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    if ((err = avfilter_graph_segment_create_filters(seg, 0)) < 0) {
+        upipe_err_va(upipe, "cannot create filters: %s", av_err2str(err));
+        avfilter_graph_segment_free(&seg);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    if (upipe_avfilt->hw_device_ctx != NULL) {
+        AVFilterGraph *graph = upipe_avfilt->filter_graph;
+        for (int i = 0; i < graph->nb_filters; i++) {
+            AVFilterContext *f = graph->filters[i];
+            if (!(f->filter->flags & AVFILTER_FLAG_HWDEVICE))
+                continue;
+            f->hw_device_ctx = av_buffer_ref(upipe_avfilt->hw_device_ctx);
+            if (f->hw_device_ctx == NULL) {
+                upipe_err(upipe, "cannot alloc hw device context");
+                avfilter_graph_segment_free(&seg);
+                return UBASE_ERR_ALLOC;
+            }
+        }
+    }
+
+    AVFilterInOut *outputs;
+    AVFilterInOut *inputs;
+    if ((err = avfilter_graph_segment_apply(seg, 0, &inputs, &outputs)) < 0) {
+        upipe_err_va(upipe, "cannot apply filters: %s", av_err2str(err));
+        avfilter_graph_segment_free(&seg);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    avfilter_graph_segment_free(&seg);
+
+    if ((err = avfilter_link(upipe_avfilt->buffer_ctx, 0,
+                             inputs->filter_ctx, inputs->pad_idx)) < 0) {
+        upipe_err_va(upipe, "cannot link filter input: %s", av_err2str(err));
+        avfilter_inout_free(&outputs);
+        avfilter_inout_free(&inputs);
+        return UBASE_ERR_EXTERNAL;
+    }
+
+    av_freep(&outputs->name);
+    outputs->name = av_strdup("out");
+
+    avfilter_inout_free(&inputs);
+#else
     AVFilterInOut *outputs = avfilter_inout_alloc();
     if (outputs == NULL) {
         upipe_err(upipe, "cannot allocate inout for input");
@@ -1786,6 +1841,7 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
         avfilter_inout_free(&outputs);
         return UBASE_ERR_EXTERNAL;
     }
+#endif
 
     if (outputs != NULL) {
         const char *filters = NULL;
@@ -1818,6 +1874,7 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
 
     avfilter_inout_free(&outputs);
 
+#if LIBAVFILTER_VERSION_INT < AV_VERSION_INT(9, 1, 100)
     AVBufferRef *device_ctx = upipe_avfilt->hw_device_ctx;
     if (device_ctx == NULL && frame->hw_frames_ctx != NULL) {
         AVHWFramesContext *hw_frames =
@@ -1836,6 +1893,7 @@ static int upipe_avfilt_init_buffer_from_first_frame(struct upipe *upipe,
             }
         }
     }
+#endif
 
     return UBASE_ERR_NONE;
 }
