@@ -1419,6 +1419,9 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
     if (upipe_avfilt->filter_graph)
         return UBASE_ERR_NONE;
 
+    if (ulist_empty(&upipe_avfilt->subs))
+        return UBASE_ERR_NONE;
+
     upipe_avfilt->filter_graph = avfilter_graph_alloc();
     upipe_avfilt->last_input_pts_prog = UINT64_MAX;
     upipe_avfilt->last_input_pts_sys = UINT64_MAX;
