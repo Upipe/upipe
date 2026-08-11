@@ -57,6 +57,8 @@ static struct upipe_mgr *avfilt_mgr = NULL;
 static struct upipe_mgr *deint_mgr = NULL;
 static struct upipe_mgr *interlace_mgr = NULL;
 static struct upipe_mgr *setscan_mgr = NULL;
+static const char *hw_type = NULL;
+static const char *hw_device = NULL;
 
 static void test_passthrough(void);
 static void test_deint(void);
@@ -67,6 +69,7 @@ static void test_scale(void);
 static void test_format(void);
 static void test_scale_format(void);
 static void test_reconfigure(void);
+static void test_hwupload(void);
 
 typedef void (*test_func)(void);
 
@@ -85,6 +88,7 @@ static const struct test tests[] = {
     { "format",         test_format },
     { "scale_format",   test_scale_format },
     { "reconfigure",    test_reconfigure },
+    { "hwupload",       test_hwupload },
 };
 struct sink {
     struct urefcount urefcount;
@@ -210,6 +214,9 @@ static struct upipe *build_pipeline(struct upipe_mgr *avfilt,
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_VERBOSE, "ffmt"),
         flow_def_wanted);
     assert(ffmt);
+
+    if (hw_type && hw_device)
+        ubase_assert(upipe_avfilt_set_hw_config(ffmt, hw_type, hw_device));
 
     struct upipe *sink = upipe_flow_alloc_output(
         ffmt, &sink_mgr,
@@ -639,11 +646,49 @@ static void test_reconfigure(void)
         test_reconfigure_run(NULL, NULL, NULL, sws_mgr);
 }
 
+static void test_hwupload(void)
+{
+    if (!hw_type || !hw_device)
+        return;
+
+    struct uref *flow_def_wanted = uref_pic_flow_alloc_nv12(uref_mgr);
+    assert(flow_def_wanted);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def_wanted, 1920));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def_wanted, 1080));
+    ubase_assert(uref_pic_set_progressive(flow_def_wanted, true));
+    ubase_assert(
+        uref_pic_flow_set_surface_type_va(flow_def_wanted, "av.%s", hw_type));
+    ubase_assert(uref_test_set_count(flow_def_wanted, 2 * NB_FRAMES));
+    struct upipe *ffmt = build_pipeline(avfilt_mgr, deint_mgr, interlace_mgr,
+                                        sws_mgr, flow_def_wanted);
+    uref_free(flow_def_wanted);
+
+    ubase_assert(upipe_avfilt_set_hw_config(ffmt, hw_type, hw_device));
+
+    struct uref *flow_def = uref_pic_flow_alloc_nv12(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 1920));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 1080));
+    ubase_assert(uref_pic_set_progressive(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    flow_def = uref_pic_flow_alloc_yuv420p(uref_mgr);
+    assert(flow_def);
+    ubase_assert(uref_pic_flow_set_hsize(flow_def, 1920));
+    ubase_assert(uref_pic_flow_set_vsize(flow_def, 1080));
+    ubase_assert(uref_pic_set_progressive(flow_def, true));
+    send_frames(ffmt, flow_def);
+    uref_free(flow_def);
+
+    upipe_release(ffmt);
+}
+
 int main(int argc, char *argv[])
 {
     int verbose = 4;
     int opt;
-    while ((opt = getopt(argc, argv, "vq")) != -1) {
+    while ((opt = getopt(argc, argv, "vqt:d:")) != -1) {
         switch (opt) {
             case 'v':
                 verbose++;
@@ -651,8 +696,15 @@ int main(int argc, char *argv[])
             case 'q':
                 verbose--;
                 break;
+            case 't':
+                hw_type = optarg;
+                break;
+            case 'd':
+                hw_device = optarg;
+                break;
         }
     }
+
     const enum uprobe_log_level log_levels[] = {
         UPROBE_LOG_ERROR,
         UPROBE_LOG_WARNING,
@@ -695,8 +747,19 @@ int main(int argc, char *argv[])
     assert(setscan_mgr);
 
     for (unsigned i = 0; i < UBASE_ARRAY_SIZE(tests); i++) {
-        uprobe_notice_va(logger, NULL, "start %s", tests[i].name);
-        tests[i].run();
+        bool found = false;
+
+        if (optind < argc) {
+            for (int t = optind; t < argc; t++)
+                if (argv[t] && !strcmp(argv[t], tests[i].name))
+                    found = true;
+        } else {
+            found = true;
+        }
+        if (found) {
+            uprobe_notice_va(logger, NULL, "start %s", tests[i].name);
+            tests[i].run();
+        }
     }
 
     upipe_mgr_release(setscan_mgr);
