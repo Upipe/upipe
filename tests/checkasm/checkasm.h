@@ -83,6 +83,7 @@ void checkasm_check_planar8_input(void);
 void checkasm_check_sdi_input(void);
 void checkasm_check_uyvy_input(void);
 void checkasm_check_v210_input(void);
+void checkasm_check_ubuf_pic_blit(void);
 
 struct CheckasmPerf;
 
