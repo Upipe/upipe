@@ -1608,10 +1608,12 @@ int main(int argc, char **argv)
             { "y10l", "a10l", 1, true,  {  2,  14,  16,  18,  24,  30,  34,  50, 100 } },
             { "u10l", "a10l", 2, true,  {  4,  28,  32,  36,  48,  60,  68, 100, 200 } },
         };
-        /* threshold 0 is the copy and the saturated threshold is the smooth
-         * blending; everything else is the on/off blending the kernels
-         * implement. A non saturated alpha multiplier scales the alpha plane
-         * sample first, which they leave to the caller. */
+        /* threshold 0 is the copy, which the caller does itself.  A threshold
+         * between that and the saturated one is the on/off blending, and the
+         * saturated one is the smooth blending; both have kernels, except that
+         * smooth blending only has them for 10 bit.  A non saturated alpha
+         * multiplier scales the alpha plane sample first, which the kernels
+         * leave to the caller whichever the method. */
         static const struct { int alpha8, threshold8, alpha10, threshold10; }
         cases[] = {
             { 0xff, 0,    0x3ff, 0 },
