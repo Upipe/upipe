@@ -125,5 +125,32 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
         }
         return false;
     }
+
+    else if (threshold == 0x3ff && alpha_multiplier == 0x3ff) {
+        if (hsub == 1) {
+            if (__builtin_cpu_supports("avx2")) {
+                upipe_blit10_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
+                return true;
+            }
+            if (__builtin_cpu_supports("ssse3")) {
+                upipe_blit10_blend_hsub1_ssse3(dst, bg, src, alpha, hsize);
+                return true;
+            }
+            return false;
+        }
+
+        if (hsub == 2) {
+            if (__builtin_cpu_supports("avx2")) {
+                upipe_blit10_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
+                return true;
+            }
+            if (__builtin_cpu_supports("ssse3")) {
+                upipe_blit10_blend_hsub2_ssse3(dst, bg, src, alpha, hsize);
+                return true;
+            }
+            return false;
+        }
+        return false;
+    }
     return false;
 }
