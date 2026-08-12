@@ -43,20 +43,12 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
                 upipe_blit8_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
-            if (__builtin_cpu_supports("ssse3")) {
-                upipe_blit8_threshold_hsub1_ssse3(dst, bg, src, alpha, hsize, threshold);
-                return true;
-            }
             return false;
         }
 
         if (hsub == 2) {
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit8_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
-                return true;
-            }
-            if (__builtin_cpu_supports("ssse3")) {
-                upipe_blit8_threshold_hsub2_ssse3(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
             return false;
@@ -105,20 +97,12 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
                 upipe_blit10_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
-            if (__builtin_cpu_supports("ssse3")) {
-                upipe_blit10_threshold_hsub1_ssse3(dst, bg, src, alpha, hsize, threshold);
-                return true;
-            }
             return false;
         }
 
         if (hsub == 2) {
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit10_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
-                return true;
-            }
-            if (__builtin_cpu_supports("ssse3")) {
-                upipe_blit10_threshold_hsub2_ssse3(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
             return false;
@@ -132,20 +116,12 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
                 upipe_blit10_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
                 return true;
             }
-            if (__builtin_cpu_supports("ssse3")) {
-                upipe_blit10_blend_hsub1_ssse3(dst, bg, src, alpha, hsize);
-                return true;
-            }
             return false;
         }
 
         if (hsub == 2) {
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit10_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
-                return true;
-            }
-            if (__builtin_cpu_supports("ssse3")) {
-                upipe_blit10_blend_hsub2_ssse3(dst, bg, src, alpha, hsize);
                 return true;
             }
             return false;

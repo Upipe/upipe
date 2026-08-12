@@ -101,10 +101,6 @@ void checkasm_check_ubuf_pic_blit(void)
 #ifdef HAVE_X86ASM
     int cpu_flags = av_get_cpu_flags();
 
-    if (cpu_flags & AV_CPU_FLAG_SSSE3) {
-        blend_hsub1 = upipe_blit10_blend_hsub1_ssse3;
-        blend_hsub2 = upipe_blit10_blend_hsub2_ssse3;
-    }
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         blend_hsub1 = upipe_blit10_blend_hsub1_avx2;
         blend_hsub2 = upipe_blit10_blend_hsub2_avx2;
