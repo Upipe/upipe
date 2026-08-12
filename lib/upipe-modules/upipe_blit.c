@@ -175,6 +175,20 @@ struct upipe_blit_sub {
     /** computed vertical position */
     uint64_t vposition;
 
+    /* The geometry above is what the next input is validated against, and a
+     * new flow definition replaces it.  The ubuf keeps the geometry it was
+     * accepted under, so it stays blittable while the flow definition of the
+     * subpicture that follows it is being negotiated. */
+
+    /** horizontal size of ubuf */
+    uint64_t ubuf_hsize;
+    /** vertical size of ubuf */
+    uint64_t ubuf_vsize;
+    /** horizontal position of ubuf */
+    uint64_t ubuf_hposition;
+    /** vertical position of ubuf */
+    uint64_t ubuf_vposition;
+
     /** flow format urequests */
     struct uchain flow_format_requests;
 
@@ -217,6 +231,8 @@ static struct upipe *upipe_blit_sub_alloc(struct upipe_mgr *mgr,
     sub->loffset_r = sub->roffset_r = sub->toffset_r = sub->boffset_r = 0;
     sub->ubuf = NULL;
     sub->hsize = sub->vsize = sub->hposition = sub->vposition = UINT64_MAX;
+    sub->ubuf_hsize = sub->ubuf_vsize =
+        sub->ubuf_hposition = sub->ubuf_vposition = UINT64_MAX;
     ulist_init(&sub->flow_format_requests);
 
     upipe_throw_ready(upipe);
@@ -237,8 +253,9 @@ static void upipe_blit_sub_work(struct upipe *upipe, struct uref *uref)
     if (unlikely(sub->ubuf == NULL))
         return;
 
-    int err = uref_pic_blit(uref, sub->ubuf, sub->hposition, sub->vposition,
-                            0, 0, sub->hsize, sub->vsize, sub->alpha,
+    int err = uref_pic_blit(uref, sub->ubuf,
+                            sub->ubuf_hposition, sub->ubuf_vposition,
+                            0, 0, sub->ubuf_hsize, sub->ubuf_vsize, sub->alpha,
                             sub->alpha_threshold);
     if (unlikely(!ubase_check(err))) {
         upipe_warn(upipe, "unable to blit picture");
@@ -281,6 +298,13 @@ static void upipe_blit_sub_input(struct upipe *upipe, struct uref *uref,
 
     ubuf_free(sub->ubuf);
     sub->ubuf = uref_detach_ubuf(uref);
+    /* Keep the geometry it was accepted under: the one above is replaced as
+     * soon as the next subpicture's flow definition is negotiated, which
+     * happens while this one is still being blitted. */
+    sub->ubuf_hsize = sub->hsize;
+    sub->ubuf_vsize = sub->vsize;
+    sub->ubuf_hposition = sub->hposition;
+    sub->ubuf_vposition = sub->vposition;
     uref_free(uref);
 }
 
@@ -571,8 +595,9 @@ static int upipe_blit_sub_set_flow_def(struct upipe *upipe,
     uref_pic_get_hposition(flow_def, &sub->hposition);
     uref_pic_get_vposition(flow_def, &sub->vposition);
 
-    ubuf_free(sub->ubuf);
-    sub->ubuf = NULL;
+    /* The subpicture keeps being blitted until the next one arrives, and with
+     * a geometry per subpicture a flow definition arrives with every one of
+     * them, so dropping it here would leave nothing to blit. */
 
     return UBASE_ERR_NONE;
 }
@@ -749,6 +774,8 @@ static int _upipe_blit_sub_flush(struct upipe *upipe)
     struct upipe_blit_sub *sub = upipe_blit_sub_from_upipe(upipe);
     ubuf_free(sub->ubuf);
     sub->ubuf = NULL;
+    sub->ubuf_hsize = sub->ubuf_vsize =
+        sub->ubuf_hposition = sub->ubuf_vposition = UINT64_MAX;
     return UBASE_ERR_NONE;
 }
 
@@ -1040,6 +1067,13 @@ static int upipe_blit_set_flow_def(struct upipe *upipe, struct uref *flow_def)
     struct uchain *uchain;
     ulist_foreach (&upipe_blit->subs, uchain) {
         struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
+        /* The subpictures were scaled and placed for the previous format, so
+         * unlike a change of their own flow definition this does invalidate
+         * them. */
+        ubuf_free(sub->ubuf);
+        sub->ubuf = NULL;
+        sub->ubuf_hsize = sub->ubuf_vsize =
+            sub->ubuf_hposition = sub->ubuf_vposition = UINT64_MAX;
         upipe_blit_sub_provide_flow_format(upipe_blit_sub_to_upipe(sub));
     }
     return UBASE_ERR_NONE;
@@ -1107,8 +1141,8 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
             ulist_foreach (&upipe_blit->subs, uchain) {
                 struct upipe_blit_sub *sub = upipe_blit_sub_from_uchain(uchain);
                 if (sub->ubuf != NULL &&
-                    sub->hposition + sub->hsize <= hsize &&
-                    sub->vposition + sub->vsize <= vsize) {
+                    sub->ubuf_hposition + sub->ubuf_hsize <= hsize &&
+                    sub->ubuf_vposition + sub->ubuf_vsize <= vsize) {
                     fused = sub;
                     break;
                 }
@@ -1117,8 +1151,8 @@ static int _upipe_blit_prepare(struct upipe *upipe, struct upump **upump_p)
 
         if (fused != NULL) {
             int w = hsize, h = vsize;
-            int hp = fused->hposition, vp = fused->vposition;
-            int hs = fused->hsize, vs = fused->vsize;
+            int hp = fused->ubuf_hposition, vp = fused->ubuf_vposition;
+            int hs = fused->ubuf_hsize, vs = fused->ubuf_vsize;
             ubuf = ubuf_pic_alloc(upipe_blit->ubuf_mgr, w, h);
             if (ubuf != NULL) {
                 int err = UBASE_ERR_NONE;
