@@ -56,7 +56,7 @@ enum upipe_fenc_mgr_command {
  */                                                                         \
 static inline int                                                           \
     upipe_fenc_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                  \
-                                      struct upipe_mgr *p)                  \
+                                    struct upipe_mgr **p)                   \
 {                                                                           \
     return upipe_mgr_control(mgr, UPIPE_FENC_MGR_GET_##NAME##_MGR,          \
                              UPIPE_FENC_SIGNATURE, p);                      \
@@ -70,7 +70,7 @@ static inline int                                                           \
  */                                                                         \
 static inline int                                                           \
     upipe_fenc_mgr_set_##name##_mgr(struct upipe_mgr *mgr,                  \
-                                      struct upipe_mgr *m)                  \
+                                    struct upipe_mgr *m)                    \
 {                                                                           \
     return upipe_mgr_control(mgr, UPIPE_FENC_MGR_SET_##NAME##_MGR,          \
                              UPIPE_FENC_SIGNATURE, m);                      \

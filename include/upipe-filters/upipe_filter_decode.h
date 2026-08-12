@@ -90,7 +90,7 @@ enum upipe_fdec_mgr_command {
  */                                                                         \
 static inline int                                                           \
     upipe_fdec_mgr_get_##name##_mgr(struct upipe_mgr *mgr,                  \
-                                      struct upipe_mgr *p)                  \
+                                    struct upipe_mgr **p)                   \
 {                                                                           \
     return upipe_mgr_control(mgr, UPIPE_FDEC_MGR_GET_##NAME##_MGR,          \
                              UPIPE_FDEC_SIGNATURE, p);                      \
@@ -104,7 +104,7 @@ static inline int                                                           \
  */                                                                         \
 static inline int                                                           \
     upipe_fdec_mgr_set_##name##_mgr(struct upipe_mgr *mgr,                  \
-                                      struct upipe_mgr *m)                  \
+                                    struct upipe_mgr *m)                    \
 {                                                                           \
     return upipe_mgr_control(mgr, UPIPE_FDEC_MGR_SET_##NAME##_MGR,          \
                              UPIPE_FDEC_SIGNATURE, m);                      \
