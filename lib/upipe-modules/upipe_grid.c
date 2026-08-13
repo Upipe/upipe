@@ -1152,8 +1152,9 @@ static void upipe_grid_out_reset_source(struct upipe *upipe)
             upipe_grid_out_flow_format_proxy_from_urequest(urequest);
         uref_free(proxy->flow_upstream_provided);
         proxy->flow_upstream_provided = NULL;
-        urequest_provide_flow_format(proxy->upstream,
-                                     uref_dup(proxy->flow_downstream_provided));
+        if (proxy->flow_downstream_provided)
+            urequest_provide_flow_format(
+                proxy->upstream, uref_dup(proxy->flow_downstream_provided));
     }
 }
 
