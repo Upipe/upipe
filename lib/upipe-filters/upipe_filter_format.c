@@ -44,6 +44,115 @@
 #include <stdarg.h>
 #include <string.h>
 
+/** @internal @This enumerates the supported surface types. */
+enum upipe_ffmt_surface_type {
+    SW,
+    AV_VAAPI,
+    AV_QSV,
+    AV_NI_QUADRA,
+};
+
+/** @internal @This stores and extracts usefull attributes from a flow
+ * definition packet.
+ */
+struct upipe_ffmt_format {
+    /** flow definition packet */
+    struct uref *flow_def;
+    /** surface type */
+    enum upipe_ffmt_surface_type surface_type;
+    /** horizontal size */
+    uint64_t hsize;
+    /** vertical size */
+    uint64_t vsize;
+    /** fullrange? */
+    bool fullrange;
+    /** progressive? */
+    bool progressive;
+    /** top field first? */
+    bool tff;
+    /** surface type is hardware? */
+    bool hw;
+    /** bit depth */
+    int bit_depth;
+    /** pixel format name */
+    const char *pix_fmt;
+};
+
+/** @internal @This initializes a upipe_ffmt_format structure.
+ *
+ * @param format structure to initialize
+ */
+static void upipe_ffmt_format_init(struct upipe_ffmt_format *format)
+{
+    if (format) {
+        memset(format, 0, sizeof (*format));
+    }
+}
+
+/** @internal @This cleans a upipe_ffmt format structure.
+ *
+ * @param format structure to clean
+ */
+static void upipe_ffmt_format_clean(struct upipe_ffmt_format *format)
+{
+    if (format) {
+        uref_free(format->flow_def);
+        upipe_ffmt_format_init(format);
+    }
+}
+
+/** @internal @This stores input and output flow format and transformation
+ * needed.
+ */
+struct upipe_ffmt_config {
+    /** input flow format description */
+    struct upipe_ffmt_format in;
+    /** output flow format description */
+    struct upipe_ffmt_format out;
+    /** deinterlacing is needed? */
+    bool need_deint;
+    /** interlacing is needed? */
+    bool need_interlace;
+    /** format conversion is needed? */
+    bool need_format;
+    /** scaling is needed? */
+    bool need_scale;
+    /** range conversion is needed? */
+    bool need_range;
+    /** tonemap conversion is needed? */
+    bool need_tonemap;
+    /** hardware derivation is needed? */
+    bool need_derive;
+    /** hardware transfer is needed? */
+    bool need_hw_transfer;
+};
+
+/** @internal @This initializes a configuration structure.
+ *
+ * @param config configuration structure to initialize
+ */
+static void upipe_ffmt_config_init(struct upipe_ffmt_config *config)
+{
+    if (config) {
+        memset(config, 0, sizeof (*config));
+        upipe_ffmt_format_init(&config->in);
+        upipe_ffmt_format_init(&config->out);
+    }
+}
+
+/** @internal @This cleans a configuration structure.
+ *
+ * @param config configuration structure to clean
+ */
+static void upipe_ffmt_config_clean(struct upipe_ffmt_config *config)
+{
+    if (config) {
+        upipe_ffmt_format_clean(&config->out);
+        upipe_ffmt_format_clean(&config->in);
+        upipe_ffmt_config_init(config);
+    }
+}
+
 /** @internal @This is the private context of a ffmt manager. */
 struct upipe_ffmt_mgr {
     /** refcount management structure */
@@ -88,6 +197,9 @@ struct upipe_ffmt {
     struct uprobe proxy_probe;
     /** probe for the last inner pipe */
     struct uprobe last_inner_probe;
+
+    /** current configuration */
+    struct upipe_ffmt_config config;
 
     /** flow definition on the input */
     struct uref *flow_def_input;
@@ -193,6 +305,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt_init_bin_input(upipe);
     upipe_ffmt_init_bin_output(upipe);
 
+    upipe_ffmt_config_init(&upipe_ffmt->config);
     upipe_ffmt->sws_flags = 0;
     upipe_ffmt->deinterlace_vaapi_mode = NULL;
     upipe_ffmt->scale_vaapi_mode = NULL;
@@ -245,8 +358,6 @@ static int upipe_ffmt_set_flow_def_real(struct upipe *upipe,
             uref_flow_set_def(flow_def, input_def);
     }
 
-    upipe_ffmt_store_bin_input(upipe, NULL);
-    upipe_ffmt_store_bin_output(upipe, NULL);
     upipe_ffmt_store_flow_def_provided(upipe, NULL);
     upipe_ffmt_require_flow_format(upipe, flow_def);
     return UBASE_ERR_NONE;
@@ -271,13 +382,20 @@ static bool upipe_ffmt_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    if (upipe_ffmt->first_inner == NULL) {
-        if (!upipe_ffmt->flow_def_input || upipe_ffmt->flow_def_provided) {
-            upipe_warn_va(upipe, "dropping...");
+    if (unlikely(!upipe_ffmt->flow_def_provided)) {
+        if (unlikely(!upipe_ffmt->flow_def_input)) {
+            upipe_warn_va(upipe, "no input flow def set, dropping...");
             uref_free(uref);
             return true;
         }
+        /* wait for downstream reply */
         return false;
+    }
+
+    if (upipe_ffmt->first_inner == NULL) {
+        upipe_warn_va(upipe, "dropping...");
+        uref_free(uref);
+        return true;
     }
 
     upipe_ffmt_bin_input(upipe, uref, upump_p);
@@ -321,6 +439,173 @@ static void upipe_ffmt_push(struct upipe *upipe, struct upipe **last_inner,
         upipe_release(*last_inner);
     }
     *last_inner = input;
+}
+
+/** @internal @This fills a upipe_ffmt format structure from a flow
+ * definition packet.
+ *
+ * @param upipe description structure of the pipe
+ * @param format format structure to fill
+ * @param flow_def flow definition packet to read the format from
+ * @return an error code
+ */
+static int upipe_ffmt_format_set(struct upipe *upipe,
+                                 struct upipe_ffmt_format *format,
+                                 struct uref *flow_def)
+{
+    struct upipe_ffmt_mgr *ffmt_mgr = upipe_ffmt_mgr_from_upipe_mgr(upipe->mgr);
+
+    if (unlikely(!format || !flow_def))
+        return UBASE_ERR_INVALID;
+
+    format->flow_def = uref_dup(flow_def);
+    if (unlikely(!format->flow_def))
+        return UBASE_ERR_ALLOC;
+
+    const char *surface_type = "";
+    uref_pic_flow_get_surface_type(flow_def, &surface_type);
+    if (!strcmp(surface_type, "av.vaapi"))
+        format->surface_type = AV_VAAPI;
+    else if (!strcmp(surface_type, "av.qsv"))
+        format->surface_type = AV_QSV;
+    else if (!strcmp(surface_type, "av.ni_quadra"))
+        format->surface_type = AV_NI_QUADRA;
+    else
+        format->surface_type = SW;
+    format->hw = format->surface_type != SW;
+    format->hsize = 0;
+    uref_pic_flow_get_hsize(flow_def, &format->hsize);
+    format->vsize = 0;
+    uref_pic_flow_get_vsize(flow_def, &format->vsize);
+    format->fullrange = ubase_check(uref_pic_flow_get_full_range(flow_def));
+    format->progressive = uref_pic_check_progressive(flow_def);
+    format->tff = uref_pic_check_tff(flow_def);
+    format->bit_depth = 0;
+    uref_pic_flow_get_bit_depth(flow_def, &format->bit_depth);
+    format->pix_fmt = "unknown";
+    if (ffmt_mgr->avfilter_mgr) {
+        upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr, flow_def,
+                                         &format->pix_fmt, true);
+    } else {
+        const struct uref_pic_flow_format *flow_format =
+            uref_pic_flow_get_format(flow_def);
+        if (likely(flow_format))
+            format->pix_fmt = flow_format->name;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This fills a upipe_ffmt config structure from the input and
+ * output flow definition packets, and determines which conversion steps
+ * (deinterlace, interlace, scale, range, format, hw transfer, derive,
+ * tonemap) are needed to go from one to the other.
+ *
+ * @param upipe description structure of the pipe
+ * @param config config structure to fill
+ * @param in input flow definition packet
+ * @param out output flow definition packet
+ * @return an error code
+ */
+static int upipe_ffmt_config_set(struct upipe *upipe,
+                                 struct upipe_ffmt_config *config,
+                                 struct uref *in, struct uref *out)
+{
+    int ret = upipe_ffmt_format_set(upipe, &config->in, in);
+    if (unlikely(!ubase_check(ret)))
+        return ret;
+    ret = upipe_ffmt_format_set(upipe, &config->out, out);
+    if (unlikely(!ubase_check(ret))) {
+        upipe_ffmt_format_clean(&config->in);
+        return ret;
+    }
+
+    config->need_deint = !config->in.progressive && config->out.progressive;
+    config->need_interlace = config->in.progressive && !config->out.progressive;
+    if (!config->in.progressive && !config->out.progressive &&
+        ubase_check(uref_pic_get_tff(config->out.flow_def, NULL)) &&
+        ((config->in.tff && !config->out.tff) ||
+         (!config->in.tff && config->out.tff))) {
+        config->need_deint = true;
+        config->need_interlace = true;
+    }
+    config->need_scale = config->in.hsize != config->out.hsize ||
+                         config->in.vsize != config->out.vsize;
+    config->need_range = config->in.fullrange != config->out.fullrange;
+    config->need_format = !uref_pic_flow_compare_format(config->in.flow_def,
+                                                        config->out.flow_def);
+    config->need_hw_transfer = (config->in.hw && !config->out.hw) ||
+                               (!config->in.hw && config->out.hw);
+    config->need_derive = config->in.surface_type == AV_VAAPI &&
+                          config->out.surface_type == AV_QSV;
+    config->need_tonemap =
+        ubase_check(uref_pic_flow_check_hdr10(config->in.flow_def)) &&
+        ubase_check(uref_pic_flow_check_sdr(config->out.flow_def));
+
+    if (config->need_format)
+        upipe_notice_va(upipe, "need format conversion %s → %s",
+                        config->in.pix_fmt, config->out.pix_fmt);
+    if (config->need_hw_transfer)
+        upipe_notice_va(upipe, "need transfer %s → %s",
+                        config->in.hw ? "hw" : "sw",
+                        config->out.hw ? "hw" : "sw");
+    if (config->need_scale)
+        upipe_notice_va(
+            upipe, "need scale %" PRIu64 "x%" PRIu64 " → %" PRIu64 "x%" PRIu64,
+            config->in.hsize, config->in.vsize, config->out.hsize,
+            config->out.vsize);
+    if (config->need_range)
+        upipe_notice_va(upipe, "need range conversion %s → %s",
+                        config->in.fullrange ? "full" : "limited",
+                        config->out.fullrange ? "full" : "limited");
+    if (config->need_derive)
+        upipe_notice(upipe, "need hw surface mapping vaapi → qsv");
+    if (config->need_deint)
+        upipe_notice(upipe, "need deinterlace");
+    if (config->need_interlace)
+        upipe_notice(upipe, "need interlace");
+    if (config->need_tonemap)
+        upipe_notice(upipe, "need tonemap hdr10 → sdr");
+
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This checks whether two upipe_ffmt config structures are
+ * equivalent, ie. would build the same inner pipeline (same output format
+ * and same needed conversion steps).
+ *
+ * @param c1 first config structure, may be NULL
+ * @param c2 second config structure, may be NULL
+ * @return true if the two structures are equivalent
+ */
+static bool upipe_ffmt_config_check(const struct upipe_ffmt_config *c1,
+                                    const struct upipe_ffmt_config *c2)
+{
+    if (!c1 || !c2)
+        return c1 == c2;
+    if (!c1->in.flow_def || !c1->out.flow_def ||
+        !c2->in.flow_def || !c2->out.flow_def)
+        return c1->in.flow_def == c2->in.flow_def &&
+               c1->out.flow_def == c2->out.flow_def;
+    if (!uref_pic_flow_compare_format(c1->out.flow_def, c2->out.flow_def))
+        return false;
+    if (c1->out.surface_type != c2->out.surface_type ||
+        c1->out.hsize != c2->out.hsize || c1->out.vsize != c2->out.vsize ||
+        c1->out.fullrange != c2->out.fullrange ||
+        c1->out.progressive != c2->out.progressive ||
+        c1->out.tff != c2->out.tff || c1->out.bit_depth != c2->out.bit_depth)
+        return false;
+    if (c1->in.surface_type != c2->in.surface_type)
+        return false;
+    if (c1->need_deint != c2->need_deint ||
+        c1->need_interlace != c2->need_interlace ||
+        c1->need_format != c2->need_format ||
+        c1->need_range != c2->need_range || c1->need_scale != c2->need_scale ||
+        c1->need_tonemap != c2->need_tonemap ||
+        c1->need_derive != c2->need_derive ||
+        c1->need_hw_transfer != c2->need_hw_transfer)
+        return false;
+    return true;
 }
 
 /** @internal @This builds the filter format inner pipeline.
@@ -374,117 +659,28 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
         uref_pic_flow_delete_hsize_visible(flow_def_dup);
         uref_pic_flow_delete_vsize_visible(flow_def_dup);
 
-        const char *surface_type_in;
-        if (!ubase_check(uref_pic_flow_get_surface_type(flow_def,
-                                                        &surface_type_in)))
-            surface_type_in = "";
+        struct upipe_ffmt_config config;
+        upipe_ffmt_config_init(&config);
+        UBASE_RETURN(
+            upipe_ffmt_config_set(upipe, &config, flow_def, flow_def_dup))
+        bool need_reconfigure =
+            !upipe_ffmt_config_check(&upipe_ffmt->config, &config);
+        upipe_ffmt_config_clean(&upipe_ffmt->config);
+        upipe_ffmt->config = config;
+        if (!need_reconfigure && upipe_ffmt->first_inner)
+            return upipe_set_flow_def(upipe_ffmt->first_inner, flow_def);
 
-        const char *surface_type_out;
-        if (!ubase_check(uref_pic_flow_get_surface_type(flow_def_dup,
-                                                        &surface_type_out)))
-            surface_type_out = "";
-
-        bool need_deint =
-            !uref_pic_check_progressive(flow_def) &&
-            uref_pic_check_progressive(flow_def_dup);
-        bool need_interlace =
-            uref_pic_check_progressive(flow_def) &&
-            !uref_pic_check_progressive(flow_def_dup);
-        if (!uref_pic_check_progressive(flow_def) &&
-            !uref_pic_check_progressive(flow_def_dup) &&
-            ubase_check(uref_pic_get_tff(flow_def_dup, NULL)) &&
-            ((uref_pic_check_tff(flow_def) &&
-              !uref_pic_check_tff(flow_def_dup)) ||
-             (!uref_pic_check_tff(flow_def) &&
-              uref_pic_check_tff(flow_def_dup)))) {
-            need_deint = true;
-            need_interlace = true;
-        }
-        bool need_scale =
-            uref_pic_flow_cmp_hsize(flow_def, flow_def_dup) ||
-            uref_pic_flow_cmp_vsize(flow_def, flow_def_dup);
-        bool need_range = uref_pic_flow_cmp_full_range(flow_def, flow_def_dup);
-        bool need_format =
-            !uref_pic_flow_compare_format(flow_def, flow_def_dup);
-        bool need_sws = need_scale || need_format || need_range;
-        bool pic_vaapi_in = !strcmp(surface_type_in, "av.vaapi");
-        bool pic_vaapi_out = !strcmp(surface_type_out, "av.vaapi");
-        bool pic_qsv_in = !strcmp(surface_type_in, "av.qsv");
-        bool pic_qsv_out = !strcmp(surface_type_out, "av.qsv");
-        bool pic_quadra_in = !strcmp(surface_type_in, "av.ni_quadra");
-        bool pic_quadra_out = !strcmp(surface_type_out, "av.ni_quadra");
-        bool hw_in = pic_vaapi_in || pic_qsv_in || pic_quadra_in;
-        bool hw_out = pic_vaapi_out || pic_qsv_out || pic_quadra_out;
-        bool hw = hw_in || hw_out;
-        int bit_depth_in = 0;
-        int bit_depth_out = 0;
-        uref_pic_flow_get_bit_depth(flow_def, &bit_depth_in);
-        uref_pic_flow_get_bit_depth(flow_def_dup, &bit_depth_out);
-        bool need_hw_transfer = (hw_in && !hw_out) || (!hw_in && hw_out);
-        bool need_derive = pic_vaapi_in && pic_qsv_out;
-        bool need_tonemap = ubase_check(uref_pic_flow_check_hdr10(flow_def)) &&
-            ubase_check(uref_pic_flow_check_sdr(flow_def_dup));
-
-        const char *range_in =
-            ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
-            "full" : "limited";
-        const char *range_out =
-            ubase_check(uref_pic_flow_get_full_range(flow_def_dup)) ?
-            "full" : "limited";
-        uint64_t hsize_in = 0, vsize_in = 0;
-        uint64_t hsize_out = 0, vsize_out = 0;
-        uref_pic_flow_get_hsize(flow_def, &hsize_in);
-        uref_pic_flow_get_vsize(flow_def, &vsize_in);
-        uref_pic_flow_get_hsize(flow_def_dup, &hsize_out);
-        uref_pic_flow_get_vsize(flow_def_dup, &vsize_out);
-        const char *pix_fmt_in = "unknown";
-        const char *pix_fmt_out = "unknown";
-        if (ffmt_mgr->avfilter_mgr) {
-            upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr, flow_def,
-                                             &pix_fmt_in, true);
-            upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
-                                             flow_def_dup, &pix_fmt_out, true);
-        } else {
-            const struct uref_pic_flow_format *from =
-                uref_pic_flow_get_format(flow_def);
-            const struct uref_pic_flow_format *to =
-                uref_pic_flow_get_format(flow_def_dup);
-            if (likely(from))
-                pix_fmt_in = from->name;
-            if (likely(to))
-                pix_fmt_out = to->name;
-        }
-
-        if (need_format)
-            upipe_notice_va(upipe, "need format conversion %s → %s",
-                            pix_fmt_in, pix_fmt_out);
-        if (need_hw_transfer)
-            upipe_notice_va(upipe, "need transfer %s → %s",
-                            hw_in ? "hw" : "sw", hw_out ? "hw" : "sw");
-        if (need_scale)
-            upipe_notice_va(upipe,
-                            "need scale %" PRIu64 "x%" PRIu64
-                            " → %" PRIu64 "x%" PRIu64,
-                            hsize_in, vsize_in, hsize_out, vsize_out);
-        if (need_range)
-            upipe_notice_va(upipe, "need range conversion %s → %s",
-                            range_in, range_out);
-        if (need_derive)
-            upipe_notice(upipe, "need hw surface mapping vaapi → qsv");
-        if (need_deint)
-            upipe_notice(upipe, "need deinterlace");
-        if (need_interlace)
-            upipe_notice(upipe, "need interlace");
-        if (need_tonemap)
-            upipe_notice(upipe, "need tonemap hdr10 → sdr");
-
+        const struct upipe_ffmt_format *in = &upipe_ffmt->config.in;
+        const struct upipe_ffmt_format *out = &upipe_ffmt->config.out;
         bool use_avfilter = false;
         bool use_deint = false;
         bool use_sws = false;
         bool use_interlace = false;
 
-        if (hw) {
-            if (need_deint || need_sws || need_hw_transfer || need_derive) {
+        if (in->hw || out->hw) {
+            if (config.need_deint || config.need_scale || config.need_format ||
+                config.need_range || config.need_hw_transfer ||
+                config.need_derive) {
                 if (ffmt_mgr->avfilter_mgr)
                     use_avfilter = true;
                 else {
@@ -494,7 +690,7 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             }
         }
 
-        if (need_tonemap) {
+        if (config.need_tonemap) {
             if (ffmt_mgr->avfilter_mgr)
                 use_avfilter = true;
             else {
@@ -503,7 +699,7 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             }
         }
 
-        if (need_sws) {
+        if (config.need_format || config.need_scale || config.need_range) {
             if (use_avfilter)
                 use_sws = false;
             else if (ffmt_mgr->sws_mgr)
@@ -516,7 +712,7 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             }
         }
 
-        if (need_deint) {
+        if (config.need_deint) {
             if (use_avfilter)
                 use_deint = false;
             else if (ffmt_mgr->deint_mgr)
@@ -529,9 +725,9 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             }
         }
 
-        if (need_interlace) {
+        if (config.need_interlace) {
             if (ffmt_mgr->interlace_mgr) {
-                if (hw_out) {
+                if (out->hw) {
                     upipe_warn(upipe, "hardware interlacing is not supported");
                     return UBASE_ERR_UNHANDLED;
                 }
@@ -548,9 +744,6 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             const char *pix_fmt = NULL;
             upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
                                              flow_def_dup, &pix_fmt, false);
-            const char *pix_fmt_sw = NULL;
-            upipe_avfilt_mgr_get_pixfmt_name(ffmt_mgr->avfilter_mgr,
-                                             flow_def_dup, &pix_fmt_sw, true);
 
             int val;
 
@@ -575,10 +768,16 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                 UBASE_RETURN(upipe_avfilt_mgr_get_color_transfer_name(
                         ffmt_mgr->avfilter_mgr, val, &color_transfer))
 
-            bool in_10bit = bit_depth_in == 10;
-            bool out_10bit = bit_depth_out == 10;
+            bool in_10bit = in->bit_depth == 10;
+            bool out_10bit = out->bit_depth == 10;
             const char *pix_fmt_semiplanar_in = in_10bit ? "p010le" : "nv12";
             const char *pix_fmt_semiplanar_out = out_10bit ? "p010le" : "nv12";
+            const char *range_out = out->fullrange ? "full" : "limited";
+            bool need_deint = config.need_deint;
+            bool need_scale = config.need_scale;
+            bool need_format = config.need_format;
+            bool need_range = config.need_range;
+            bool need_tonemap = config.need_tonemap;
 
             char filters[512];
             int pos = 0;
@@ -592,8 +791,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             pos += snprintf(filters + pos, sizeof(filters) - pos, \
                             "%s" Fmt, opt++ ? ":" : "=", ##__VA_ARGS__)
 
-            if (!hw_in && hw_out) {
-                if (pic_quadra_out) {
+            if (!in->hw && out->hw) {
+                if (out->surface_type == AV_NI_QUADRA) {
                     if (need_deint) {
                         add_filter("yadif");
                         add_option("deint=interlaced");
@@ -606,8 +805,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                 }
                 add_filter("hwupload");
             }
-            if (pic_qsv_in || pic_qsv_out) {
-                if (pic_vaapi_in) {
+            if (in->surface_type == AV_QSV || out->surface_type == AV_QSV) {
+                if (in->surface_type == AV_VAAPI) {
                     add_filter("hwmap");
                     add_option("derive_device=qsv");
                     add_filter("format");
@@ -618,13 +817,13 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                     add_option("deinterlace=%s",
                                upipe_ffmt->vpp_qsv_deinterlace ?: "advanced");
                 if (need_scale) {
-                    add_option("width=%"PRIu64, hsize_out);
-                    add_option("height=%"PRIu64, vsize_out);
+                    add_option("width=%"PRIu64, out->hsize);
+                    add_option("height=%"PRIu64, out->vsize);
                 }
                 add_option("scale_mode=%s",
                            upipe_ffmt->vpp_qsv_scale_mode ?: "hq");
                 if (need_format)
-                    add_option("format=%s", pix_fmt_sw);
+                    add_option("format=%s", out->pix_fmt);
                 if (need_range)
                     add_option("out_range=%s", range_out);
                 if (color_matrix)
@@ -635,8 +834,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                     add_option("out_color_transfer=%s", color_transfer);
                 add_option("tonemap=%d", need_tonemap ? 1 : 0);
                 add_option("async_depth=0");
-            } else if (hw_out) {
-                if (need_deint && !pic_quadra_out) {
+            } else if (out->hw) {
+                if (need_deint && out->surface_type != AV_NI_QUADRA) {
                     add_filter("deinterlace_vaapi");
                     add_option("auto=1");
                     if (upipe_ffmt->deinterlace_vaapi_mode)
@@ -644,11 +843,11 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                                    upipe_ffmt->deinterlace_vaapi_mode);
                 }
                 if (need_scale || need_format || need_range) {
-                    if (pic_quadra_out) {
+                    if (out->surface_type == AV_NI_QUADRA) {
                         add_filter("ni_quadra_scale");
                         if (need_scale)
                             add_option("size=%" PRIu64 "x%" PRIu64,
-                                       hsize_out, vsize_out);
+                                       out->hsize, out->vsize);
                         if (upipe_ffmt->ni_quadra_scale_filterblit)
                             add_option("filterblit=%s",
                                        upipe_ffmt->ni_quadra_scale_filterblit);
@@ -659,8 +858,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                         add_option("mode=%s",
                                    upipe_ffmt->scale_vaapi_mode ?: "hq");
                         if (need_scale) {
-                            add_option("w=%"PRIu64, hsize_out);
-                            add_option("h=%"PRIu64, vsize_out);
+                            add_option("w=%"PRIu64, out->hsize);
+                            add_option("h=%"PRIu64, out->vsize);
                         }
                         if (need_range)
                             add_option("out_range=%s", range_out);
@@ -673,16 +872,18 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                                            color_transfer);
                         }
                     }
-                    if (!(need_tonemap && (pic_vaapi_in || pic_vaapi_out))) {
+                    if (!(need_tonemap && (in->surface_type == AV_VAAPI ||
+                                           out->surface_type == AV_VAAPI))) {
                         if (color_matrix)
                             add_option("out_color_matrix=%s", color_matrix);
                         if (need_format)
-                            add_option("format=%s", pix_fmt_sw);
+                            add_option("format=%s", out->pix_fmt);
                     }
                 }
-                if (need_tonemap && (pic_vaapi_in || pic_vaapi_out)) {
+                if (need_tonemap && (in->surface_type == AV_VAAPI ||
+                                     out->surface_type == AV_VAAPI)) {
                     add_filter("tonemap_vaapi");
-                    add_option("format=%s", pix_fmt_sw);
+                    add_option("format=%s", out->pix_fmt);
                     if (color_matrix)
                         add_option("matrix=%s", color_matrix);
                     if (color_primaries)
@@ -694,8 +895,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                 if (need_tonemap) {
                     add_filter("zscale");
                     if (need_scale) {
-                        add_option("width=%"PRIu64, hsize_out);
-                        add_option("height=%"PRIu64, vsize_out);
+                        add_option("width=%"PRIu64, out->hsize);
+                        add_option("height=%"PRIu64, out->vsize);
                         add_option("filter=%s",
                                    upipe_ffmt->zscale_filter ?: "bicubic");
                     }
@@ -714,13 +915,13 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                     add_option("transfer=%s", color_transfer);
                     add_option("matrix=%s", color_matrix);
                     add_filter("format");
-                    add_option("%s", pix_fmt_sw);
+                    add_option("%s", out->pix_fmt);
                 } else if (need_scale || need_format || need_range) {
                     add_filter("scale");
                     add_option("interl=-1");
                     if (need_scale) {
-                        add_option("w=%"PRIu64, hsize_out);
-                        add_option("h=%"PRIu64, vsize_out);
+                        add_option("w=%"PRIu64, out->hsize);
+                        add_option("h=%"PRIu64, out->vsize);
                     }
                     if (need_range)
                         add_option("out_range=%s", range_out);
@@ -736,7 +937,7 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                     add_option("deint=interlaced");
                 }
             }
-            if (hw_in && !hw_out) {
+            if (in->hw && !out->hw) {
                 add_filter("hwmap");
                 add_option("mode=read+direct");
                 add_filter("format");
@@ -1190,6 +1391,7 @@ static void upipe_ffmt_free(struct upipe *upipe)
     free(upipe_ffmt->tonemap_desat);
     free(upipe_ffmt->hw_type);
     free(upipe_ffmt->hw_device);
+    upipe_ffmt_config_clean(&upipe_ffmt->config);
     upipe_ffmt_clean_input(upipe);
     upipe_ffmt_clean_flow_format(upipe);
     upipe_ffmt_clean_proxy_probe(upipe);
