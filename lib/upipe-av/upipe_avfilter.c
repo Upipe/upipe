@@ -261,11 +261,13 @@ static inline struct urational urational(AVRational v)
 /** @internal @This builds the video flow definition packet.
  *
  * @param flow_def output flow def
+ * @param current_flow_def current output flow def or NULL
  * @param buffer_ctx buffersink context
  * @param frame first frame
  * @return an error code
  */
 static int build_video_flow_def(struct uref *flow_def,
+                                struct uref *current_flow_def,
                                 AVFilterContext *buffer_ctx,
                                 const AVFrame *frame)
 {
@@ -318,36 +320,7 @@ static int build_video_flow_def(struct uref *flow_def,
     UBASE_RETURN(uref_pic_flow_set_matrix_coefficients_val(
             flow_def, matrix_coefficients))
 
-    AVFrameSideData *sd = av_frame_get_side_data(
-        frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
-    if (sd) {
-        AVContentLightMetadata *clm = (AVContentLightMetadata *)sd->data;
-        UBASE_RETURN(uref_pic_flow_set_max_cll(flow_def, clm->MaxCLL))
-        UBASE_RETURN(uref_pic_flow_set_max_fall(flow_def, clm->MaxFALL))
-    }
-    sd = av_frame_get_side_data(
-        frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
-    if (sd) {
-        AVMasteringDisplayMetadata *mdcv =
-            (AVMasteringDisplayMetadata *)sd->data;
-        AVRational chroma = { 1, 50000 };
-        AVRational luma = { 1, 10000 };
-        UBASE_RETURN(uref_pic_flow_set_mastering_display(flow_def,
-            &(struct uref_pic_mastering_display){
-                .red_x = av_rescale_q(1, mdcv->display_primaries[0][0], chroma),
-                .red_y = av_rescale_q(1, mdcv->display_primaries[0][1], chroma),
-                .green_x = av_rescale_q(1, mdcv->display_primaries[1][0], chroma),
-                .green_y = av_rescale_q(1, mdcv->display_primaries[1][1], chroma),
-                .blue_x = av_rescale_q(1, mdcv->display_primaries[2][0], chroma),
-                .blue_y = av_rescale_q(1, mdcv->display_primaries[2][1], chroma),
-                .white_x = av_rescale_q(1, mdcv->white_point[0], chroma),
-                .white_y = av_rescale_q(1, mdcv->white_point[1], chroma),
-                .min_luminance = av_rescale_q(1, mdcv->min_luminance, luma),
-                .max_luminance = av_rescale_q(1, mdcv->max_luminance, luma),
-            }))
-    }
-
-    return UBASE_ERR_NONE;
+    return upipe_av_get_frame_properties(flow_def, frame, current_flow_def);
 }
 
 /** @internal @This builds the audio flow definition packet.
@@ -371,19 +344,20 @@ static int build_audio_flow_def(struct uref *flow_def,
 /** @internal @This builds the flow definition packet.
  *
  * @param flow_def output flow def
+ * @param current_flow_def current output flow def or NULL
  * @param buffer_ctx buffersink context
  * @param frame first frame
  * @return an error code
  */
-static int build_flow_def(struct uref *flow_def, AVFilterContext *ctx,
-                          const AVFrame *frame)
+static int build_flow_def(struct uref *flow_def, struct uref *current_flow_def,
+                          AVFilterContext *ctx, const AVFrame *frame)
 {
     if (!flow_def || !ctx || !frame)
         return UBASE_ERR_INVALID;
 
     switch (av_buffersink_get_type(ctx)) {
         case AVMEDIA_TYPE_VIDEO:
-            return build_video_flow_def(flow_def, ctx, frame);
+            return build_video_flow_def(flow_def, current_flow_def, ctx, frame);
 
         case AVMEDIA_TYPE_AUDIO:
             return build_audio_flow_def(flow_def, ctx, frame);
@@ -414,7 +388,7 @@ static struct uref *upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
     if (unlikely(flow_def == NULL))
         return NULL;
 
-    int ret = build_flow_def(flow_def, ctx, frame);
+    int ret = build_flow_def(flow_def, upipe_avfilt_sub->flow_def, ctx, frame);
     if (unlikely(!ubase_check(ret))) {
         uref_free(flow_def);
         upipe_err_va(upipe, "unknown buffersink type");
@@ -1916,7 +1890,7 @@ static struct uref *upipe_avfilt_build_flow_def(struct upipe *upipe,
     if (unlikely(flow_def == NULL))
         return NULL;
 
-    int ret = build_flow_def(flow_def, ctx, frame);
+    int ret = build_flow_def(flow_def, upipe_avfilt->flow_def, ctx, frame);
     if (unlikely(!ubase_check(ret))) {
         uref_free(flow_def);
         upipe_err_va(upipe, "unknown buffersink type");

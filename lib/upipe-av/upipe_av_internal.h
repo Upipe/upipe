@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2018 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -184,5 +185,16 @@ int upipe_av_set_frame_properties(struct upipe *upipe,
                                   AVFrame *frame,
                                   struct uref *flow_def,
                                   struct uref *uref);
+
+/** @This sets flow definition from a frame.
+ *
+ * @param flow_def flow definition packet
+ * @param frame av frame to setup
+ * @param current_flow_def current flow definition packet or NULL
+ * @return an error code
+ */
+int upipe_av_get_frame_properties(struct uref *flow_def,
+                                  const AVFrame *frame,
+                                  struct uref *current_flow_def);
 
 #endif
