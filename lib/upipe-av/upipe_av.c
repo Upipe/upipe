@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2013 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *
@@ -176,6 +177,62 @@ int upipe_av_set_frame_properties(struct upipe *upipe,
         mdm->max_luminance = av_make_q(mdcv.max_luminance, luma);
         mdm->min_luminance = av_make_q(mdcv.min_luminance, luma);
         mdm->has_luminance = 1;
+    }
+
+    return UBASE_ERR_NONE;
+}
+
+/** @This sets flow definition attributes from a frame.
+ *
+ * @param flow_def flow definition packet
+ * @param frame av frame to setup
+ * @param current_flow_def current flow definition packet or NULL
+ * @return an error code
+ */
+int upipe_av_get_frame_properties(struct uref *flow_def,
+                                  const AVFrame *frame,
+                                  struct uref *current_flow_def)
+{
+    if (unlikely(!flow_def || !frame))
+        return UBASE_ERR_INVALID;
+#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
+    bool key_frame = frame->key_frame;
+#else
+    bool key_frame = frame->flags & AV_FRAME_FLAG_KEY;
+#endif
+
+    AVFrameSideData *sd = av_frame_get_side_data(
+        frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+    if (sd) {
+        AVContentLightMetadata *clm = (AVContentLightMetadata *)sd->data;
+        UBASE_RETURN(uref_pic_flow_set_max_cll(flow_def, clm->MaxCLL))
+        UBASE_RETURN(uref_pic_flow_set_max_fall(flow_def, clm->MaxFALL))
+    } else if (!key_frame && current_flow_def) {
+        UBASE_RETURN(uref_pic_flow_copy_max_cll(flow_def, current_flow_def))
+        UBASE_RETURN(uref_pic_flow_copy_max_fall(flow_def, current_flow_def))
+    }
+    sd = av_frame_get_side_data(
+        frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+    if (sd) {
+        AVMasteringDisplayMetadata *mdcv =
+            (AVMasteringDisplayMetadata *)sd->data;
+        AVRational chroma = { 1, 50000 };
+        AVRational luma = { 1, 10000 };
+        UBASE_RETURN(uref_pic_flow_set_mastering_display(flow_def,
+            &(struct uref_pic_mastering_display){
+                .red_x = av_rescale_q(1, mdcv->display_primaries[0][0], chroma),
+                .red_y = av_rescale_q(1, mdcv->display_primaries[0][1], chroma),
+                .green_x = av_rescale_q(1, mdcv->display_primaries[1][0], chroma),
+                .green_y = av_rescale_q(1, mdcv->display_primaries[1][1], chroma),
+                .blue_x = av_rescale_q(1, mdcv->display_primaries[2][0], chroma),
+                .blue_y = av_rescale_q(1, mdcv->display_primaries[2][1], chroma),
+                .white_x = av_rescale_q(1, mdcv->white_point[0], chroma),
+                .white_y = av_rescale_q(1, mdcv->white_point[1], chroma),
+                .min_luminance = av_rescale_q(1, mdcv->min_luminance, luma),
+                .max_luminance = av_rescale_q(1, mdcv->max_luminance, luma),
+            }))
+    } else if (!key_frame && current_flow_def) {
+        UBASE_RETURN(uref_pic_flow_copy_mdcv(flow_def, current_flow_def))
     }
 
     return UBASE_ERR_NONE;

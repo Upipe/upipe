@@ -357,64 +357,8 @@ static int upipe_avcdec_get_buffer_pic(struct AVCodecContext *context,
     if (context->color_range == AVCOL_RANGE_JPEG)
         uref_pic_flow_set_full_range(flow_def_attr);
 
-#if LIBAVUTIL_VERSION_INT < AV_VERSION_INT(58, 7, 100)
-    bool key_frame = frame->key_frame;
-#else
-    bool key_frame = frame->flags & AV_FRAME_FLAG_KEY;
-#endif
-
-    AVFrameSideData *sd = av_frame_get_side_data(
-        frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
-    if (sd) {
-        AVContentLightMetadata *clm = (AVContentLightMetadata *)sd->data;
-        UBASE_FATAL(upipe, uref_pic_flow_set_max_cll(
-                flow_def_attr, clm->MaxCLL))
-        UBASE_FATAL(upipe, uref_pic_flow_set_max_fall(
-                flow_def_attr, clm->MaxFALL))
-    } else if (!key_frame && upipe_avcdec->flow_def_format) {
-        uint64_t max_cll;
-        if (ubase_check(uref_pic_flow_get_max_cll(
-                    upipe_avcdec->flow_def_format, &max_cll))) {
-            UBASE_FATAL(upipe, uref_pic_flow_set_max_cll(
-                    flow_def_attr, max_cll))
-        }
-        uint64_t max_fall;
-        if (ubase_check(uref_pic_flow_get_max_fall(
-                    upipe_avcdec->flow_def_format, &max_fall))) {
-            UBASE_FATAL(upipe, uref_pic_flow_set_max_fall(
-                    flow_def_attr, max_fall))
-        }
-    }
-
-    sd = av_frame_get_side_data(
-        frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
-    if (sd) {
-        AVMasteringDisplayMetadata *mdcv =
-            (AVMasteringDisplayMetadata *)sd->data;
-        AVRational chroma = { 1, 50000 };
-        AVRational luma = { 1, 10000 };
-        UBASE_FATAL(upipe, uref_pic_flow_set_mastering_display(flow_def_attr,
-            &(struct uref_pic_mastering_display){
-                .red_x = av_rescale_q(1, mdcv->display_primaries[0][0], chroma),
-                .red_y = av_rescale_q(1, mdcv->display_primaries[0][1], chroma),
-                .green_x = av_rescale_q(1, mdcv->display_primaries[1][0], chroma),
-                .green_y = av_rescale_q(1, mdcv->display_primaries[1][1], chroma),
-                .blue_x = av_rescale_q(1, mdcv->display_primaries[2][0], chroma),
-                .blue_y = av_rescale_q(1, mdcv->display_primaries[2][1], chroma),
-                .white_x = av_rescale_q(1, mdcv->white_point[0], chroma),
-                .white_y = av_rescale_q(1, mdcv->white_point[1], chroma),
-                .min_luminance = av_rescale_q(1, mdcv->min_luminance, luma),
-                .max_luminance = av_rescale_q(1, mdcv->max_luminance, luma),
-            }))
-    } else if (!key_frame && upipe_avcdec->flow_def_format) {
-        const uint8_t *mdcv;
-        size_t size;
-        if (ubase_check(uref_pic_flow_get_mdcv(upipe_avcdec->flow_def_format,
-                                               &mdcv, &size))) {
-            UBASE_FATAL(upipe, uref_pic_flow_set_mdcv(
-                    flow_def_attr, mdcv, size))
-        }
-    }
+    UBASE_FATAL(upipe, upipe_av_get_frame_properties(
+                           flow_def_attr, frame, upipe_avcdec->flow_def_format))
 
     if (unlikely(upipe_avcdec->ubuf_mgr != NULL &&
                  udict_cmp(upipe_avcdec->flow_def_format->udict,
