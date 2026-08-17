@@ -1619,7 +1619,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->width = hsize;
         context->height = vsize;
         context->pix_fmt = upipe_av_pixfmt_from_flow_def(
-            flow_def, codec->pix_fmts, upipe_avcenc->chroma_map);
+            flow_def, upipe_av_codec_get_pix_fmts(context, codec),
+            upipe_avcenc->chroma_map);
 
         if (context->pix_fmt == AV_PIX_FMT_NONE) {
             upipe_err_va(upipe, "unsupported pixel format");
@@ -1629,7 +1630,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
         upipe_avcenc->frame->format = context->pix_fmt;
 
-        const AVRational *supported_framerates = codec->supported_framerates;
+        const AVRational *supported_framerates =
+            upipe_av_codec_get_frame_rates(context, codec);
         struct urational fps = {25, 1};
         if (ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) &&
             supported_framerates != NULL) {
@@ -1735,7 +1737,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         upipe_avcenc_store_flow_def_check(upipe, flow_def_check);
 
     } else {
-        const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
+        const enum AVSampleFormat *sample_fmts =
+            upipe_av_codec_get_sample_fmts(context, codec);
         if (sample_fmts == NULL) {
             upipe_err_va(upipe, "unknown sample format %s", def);
             uref_free(flow_def_check);
@@ -1755,7 +1758,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         context->sample_fmt = *sample_fmts;
 
         uint64_t rate;
-        const int *supported_samplerates = codec->supported_samplerates;
+        const int *supported_samplerates =
+            upipe_av_codec_get_sample_rates(context, codec);
         if (!ubase_check(uref_sound_flow_get_rate(flow_def, &rate))) {
             upipe_err_va(upipe, "unsupported sample rate");
             uref_free(flow_def_check);
@@ -1783,7 +1787,8 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
             uref_free(flow_def_check);
             return UBASE_ERR_INVALID;
         }
-        const AVChannelLayout *ch_layouts = context->codec->ch_layouts;
+        const AVChannelLayout *ch_layouts =
+            upipe_av_codec_get_ch_layouts(context, codec);
         if (ch_layouts) {
             while (ch_layouts->nb_channels != 0) {
                 if (ch_layouts->nb_channels == channels)
@@ -1861,14 +1866,16 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
         return urequest_provide_flow_format(request, flow_format);
 
     } else if (!ubase_ncmp(def, "pic.")) {
-        if (unlikely(codec->pix_fmts == NULL || codec->pix_fmts[0] == -1))
+        const enum AVPixelFormat *pix_fmts =
+            upipe_av_codec_get_pix_fmts(context, codec);
+        if (unlikely(pix_fmts == NULL || pix_fmts[0] == -1))
             goto upipe_avcenc_provide_flow_format_err;
 
         enum AVPixelFormat hw_pix_fmt = upipe_avcenc_get_hw_pix_fmt(codec);
         if (hw_pix_fmt != AV_PIX_FMT_NONE) {
             const char *chroma_map[UPIPE_AV_MAX_PLANES];
             enum AVPixelFormat pix_fmt = upipe_av_sw_pixfmt_from_flow_def(
-                flow_format, codec->pix_fmts, chroma_map);
+                flow_format, pix_fmts, chroma_map);
             if (pix_fmt == AV_PIX_FMT_NONE) {
                 int bit_depth = 0;
                 uref_pic_flow_get_bit_depth(flow_format, &bit_depth);
@@ -1883,16 +1890,17 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
         } else {
             const char *chroma_map[UPIPE_AV_MAX_PLANES];
             enum AVPixelFormat pix_fmt = upipe_av_pixfmt_from_flow_def(flow_format,
-                        codec->pix_fmts, chroma_map);
+                        pix_fmts, chroma_map);
             if (pix_fmt == AV_PIX_FMT_NONE) {
                 uref_pic_flow_clear_format(flow_format);
                 if (unlikely(!ubase_check(upipe_av_pixfmt_to_flow_def(
-                                codec->pix_fmts[0], flow_format))))
+                                pix_fmts[0], flow_format))))
                     goto upipe_avcenc_provide_flow_format_err;
             }
         }
 
-        const AVRational *supported_framerates = codec->supported_framerates;
+        const AVRational *supported_framerates =
+            upipe_av_codec_get_frame_rates(context, codec);
         struct urational fps = {25, 1};
         if (ubase_check(uref_pic_flow_get_fps(flow_format, &fps)) &&
             supported_framerates != NULL) {
@@ -1927,20 +1935,23 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
         uint8_t channels = 0;
         enum AVSampleFormat sample_fmt =
             upipe_av_samplefmt_from_flow_def(flow_format, &channels);
-        const enum AVSampleFormat *sample_fmts = codec->sample_fmts;
+        const enum AVSampleFormat *sample_fmts =
+            upipe_av_codec_get_sample_fmts(context, codec);
         if (sample_fmt == AV_SAMPLE_FMT_NONE || sample_fmts == NULL)
             goto upipe_avcenc_provide_flow_format_err;
 
-        while (*sample_fmts != -1) {
-            if (*sample_fmts == sample_fmt)
+        const enum AVSampleFormat *p = sample_fmts;
+        while (*p != -1) {
+            if (*p == sample_fmt)
                 break;
-            sample_fmts++;
+            p++;
         }
-        if (*sample_fmts == -1)
-            sample_fmt = codec->sample_fmts[0];
+        if (*p == -1)
+            sample_fmt = sample_fmts[0];
 
         uint64_t rate;
-        const int *supported_samplerates = codec->supported_samplerates;
+        const int *supported_samplerates =
+            upipe_av_codec_get_sample_rates(context, codec);
         if (!ubase_check(uref_sound_flow_get_rate(flow_format, &rate)))
             goto upipe_avcenc_provide_flow_format_err;
 
@@ -1963,11 +1974,12 @@ static int _upipe_avcenc_provide_flow_format(struct upipe *upipe,
                 if (closest == -1)
                     goto upipe_avcenc_provide_flow_format_err;
                 UBASE_RETURN(uref_sound_flow_set_rate(flow_format,
-                            codec->supported_samplerates[closest]))
+                            supported_samplerates[closest]))
             }
         }
 
-        const AVChannelLayout *ch_layouts = codec->ch_layouts;
+        const AVChannelLayout *ch_layouts =
+            upipe_av_codec_get_ch_layouts(context, codec);
         if (ch_layouts != NULL) {
             const AVChannelLayout *selected_layout = NULL;
             uint64_t diff_channels = UINT64_MAX; /* arbitrarily big */

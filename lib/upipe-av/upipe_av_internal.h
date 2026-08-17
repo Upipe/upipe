@@ -16,6 +16,7 @@
 
 #include <stdbool.h>
 
+#include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
 #include <libavcodec/avcodec.h>
 
@@ -34,6 +35,121 @@ enum CodecID;
 #define AV_CODEC_ID_FIRST_SUBTITLE CODEC_ID_FIRST_SUBTITLE
 #define AV_CODEC_ID_FIRST_AUDIO CODEC_ID_FIRST_AUDIO
 #endif
+
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+/** @This returns the list of configurations of a given type supported by a
+ * codec.
+ *
+ * @param context codec context to take into account, or NULL for defaults
+ * @param codec codec to query, or NULL to use the context codec
+ * @param config type of configuration to query
+ * @return a terminated list of values, or NULL if all values are supported
+ */
+static inline const void *
+upipe_av_codec_get_supported_config(const AVCodecContext *context,
+                                    const AVCodec *codec,
+                                    enum AVCodecConfig config)
+{
+    const void *configs;
+    if (avcodec_get_supported_config(context, codec, config, 0,
+                                     &configs, NULL) < 0)
+        return NULL;
+    return configs;
+}
+#endif
+
+/** @This returns the list of pixel formats supported by a codec.
+ *
+ * @param context codec context to take into account, or NULL for defaults
+ * @param codec codec to query, or NULL to use the context codec
+ * @return a list terminated by AV_PIX_FMT_NONE, or NULL if all are supported
+ */
+static inline const enum AVPixelFormat *
+upipe_av_codec_get_pix_fmts(const AVCodecContext *context,
+                            const AVCodec *codec)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    return upipe_av_codec_get_supported_config(context, codec,
+                                               AV_CODEC_CONFIG_PIX_FORMAT);
+#else
+    return codec != NULL ? codec->pix_fmts : context->codec->pix_fmts;
+#endif
+}
+
+/** @This returns the list of frame rates supported by a codec.
+ *
+ * @param context codec context to take into account, or NULL for defaults
+ * @param codec codec to query, or NULL to use the context codec
+ * @return a list terminated by {0, 0}, or NULL if all are supported
+ */
+static inline const AVRational *
+upipe_av_codec_get_frame_rates(const AVCodecContext *context,
+                               const AVCodec *codec)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    return upipe_av_codec_get_supported_config(context, codec,
+                                               AV_CODEC_CONFIG_FRAME_RATE);
+#else
+    return codec != NULL ? codec->supported_framerates :
+                           context->codec->supported_framerates;
+#endif
+}
+
+/** @This returns the list of sample formats supported by a codec.
+ *
+ * @param context codec context to take into account, or NULL for defaults
+ * @param codec codec to query, or NULL to use the context codec
+ * @return a list terminated by AV_SAMPLE_FMT_NONE, or NULL if all are
+ * supported
+ */
+static inline const enum AVSampleFormat *
+upipe_av_codec_get_sample_fmts(const AVCodecContext *context,
+                               const AVCodec *codec)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    return upipe_av_codec_get_supported_config(context, codec,
+                                               AV_CODEC_CONFIG_SAMPLE_FORMAT);
+#else
+    return codec != NULL ? codec->sample_fmts : context->codec->sample_fmts;
+#endif
+}
+
+/** @This returns the list of sample rates supported by a codec.
+ *
+ * @param context codec context to take into account, or NULL for defaults
+ * @param codec codec to query, or NULL to use the context codec
+ * @return a list terminated by 0, or NULL if all are supported
+ */
+static inline const int *
+upipe_av_codec_get_sample_rates(const AVCodecContext *context,
+                                const AVCodec *codec)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    return upipe_av_codec_get_supported_config(context, codec,
+                                               AV_CODEC_CONFIG_SAMPLE_RATE);
+#else
+    return codec != NULL ? codec->supported_samplerates :
+                           context->codec->supported_samplerates;
+#endif
+}
+
+/** @This returns the list of channel layouts supported by a codec.
+ *
+ * @param context codec context to take into account, or NULL for defaults
+ * @param codec codec to query, or NULL to use the context codec
+ * @return a list terminated by {0}, or NULL if all are supported
+ */
+static inline const AVChannelLayout *
+upipe_av_codec_get_ch_layouts(const AVCodecContext *context,
+                              const AVCodec *codec)
+{
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    return upipe_av_codec_get_supported_config(context, codec,
+                                               AV_CODEC_CONFIG_CHANNEL_LAYOUT);
+#else
+    return codec != NULL ? codec->ch_layouts : context->codec->ch_layouts;
+#endif
+}
 
 /** @This allows to convert from avcodec ID to flow definition codec.
  *
