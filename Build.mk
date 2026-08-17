@@ -7,8 +7,9 @@ version      = 1.0
 cflags       = -O2 -g $(warn) $(warn_c)
 cxxflags     = -O2 -g $(warn) $(warn_cxx)
 cppflags     = -I$(top_builddir) -Iinclude -I$(top_srcdir)/include
+
 ldflags      = $(if $(or $(have_apple),$(have_san)),,-Wl,--no-undefined) \
-               $(if $(have_apple),,-Wl,--exclude-libs,ALL)
+               $(if $(or $(have_apple),$(have_san)),,-Wl,--exclude-libs,ALL)
 
 warn         = -Wall \
                -Wextra \
