@@ -46,6 +46,27 @@ SECTION .text
     jne .loop_scalar
 %endmacro
 
+%macro SCALAR_TAIL_BLEND_B 4-5 1 ; counter, temp1, temp2, temp3, optional subsampling
+    .loop_scalar:
+        movzx %2d, byte [alpha_q + %5 * %1q] ; load alpha sample
+        movzx %3d, byte [bg_q + %1q]         ; load background sample
+        movzx %4d, byte [src_q + %1q]        ; load source sample
+        imul %4d, %2d                        ; src * a
+        neg %2d
+        add %2d, 0xff                        ; 0xff - a
+        imul %3d, %2d                        ; bg * (0xff - a)
+        add %4d, %3d                         ; the numerator
+        mov %2d, %4d
+        shr %2d, 8
+        add %4d, %2d                         ; N + (N >> 8)
+        add %4d, 1
+        shr %4d, 8                          ; / 0xff
+        mov [dst_q + %1q], %4b
+        add %1q, 1
+        cmp hsize_q, %1q
+    jne .loop_scalar
+%endmacro
+
 ; The blend kernels compute, per 10 bit sample,
 ;
 ;     dst = (bg * (0x3ff - a) + src * a) / 0x3ff
@@ -254,6 +275,127 @@ cglobal blit10_threshold_hsub2, 6, 9, 6, dst_, bg_, src_, alpha_, hsize_, thresh
     jae .ret
     ALIGN 16
     SCALAR_TAIL_W r7, r6, r8, 2
+    .ret:
+RET
+
+%define zero m0
+%define pw1 m1
+%define pw255 m2
+
+cglobal blit8_blend_hsub1, 5, 10, 11, dst_, bg_, src_, alpha_, hsize_
+    pxor zero, zero
+    pcmpeqw pw255, pw255
+    mov r6d, mmsize
+    psrlw pw1, pw255, 15
+    psrlw pw255, 8
+    ALIGN 16
+    .loop_simd:
+        ; Load and unpack alpha
+        movu m3, [alpha_q + r6q - mmsize]
+        punpckhbw m4, m3, zero
+        punpcklbw m3, zero
+        mov r7q, r6q
+        ; Load and unpack src
+        movu m5, [src_q + r6q - mmsize]
+        punpckhbw m6, m5, zero
+        punpcklbw m5, zero
+        ; 255-a
+        psubw m8, pw255, m4
+        psubw m7, pw255, m3
+        ; Load and unpack bg
+        movu m9, [bg_q + r6q - mmsize]
+        punpckhbw m10, m9, zero
+        punpcklbw m9, zero
+        ; src*a
+        pmullw m6, m4
+        pmullw m5, m3
+        ; bg*(255-a)
+        pmullw m10, m8
+        pmullw m9, m7
+        ; bg*(255-a) + src*a
+        paddw m4, m10, m6
+        paddw m3, m9, m5
+        ; /255 -> (t + 1 + (t>>8)) >> 8
+        paddw m6, m4, pw1
+        paddw m5, m3, pw1
+        psrlw m4, 8
+        psrlw m3, 8
+        paddw m6, m4
+        paddw m5, m3
+        psrlw m6, 8
+        psrlw m5, 8
+        packuswb m5, m6
+        movu [dst_q + r6q - mmsize], m5
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6
+    .ret:
+RET
+
+%define shuffle m11
+
+cglobal blit8_blend_hsub2, 5, 10, 12, dst_, bg_, src_, alpha_, hsize_
+    pxor zero, zero
+    pcmpeqw pw255, pw255
+    mov r6d, mmsize
+    psrlw pw1, pw255, 15
+    psrlw pw255, 8
+    VBROADCASTI128 shuffle, [blit8_alpha_shuffle]
+    ALIGN 16
+    .loop_simd:
+        ; Load and unpack alpha
+        movu m5, [alpha_q + 2*r6q - 2*mmsize]
+        movu m6, [alpha_q + 2*r6q - 1*mmsize]
+        ; Need to compress every second byte
+        pshufb m5, shuffle
+        pshufb m6, shuffle
+        punpcklqdq m3, m5, m6
+        vpermq m3, m3, q3120 ; Permute to get correct order of qwords
+        punpckhbw m4, m3, zero
+        punpcklbw m3, zero
+        mov r7q, r6q
+        ; Load and unpack src
+        movu m5, [src_q + r6q - mmsize]
+        punpckhbw m6, m5, zero
+        punpcklbw m5, zero
+        ; 255-a
+        psubw m8, pw255, m4
+        psubw m7, pw255, m3
+        ; Load and unpack bg
+        movu m9, [bg_q + r6q - mmsize]
+        punpckhbw m10, m9, zero
+        punpcklbw m9, zero
+        ; src*a
+        pmullw m6, m4
+        pmullw m5, m3
+        ; bg*(255-a)
+        pmullw m10, m8
+        pmullw m9, m7
+        ; bg*(255-a) + src*a
+        paddw m4, m10, m6
+        paddw m3, m9, m5
+        ; /255 -> (t + 1 + (t>>8)) >> 8
+        paddw m6, m4, pw1
+        paddw m5, m3, pw1
+        psrlw m4, 8
+        psrlw m3, 8
+        paddw m6, m4
+        paddw m5, m3
+        psrlw m6, 8
+        psrlw m5, 8
+        packuswb m5, m6
+        movu [dst_q + r6q - mmsize], m5
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
     .ret:
 RET
 

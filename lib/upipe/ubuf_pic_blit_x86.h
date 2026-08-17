@@ -55,6 +55,25 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
         }
         return false;
     }
+
+    else if (threshold == 0xff && alpha_multiplier == 0xff) {
+        if (hsub == 1) {
+            if (__builtin_cpu_supports("avx2")) {
+                upipe_blit8_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
+                return true;
+            }
+            return false;
+        }
+
+        if (hsub == 2) {
+            if (__builtin_cpu_supports("avx2")) {
+                upipe_blit8_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
+                return true;
+            }
+            return false;
+        }
+        return false;
+    }
     return false;
 }
 
