@@ -119,7 +119,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           LIBS: >
-            ev asound2 x264 x265 speexdsp png freetype6 zvbi gcrypt tasn1 dvbv5
+            ev asound2 x264 x265 speexdsp png freetype zvbi gcrypt tasn1 dvbv5
             udev avcodec avformat avfilter swresample swscale gl1-mesa glu1-mesa
             srt-gnutls gnutls28 ssl bearssl ebur128 dvbcsa pcap
         run: |
