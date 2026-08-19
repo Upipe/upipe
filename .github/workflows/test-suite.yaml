@@ -13,17 +13,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: ubuntu-amd64-gcc-15
+          - name: ubuntu-amd64-gcc-16
             os: ubuntu-26.04
             arch: amd64
             compiler: gcc
-            version: 15
+            version: 16
 
-          - name: ubuntu-amd64-gcc-15-static
+          - name: ubuntu-amd64-gcc-16-static
             os: ubuntu-26.04
             arch: amd64
             compiler: gcc
-            version: 15
+            version: 16
             static: true
 
           - name: ubuntu-amd64-clang-22
@@ -32,19 +32,19 @@ jobs:
             compiler: clang
             version: 22
 
-          - name: ubuntu-armhf-gcc-15
+          - name: ubuntu-armhf-gcc-16
             os: ubuntu-26.04
             arch: armhf
             host: arm-linux-gnueabihf
             compiler: gcc
-            version: 15
+            version: 16
 
-          - name: ubuntu-arm64-gcc-15
+          - name: ubuntu-arm64-gcc-16
             os: ubuntu-26.04
             arch: arm64
             host: aarch64-linux-gnu
             compiler: gcc
-            version: 15
+            version: 16
 
           - name: macos-15-amd64-xcode
             os: macos-15-intel
