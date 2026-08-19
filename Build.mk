@@ -30,7 +30,8 @@ warn_opt     = -Wstrict-prototypes \
                -Wrestrict \
                -Wformat=2 \
                -Wno-vla-larger-than \
-               -Wno-vla-cxx-extension
+               -Wno-vla-cxx-extension \
+               -Wno-gnu-folding-constant
 
 warn_c       = $(foreach w,$(warn_opt),$(call try_cc,$w))
 warn_cxx     = $(foreach w,$(warn_opt),$(call try_cxx,$w))
