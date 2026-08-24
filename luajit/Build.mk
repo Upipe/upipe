@@ -202,7 +202,7 @@ $(modules-cdef): %.lua: $(srcdir)/gen-ffi-cdef.pl $(srcdir)/libc.defs \
 
 %-sigs.lua: $$(call includes,$$(*F))
 	$(call cmd,gen)$(PERL) -ne \
-	  'print if s/^#define UPIPE_(.*)_SIGNATURE UBASE_FOURCC\((.*)\)/upipe_sig("\L\1\E", \2)/' \
+	  'print if s/^#define UPIPE_(.*)_SIGNATURE\s+UBASE_FOURCC\((.*)\)/upipe_sig("\L\1\E", \2)/' \
 	  $^ > $@
 
 # --- test suite ---------------------------------------------------------------
