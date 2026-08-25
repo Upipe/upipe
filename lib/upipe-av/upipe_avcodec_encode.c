@@ -180,6 +180,8 @@ struct upipe_avcenc {
     AVPacket *avpkt;
     /** true if the pipe need to be released after output_input */
     bool release_needed;
+    /** true if a frame has been sent to the encoder */
+    bool flush_needed;
 
     /** codec level */
     int level;
@@ -230,7 +232,13 @@ static int upipe_avcenc_reinit(struct upipe *upipe)
     enum AVColorTransferCharacteristic color_trc = context->color_trc;
     enum AVColorSpace colorspace = context->colorspace;
 
+    if (upipe_avcenc->flush_needed &&
+        context->codec->capabilities & AV_CODEC_CAP_DELAY) {
+            upipe_avcenc_encode_frame(upipe, NULL, NULL);
+            upipe_avcenc->flush_needed = false;
+    }
     avcodec_free_context(&context);
+    upipe_notice(upipe, "reinit");
     context = avcodec_alloc_context3(codec);
     if (context == NULL) {
         upipe_err(upipe, "cannot allocate codec context");
@@ -825,6 +833,7 @@ static int upipe_avcenc_encode_frame(struct upipe *upipe,
         upipe_err_va(upipe, "avcodec_send_frame: %s", av_err2str(err));
         return UBASE_ERR_EXTERNAL;
     }
+    upipe_avcenc->flush_needed = true;
 
     while (1) {
         err = avcodec_receive_packet(context, upipe_avcenc->avpkt);
@@ -1260,13 +1269,7 @@ static bool upipe_avcenc_handle(struct upipe *upipe, struct uref *uref,
         if (context->hw_frames_ctx != NULL &&
             context->hw_frames_ctx->data != frame->hw_frames_ctx->data) {
             upipe_notice(upipe, "hw frames ctx changed");
-            if (context->codec->capabilities & AV_CODEC_CAP_DELAY)
-                upipe_avcenc_encode_frame(upipe, NULL, upump_p);
             upipe_avcenc_reinit(upipe);
-            if (avcodec_is_open(upipe_avcenc->context)) {
-                av_frame_free(&frame);
-                return false;
-            }
             context = upipe_avcenc->context;
         }
         if (context->hw_frames_ctx == NULL) {
@@ -1485,6 +1488,8 @@ static int upipe_avcenc_check_ubuf_mgr(struct upipe *upipe,
  */
 static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
 {
+    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+
     if (flow_def == NULL)
         return UBASE_ERR_INVALID;
 
@@ -1573,18 +1578,16 @@ static int upipe_avcenc_set_flow_def(struct upipe *upipe, struct uref *flow_def)
         }
     }
 
-    struct upipe_avcenc *upipe_avcenc = upipe_avcenc_from_upipe(upipe);
+    if (upipe_avcenc->flow_def_check != NULL &&
+        !upipe_avcenc_check_flow_def_check(upipe, flow_def_check)) {
+        upipe_avcenc_store_flow_def_check(upipe, NULL);
+        upipe_avcenc_reinit(upipe);
+    }
+
     AVCodecContext *context = upipe_avcenc->context;
     const AVCodec *codec = context->codec;
 
     if (upipe_avcenc->flow_def_check != NULL) {
-        /* Die if the attributes changed. */
-        /* NB: this supposes that all attributes are in the udict, and that
-         * the udict is never empty. */
-        if (!upipe_avcenc_check_flow_def_check(upipe, flow_def_check)) {
-            uref_free(flow_def_check);
-            return UBASE_ERR_BUSY;
-        }
         uref_free(flow_def_check);
 
     } else if (!ubase_ncmp(def, "pic.sub.")) {
@@ -2246,6 +2249,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
     upipe_avcenc->input_pts = UINT64_MAX;
     upipe_avcenc->input_pts_sys = UINT64_MAX;
     upipe_avcenc->input_latency = 0;
+    upipe_avcenc->flush_needed = false;
 
     upipe_throw_ready(upipe);
     upipe_avcenc_build_flow_def_attr(upipe);
