@@ -770,6 +770,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
 
             bool in_10bit = in->bit_depth == 10;
             bool out_10bit = out->bit_depth == 10;
+            const char *pix_fmt_planar_in =
+                in_10bit ? "yuv420p10le" : "yuv420p";
             const char *pix_fmt_semiplanar_in = in_10bit ? "p010le" : "nv12";
             const char *pix_fmt_semiplanar_out = out_10bit ? "p010le" : "nv12";
             const char *range_out = out->fullrange ? "full" : "limited";
@@ -794,8 +796,16 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             if (!in->hw && out->hw) {
                 if (out->surface_type == AV_NI_QUADRA) {
                     if (need_deint) {
+                        if (strcmp(in->pix_fmt, pix_fmt_planar_in)) {
+                            add_filter("scale");
+                            add_option("interl=-1");
+                            add_filter("format");
+                            add_option("%s", pix_fmt_planar_in);
+                        }
                         add_filter("yadif");
                         add_option("deint=interlaced");
+                        need_format =
+                            strcmp(pix_fmt_planar_in, out->pix_fmt) != 0;
                     }
                 } else {
                     add_filter("scale");
