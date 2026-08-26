@@ -186,6 +186,7 @@ static int upipe_freetype_load_face(struct upipe *upipe)
         return UBASE_ERR_INVALID;
 
     FTC_ScalerRec scaler;
+    memset(&scaler, 0, sizeof (scaler));
     scaler.face_id = upipe_freetype->font;
     scaler.width = upipe_freetype->pixel_size;
     scaler.height = upipe_freetype->pixel_size;
@@ -1046,10 +1047,9 @@ static int _upipe_freetype_get_advance(struct upipe *upipe,
         }
 
         FT_Fixed advance;
-        FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
-                       &advance);
-
-        total_advance += advance;
+        if (!FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
+                            &advance))
+            total_advance += advance;
 
         previous = index;
     }
