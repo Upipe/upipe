@@ -660,7 +660,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                                  &type, index, &sbit, NULL))
             continue;
 
-        int left, top, width, height, xadvance, yadvance;
+        int left, top, width, height, pitch, xadvance, yadvance;
         unsigned char *buffer;
         if (!sbit->buffer) {
             if (FTC_ImageCache_Lookup(upipe_freetype->img_cache,
@@ -675,6 +675,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             top = slot->top;
             width = slot->bitmap.width;
             height = slot->bitmap.rows;
+            pitch = slot->bitmap.pitch;
             xadvance = glyph->advance.x;
             yadvance = glyph->advance.y;
             buffer = slot->bitmap.buffer;
@@ -684,6 +685,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             top = sbit->top;
             width = sbit->width;
             height = sbit->height;
+            pitch = sbit->pitch;
             /* scale to 16.16 */
             xadvance = sbit->xadvance << 16;
             yadvance = sbit->yadvance << 16;
@@ -700,7 +702,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                 if (ypos + j < 0 || ypos + j >= vsize)
                     continue;
 
-                uint8_t px = buffer[j * width + i] * upipe_freetype->foreground[3] / 0xff;
+                uint8_t px = buffer[j * pitch + i] * upipe_freetype->foreground[3] / 0xff;
 
 #define DO_PLANE(Plane, Val)                                                \
                 if (Plane.p) {                                              \
