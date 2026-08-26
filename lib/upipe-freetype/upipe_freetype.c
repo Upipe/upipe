@@ -945,6 +945,7 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
     FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
     FT_UInt previous = 0;
     FT_Pos yMax = 0;
+    bool first = true;
     int64_t width = 0;
 
     for (size_t i = 0; str[i] != '\0';) {
@@ -978,8 +979,10 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
         FT_BBox ft_bbox;
         FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_PIXELS, &ft_bbox);
 
-        if (!i)
+        if (first) {
             bbox.x = ft_bbox.xMin;
+            first = false;
+        }
         if (ft_bbox.yMin < bbox.y)
             bbox.y = ft_bbox.yMin;
         if (ft_bbox.yMax > yMax)
@@ -991,7 +994,6 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
 
     if (yMax > bbox.y)
         bbox.height = yMax - bbox.y;
-    bbox.height = yMax - bbox.y;
 
     if (width > 0)
         /* get width ceil and downscale 16.16 integer */
