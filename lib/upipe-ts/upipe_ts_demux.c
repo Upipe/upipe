@@ -927,18 +927,27 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
     }
 
     if (!ubase_ncmp(def, "block.dvb_ttml_subtitle.") &&
-        ts_demux_mgr->ts_ttmld_mgr != NULL) {
-        /* The PES payload is a PES_data_field wrapping a TTML document
-         * (EN 303 560 5.2.2.2), not an elementary stream a framer would
-         * know: unwrap it here and output the documents. */
+        ts_demux_mgr->ts_ttmld_mgr != NULL &&
+        ts_demux_mgr->autof_mgr != NULL) {
+        /* autof frames the PES data fields (ttmlf), and ts_ttmld unwraps the
+         * TTML documents they carry (EN 303 560 5.2.2.2). */
         struct upipe *output =
-            upipe_void_alloc_output(inner, ts_demux_mgr->ts_ttmld_mgr,
+            upipe_void_alloc_output(inner, ts_demux_mgr->autof_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->probe),
+                    UPROBE_LOG_VERBOSE, "autof"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+
+        struct upipe *ttmld =
+            upipe_void_alloc_output(output, ts_demux_mgr->ts_ttmld_mgr,
                 uprobe_pfx_alloc(
                     uprobe_use(&upipe_ts_demux_output->last_inner_probe),
                     UPROBE_LOG_VERBOSE, "ttmld"));
-        if (unlikely(output == NULL))
+        upipe_release(output);
+        if (unlikely(ttmld == NULL))
             return UBASE_ERR_ALLOC;
-        upipe_ts_demux_output_store_bin_output(upipe, output);
+        upipe_ts_demux_output_store_bin_output(upipe, ttmld);
         return UBASE_ERR_NONE;
     }
 

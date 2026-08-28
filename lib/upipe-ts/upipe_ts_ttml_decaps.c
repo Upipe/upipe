@@ -9,6 +9,8 @@
 /** @file
  * @short Upipe module decapsulating DVB TTML subtitle segments
  *
+ * The PES data fields are framed and CRC checked by @ref upipe_ttmlf_mgr_alloc.
+ *
  * Normative references:
  *  - ETSI EN 303 560 V1.1.1 (2018-05) (TTML subtitling systems)
  */
@@ -36,13 +38,11 @@
 #include <stdarg.h>
 #include <string.h>
 
-#include <bitstream/mpeg/psi.h>
-
 #ifdef HAVE_ZLIB
 #include <zlib.h>
 #endif
 
-/** we only accept DVB TTML subtitle PES payloads */
+/** we only accept DVB TTML subtitle PES data fields */
 #define EXPECTED_FLOW_DEF "block.dvb_ttml_subtitle."
 
 /** size of the fixed part of the PES_data_field (EN 303 560 table 16) */
@@ -62,10 +62,6 @@
 /** an inflated document larger than this is treated as corrupt: DVB TTML
  * documents are a few kilobytes of text */
 #define MAX_DOCUMENT_SIZE (1 << 20)
-
-/** a PES packet can not be longer than its 16 bit length field allows, and a
- * stream that never marks the end of one is not allowed to grow past it */
-#define MAX_PES_SIZE (UINT16_MAX + 6)
 
 /** @internal @This is the private context of a ts_ttmld pipe. */
 struct upipe_ts_ttmld {
@@ -87,11 +83,6 @@ struct upipe_ts_ttmld {
     struct uref *flow_format;
     /** ubuf manager request */
     struct urequest ubuf_mgr_request;
-
-    /** PES packet being reassembled */
-    struct uref *next_uref;
-    /** size of the PES packet reassembled so far */
-    size_t next_uref_size;
 
     /** list of input urefs */
     struct uchain urefs;
@@ -146,29 +137,8 @@ static struct upipe *upipe_ts_ttmld_alloc(struct upipe_mgr *mgr,
     upipe_ts_ttmld_init_ubuf_mgr(upipe);
     upipe_ts_ttmld_init_input(upipe);
 
-    struct upipe_ts_ttmld *upipe_ts_ttmld = upipe_ts_ttmld_from_upipe(upipe);
-    upipe_ts_ttmld->next_uref = NULL;
-    upipe_ts_ttmld->next_uref_size = 0;
-
     upipe_throw_ready(upipe);
     return upipe;
-}
-
-/** @internal @This computes the CRC of a PES_data_field.
- *
- * The CRC is the one of annex B of DVB BlueBook A038, so running it over the
- * whole field including the trailing CRC_32 leaves the registers at zero.
- *
- * @param buffer PES_data_field
- * @param size size of the field including the CRC_32
- * @return true if the CRC is correct
- */
-static bool upipe_ts_ttmld_check_crc(const uint8_t *buffer, size_t size)
-{
-    uint32_t crc = 0xffffffff;
-    for (size_t i = 0; i < size; i++)
-        crc = (crc << 8) ^ p_psi_crc_table[(crc >> 24) ^ buffer[i]];
-    return crc == 0;
 }
 
 #ifdef HAVE_ZLIB
@@ -307,8 +277,8 @@ static bool upipe_ts_ttmld_handle(struct upipe *upipe, struct uref *uref,
     if (upipe_ts_ttmld->ubuf_mgr == NULL)
         return false;
 
-    /* The reassembled packet is a chain of one ubuf per transport stream
-     * packet, so put it back into one before reading across it. */
+    /* The framed packet is a chain of one ubuf per transport stream packet,
+     * so put it back into one before reading across it. */
     const uint8_t *buffer;
     int size = -1;
     if (unlikely(!ubase_check(uref_block_merge(uref, upipe_ts_ttmld->ubuf_mgr,
@@ -321,15 +291,6 @@ static bool upipe_ts_ttmld_handle(struct upipe *upipe, struct uref *uref,
 
     if (unlikely(size < PES_DATA_FIELD_HEADER_SIZE + CRC_32_SIZE)) {
         upipe_warn(upipe, "invalid PES data field");
-        uref_block_unmap(uref, 0);
-        uref_free(uref);
-        return true;
-    }
-
-    if (unlikely(!upipe_ts_ttmld_check_crc(buffer, size))) {
-        /* EN 303 560 5.2.4.2: on a corrupt segment the current one stays
-         * active until it expires. */
-        upipe_warn(upipe, "invalid CRC, dropping segment");
         uref_block_unmap(uref, 0);
         uref_free(uref);
         return true;
@@ -382,15 +343,15 @@ static bool upipe_ts_ttmld_handle(struct upipe *upipe, struct uref *uref,
     return true;
 }
 
-/** @internal @This handles a reassembled PES packet, holding it if the pipe
+/** @internal @This receives a framed PES data field, holding it if the pipe
  * is not ready to output yet.
  *
  * @param upipe description structure of the pipe
- * @param uref PES packet
+ * @param uref uref structure
  * @param upump_p reference to pump that generated the buffer
  */
-static void upipe_ts_ttmld_work(struct upipe *upipe, struct uref *uref,
-                                struct upump **upump_p)
+static void upipe_ts_ttmld_input(struct upipe *upipe, struct uref *uref,
+                                 struct upump **upump_p)
 {
     if (!upipe_ts_ttmld_check_input(upipe)) {
         upipe_ts_ttmld_hold_input(upipe, uref);
@@ -401,95 +362,6 @@ static void upipe_ts_ttmld_work(struct upipe *upipe, struct uref *uref,
         /* Increment upipe refcount to avoid disappearing before all packets
          * have been sent. */
         upipe_use(upipe);
-    }
-}
-
-/** @internal @This drops the PES packet being reassembled.
- *
- * @param upipe description structure of the pipe
- */
-static void upipe_ts_ttmld_flush(struct upipe *upipe)
-{
-    struct upipe_ts_ttmld *upipe_ts_ttmld = upipe_ts_ttmld_from_upipe(upipe);
-    uref_free(upipe_ts_ttmld->next_uref);
-    upipe_ts_ttmld->next_uref = NULL;
-    upipe_ts_ttmld->next_uref_size = 0;
-}
-
-/** @internal @This reassembles the PES packets of the stream.
- *
- * The PES decapsulator hands over the payload of one transport stream packet
- * at a time, marking the first chunk of a PES packet with the block start flag
- * and its last chunk with the block end flag, and dating the first chunk.  A
- * PES_data_field is only complete, and only has a checkable CRC, once all of
- * them have been put back together.
- *
- * @param upipe description structure of the pipe
- * @param uref uref structure
- * @param upump_p reference to pump that generated the buffer
- */
-static void upipe_ts_ttmld_input(struct upipe *upipe, struct uref *uref,
-                                 struct upump **upump_p)
-{
-    struct upipe_ts_ttmld *upipe_ts_ttmld = upipe_ts_ttmld_from_upipe(upipe);
-
-    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref)))) {
-        if (upipe_ts_ttmld->next_uref != NULL) {
-            upipe_warn(upipe, "discontinuity, dropping PES packet");
-            upipe_ts_ttmld_flush(upipe);
-        }
-    }
-
-    size_t size;
-    if (unlikely(!ubase_check(uref_block_size(uref, &size)))) {
-        upipe_warn(upipe, "invalid PES chunk");
-        uref_free(uref);
-        return;
-    }
-
-    /* read the end flag now: the chunk is freed once appended */
-    bool end = ubase_check(uref_block_get_end(uref));
-
-    if (ubase_check(uref_block_get_start(uref))) {
-        if (unlikely(upipe_ts_ttmld->next_uref != NULL)) {
-            /* No end flag, which a PES packet of a declared length always
-             * gets: hand over what there is and let the CRC decide. */
-            upipe_verbose(upipe, "PES packet with no end");
-            struct uref *pes = upipe_ts_ttmld->next_uref;
-            upipe_ts_ttmld->next_uref = NULL;
-            upipe_ts_ttmld->next_uref_size = 0;
-            upipe_ts_ttmld_work(upipe, pes, upump_p);
-        }
-        upipe_ts_ttmld->next_uref = uref;
-        upipe_ts_ttmld->next_uref_size = size;
-    } else if (likely(upipe_ts_ttmld->next_uref != NULL)) {
-        if (unlikely(upipe_ts_ttmld->next_uref_size + size > MAX_PES_SIZE)) {
-            upipe_warn(upipe, "oversized PES packet");
-            upipe_ts_ttmld_flush(upipe);
-            uref_free(uref);
-            return;
-        }
-        struct ubuf *ubuf = uref_detach_ubuf(uref);
-        uref_free(uref);
-        if (unlikely(!ubase_check(uref_block_append(upipe_ts_ttmld->next_uref,
-                                                    ubuf)))) {
-            ubuf_free(ubuf);
-            upipe_ts_ttmld_flush(upipe);
-            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-            return;
-        }
-        upipe_ts_ttmld->next_uref_size += size;
-    } else {
-        /* the beginning of this PES packet was not seen */
-        uref_free(uref);
-        return;
-    }
-
-    if (end) {
-        struct uref *pes = upipe_ts_ttmld->next_uref;
-        upipe_ts_ttmld->next_uref = NULL;
-        upipe_ts_ttmld->next_uref_size = 0;
-        upipe_ts_ttmld_work(upipe, pes, upump_p);
     }
 }
 
@@ -579,7 +451,6 @@ static void upipe_ts_ttmld_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    upipe_ts_ttmld_flush(upipe);
     upipe_ts_ttmld_clean_input(upipe);
     upipe_ts_ttmld_clean_ubuf_mgr(upipe);
     upipe_ts_ttmld_clean_output(upipe);
