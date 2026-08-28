@@ -1103,7 +1103,7 @@ static void upipe_avcenc_encode_video(struct upipe *upipe,
                                                         upump_p)))) {
         ulist_delete(uref_to_uchain(uref));
         uref_free(uref);
-        upipe_throw_error(upipe, UBASE_ERR_EXTERNAL);
+        upipe_avcenc_reinit(upipe);
     }
 }
 
