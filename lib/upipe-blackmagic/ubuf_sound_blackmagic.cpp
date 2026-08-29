@@ -148,7 +148,7 @@ static int ubuf_sound_bmd_control(struct ubuf *ubuf, int command, va_list args)
         }
         case UBUF_SIZE_SOUND: {
             size_t *size_p = va_arg(args, size_t *);
-            uint8_t *sample_size_p = va_arg(args, uint8_t *);
+            uint16_t *sample_size_p = va_arg(args, uint16_t *);
             return ubuf_sound_common_size(ubuf, size_p, sample_size_p);
         }
         case UBUF_ITERATE_SOUND_PLANE: {
