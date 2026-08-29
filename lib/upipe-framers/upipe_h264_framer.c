@@ -2402,6 +2402,16 @@ static void upipe_h264f_work_annexb(struct upipe *upipe, struct upump **upump_p)
             break;
         size_t start_size = !prev ? 5 : 4;
 
+        if (unlikely(upipe_h264f->au_size < start_size)) {
+            /* The start code overlaps a previously flushed boundary (stale
+             * scan context): discard it and rescan from a clean state. */
+            upipe_warn(upipe, "discarding start code spanning a flush");
+            upipe_h264f->au_size = 0;
+            upipe_h264f->au_last_nal_offset = -1;
+            upipe_h264f->scan_context = UINT32_MAX;
+            continue;
+        }
+
         upipe_h264f->au_size -= start_size;
         upipe_h264f_end_annexb(upipe, upump_p);
 
@@ -2421,12 +2431,16 @@ static void upipe_h264f_work_annexb(struct upipe *upipe, struct upump **upump_p)
         upipe_h264f_begin_annexb(upipe, upump_p);
     }
 
-    if (!upipe_h264f->complete_input || !upipe_h264f->au_size)
+    if (!upipe_h264f->complete_input || !upipe_h264f->au_size ||
+        upipe_h264f->next_uref == NULL)
        return;
 
     upipe_h264f_end_annexb(upipe, upump_p);
     upipe_h264f_output_annexb(upipe, upump_p);
     upipe_h264f->au_last_nal_offset = -1;
+    /* The flush consumes up to the end of the stream, so the scan context
+     * must not be carried over to the next input uref. */
+    upipe_h264f->scan_context = UINT32_MAX;
 }
 
 /** @internal @This prepares a raw access unit.
@@ -2868,7 +2882,8 @@ static void upipe_h264f_free(struct upipe *upipe)
 
     /* Output any buffered frame. */
     if (upipe_h264f->encaps_input == UREF_H26X_ENCAPS_ANNEXB &&
-        !upipe_h264f->complete_input && upipe_h264f->au_size) {
+        !upipe_h264f->complete_input && upipe_h264f->au_size &&
+        upipe_h264f->next_uref != NULL) {
         upipe_h264f_end_annexb(upipe, NULL);
         upipe_h264f_output_annexb(upipe, NULL);
     }
