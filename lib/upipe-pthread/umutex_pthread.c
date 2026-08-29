@@ -51,6 +51,23 @@ static inline int umutex_pthread_lock(struct umutex *umutex)
     }
 }
 
+/** @This tries to lock a mutex.
+ *
+ * @param umutex pointer to a umutex structure
+ * @return an error code, UBASE_ERR_BUSY for EBUSY
+ */
+int umutex_pthread_trylock(struct umutex *umutex)
+{
+    struct umutex_pthread *umutex_pthread = umutex_pthread_from_umutex(umutex);
+    int err = pthread_mutex_trylock(&umutex_pthread->mutex);
+    switch (err) {
+        case 0: return UBASE_ERR_NONE;
+        case EBUSY: return UBASE_ERR_BUSY;
+        default:
+        case EINVAL: return UBASE_ERR_INVALID;
+    }
+}
+
 /** @This unlocks a mutex.
  *
  * @param umutex pointer to a umutex structure
