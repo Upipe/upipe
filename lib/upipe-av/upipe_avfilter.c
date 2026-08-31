@@ -2124,6 +2124,7 @@ static void upipe_avfilt_input(struct upipe *upipe,
             frame->pkt_duration = duration;
     }
 
+    av_buffer_unref(&frame->opaque_ref);
     frame->opaque_ref = uref_to_opaque_ref(uref);
 
     if (!upipe_avfilt->configured) {
