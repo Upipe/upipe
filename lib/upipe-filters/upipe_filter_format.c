@@ -44,6 +44,8 @@
 #include <stdarg.h>
 #include <string.h>
 
+#define UPIPE_FFMT_DEINTERLACE_FILTER_DEFAULT "yadif"
+
 /** @internal @This enumerates the supported surface types. */
 enum upipe_ffmt_surface_type {
     SW,
@@ -247,6 +249,8 @@ struct upipe_ffmt {
     char *tonemap_param;
     /** tonemap desat option */
     char *tonemap_desat;
+    /** deinterlace filter option */
+    char *deinterlace_filter;
 
     /** avfilter hw config type */
     char *hw_type;
@@ -316,6 +320,7 @@ static struct upipe *upipe_ffmt_alloc(struct upipe_mgr *mgr,
     upipe_ffmt->tonemap_tonemap = NULL;
     upipe_ffmt->tonemap_param = NULL;
     upipe_ffmt->tonemap_desat = NULL;
+    upipe_ffmt->deinterlace_filter = NULL;
     upipe_ffmt->hw_type = NULL;
     upipe_ffmt->hw_device = NULL;
     upipe_throw_ready(upipe);
@@ -629,6 +634,8 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
     UBASE_RETURN(uref_flow_get_def(flow_def, &def))
 
     if (!ubase_ncmp(def, "pic.")) {
+        const char *deinterlace_filter = upipe_ffmt->deinterlace_filter;
+
         /* check aspect ratio */
         struct urational sar, dar;
         if (ubase_check(uref_pic_flow_get_sar(flow_def_wanted, &sar)) &&
@@ -687,6 +694,15 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                     upipe_warn(upipe, "hardware surfaces need avfilter");
                     return UBASE_ERR_UNHANDLED;
                 }
+            }
+        }
+
+        if (deinterlace_filter && config.need_deint) {
+            if (ffmt_mgr->avfilter_mgr)
+                use_avfilter = true;
+            else {
+                upipe_warn(upipe, "deinterlace filter requires avfilter");
+                return UBASE_ERR_UNHANDLED;
             }
         }
 
@@ -781,6 +797,9 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             bool need_range = config.need_range;
             bool need_tonemap = config.need_tonemap;
 
+            if (!deinterlace_filter)
+                deinterlace_filter = UPIPE_FFMT_DEINTERLACE_FILTER_DEFAULT;
+
             char filters[512];
             int pos = 0;
             int opt;
@@ -802,8 +821,9 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                             add_filter("format");
                             add_option("%s", pix_fmt_planar_in);
                         }
-                        add_filter("yadif");
+                        add_filter(deinterlace_filter);
                         add_option("deint=interlaced");
+                        add_option("mode=send_frame");
                         need_format =
                             strcmp(pix_fmt_planar_in, out->pix_fmt) != 0;
                     }
@@ -943,8 +963,9 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                         add_option("out_transfer=%s", color_transfer);
                 }
                 if (need_deint) {
-                    add_filter("yadif");
+                    add_filter(deinterlace_filter);
                     add_option("deint=interlaced");
+                    add_option("mode=send_frame");
                 }
             }
             if (in->hw && !out->hw) {
@@ -1163,6 +1184,7 @@ static int upipe_ffmt_set_option(struct upipe *upipe,
     SET_OPTION("tonemap/tonemap", tonemap_tonemap)
     SET_OPTION("tonemap/param", tonemap_param)
     SET_OPTION("tonemap/desat", tonemap_desat)
+    SET_OPTION("deinterlace-filter", deinterlace_filter)
 
     if (!strcmp(option, "deinterlace-preset")) {
         if (!strcmp(value, "fast")) {
@@ -1399,6 +1421,7 @@ static void upipe_ffmt_free(struct upipe *upipe)
     free(upipe_ffmt->tonemap_tonemap);
     free(upipe_ffmt->tonemap_param);
     free(upipe_ffmt->tonemap_desat);
+    free(upipe_ffmt->deinterlace_filter);
     free(upipe_ffmt->hw_type);
     free(upipe_ffmt->hw_device);
     upipe_ffmt_config_clean(&upipe_ffmt->config);
