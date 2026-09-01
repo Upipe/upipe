@@ -62,6 +62,8 @@ struct upipe_ffmt_format {
     struct uref *flow_def;
     /** surface type */
     enum upipe_ffmt_surface_type surface_type;
+    /** frame rate */
+    struct urational fps;
     /** horizontal size */
     uint64_t hsize;
     /** vertical size */
@@ -478,6 +480,8 @@ static int upipe_ffmt_format_set(struct upipe *upipe,
     else
         format->surface_type = SW;
     format->hw = format->surface_type != SW;
+    format->fps.num = format->fps.den = 0;
+    uref_pic_flow_get_fps(flow_def, &format->fps);
     format->hsize = 0;
     uref_pic_flow_get_hsize(flow_def, &format->hsize);
     format->vsize = 0;
@@ -797,6 +801,12 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
             bool need_range = config.need_range;
             bool need_tonemap = config.need_tonemap;
 
+            const char *deint_mode = "send_frame";
+            struct urational fps = config.in.fps;
+            fps.num *= 2;
+            if (fps.den && urational_cmp(&fps, &config.out.fps) == 0)
+                deint_mode = "send_field";
+
             if (!deinterlace_filter)
                 deinterlace_filter = UPIPE_FFMT_DEINTERLACE_FILTER_DEFAULT;
 
@@ -823,7 +833,7 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                         }
                         add_filter(deinterlace_filter);
                         add_option("deint=interlaced");
-                        add_option("mode=send_frame");
+                        add_option("mode=%s", deint_mode);
                         need_format =
                             strcmp(pix_fmt_planar_in, out->pix_fmt) != 0;
                     }
@@ -965,7 +975,7 @@ static int upipe_ffmt_build(struct upipe *upipe, struct uref *flow_def,
                 if (need_deint) {
                     add_filter(deinterlace_filter);
                     add_option("deint=interlaced");
-                    add_option("mode=send_frame");
+                    add_option("mode=%s", deint_mode);
                 }
             }
             if (in->hw && !out->hw) {
