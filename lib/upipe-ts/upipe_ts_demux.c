@@ -75,6 +75,7 @@
 #include "upipe-ts/upipe_ts_pmt_decoder.h"
 #include "upipe-ts/upipe_ts_pes_decaps.h"
 #include "upipe-ts/upipe_ts_scte35_decoder.h"
+#include "upipe-ts/upipe_ts_ttml_decaps.h"
 #include "upipe-ts/upipe_ts_sdt_decoder.h"
 #include "upipe-ts/upipe_ts_tdt_decoder.h"
 #include "upipe-ts/upipe_ts_tot_decoder.h"
@@ -175,6 +176,8 @@ struct upipe_ts_demux_mgr {
     /* ES */
     /** pointer to ts_pesd manager */
     struct upipe_mgr *ts_pesd_mgr;
+    /** pointer to ts_ttmld manager */
+    struct upipe_mgr *ts_ttmld_mgr;
     /** pointer to autof manager */
     struct upipe_mgr *autof_mgr;
 
@@ -920,6 +923,31 @@ static int upipe_ts_demux_output_plumber(struct upipe *upipe,
             return UBASE_ERR_ALLOC;
 
         upipe_ts_demux_output_store_bin_output(upipe, output);
+        return UBASE_ERR_NONE;
+    }
+
+    if (!ubase_ncmp(def, "block.dvb_ttml_subtitle.") &&
+        ts_demux_mgr->ts_ttmld_mgr != NULL &&
+        ts_demux_mgr->autof_mgr != NULL) {
+        /* autof frames the PES data fields (ttmlf), and ts_ttmld unwraps the
+         * TTML documents they carry (EN 303 560 5.2.2.2). */
+        struct upipe *output =
+            upipe_void_alloc_output(inner, ts_demux_mgr->autof_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->probe),
+                    UPROBE_LOG_VERBOSE, "autof"));
+        if (unlikely(output == NULL))
+            return UBASE_ERR_ALLOC;
+
+        struct upipe *ttmld =
+            upipe_void_alloc_output(output, ts_demux_mgr->ts_ttmld_mgr,
+                uprobe_pfx_alloc(
+                    uprobe_use(&upipe_ts_demux_output->last_inner_probe),
+                    UPROBE_LOG_VERBOSE, "ttmld"));
+        upipe_release(output);
+        if (unlikely(ttmld == NULL))
+            return UBASE_ERR_ALLOC;
+        upipe_ts_demux_output_store_bin_output(upipe, ttmld);
         return UBASE_ERR_NONE;
     }
 
@@ -4279,6 +4307,7 @@ static void upipe_ts_demux_mgr_free(struct urefcount *urefcount)
     upipe_mgr_release(ts_demux_mgr->ts_eitd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_pesd_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_scte35d_mgr);
+    upipe_mgr_release(ts_demux_mgr->ts_ttmld_mgr);
     upipe_mgr_release(ts_demux_mgr->ts_aitd_mgr);
     upipe_mgr_release(ts_demux_mgr->autof_mgr);
 
@@ -4337,6 +4366,7 @@ static int upipe_ts_demux_mgr_control(struct upipe_mgr *mgr,
         GET_SET_MGR(ts_eitd, TS_EITD)
         GET_SET_MGR(ts_pesd, TS_PESD)
         GET_SET_MGR(ts_scte35d, TS_SCTE35D)
+        GET_SET_MGR(ts_ttmld, TS_TTMLD)
 
         GET_SET_MGR(autof, AUTOF)
 #undef GET_SET_MGR
@@ -4382,6 +4412,7 @@ struct upipe_mgr *upipe_ts_demux_mgr_alloc(void)
     ts_demux_mgr->ts_eitd_mgr = upipe_ts_eitd_mgr_alloc();
     ts_demux_mgr->ts_pesd_mgr = upipe_ts_pesd_mgr_alloc();
     ts_demux_mgr->ts_scte35d_mgr = upipe_ts_scte35d_mgr_alloc();
+    ts_demux_mgr->ts_ttmld_mgr = upipe_ts_ttmld_mgr_alloc();
     ts_demux_mgr->ts_aitd_mgr = upipe_ts_aitd_mgr_alloc();
 
     ts_demux_mgr->autof_mgr = NULL;
