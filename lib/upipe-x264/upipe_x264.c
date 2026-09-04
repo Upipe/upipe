@@ -385,7 +385,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     return upipe;
 }
 
-/** @internal @This opens x264 encoder.
+/** @internal @This opens or reconfigures x264 encoder.
  *
  * @param upipe description structure of the pipe
  * @param uref new image to encode
@@ -401,6 +401,40 @@ static int upipe_x264_open(struct upipe *upipe, struct uref *uref)
 
     uref_pic_size(uref, &width, &height, NULL);
     bool tff = uref_pic_check_tff(uref);
+
+    if (upipe_x264->encoder) {
+        bool need_update;
+
+#ifdef HAVE_X264_MPEG2
+        if (upipe_x264_mpeg2_enabled(upipe))
+            need_update =
+                (params->i_width != width || params->i_height != height ||
+                 params->i_csp != upipe_x264->chroma_subsampling ||
+                 params->vui.i_aspect_ratio_information !=
+                     upipe_x264->mpeg2_ar);
+        else
+#endif
+            need_update =
+                (params->i_width != width || params->i_height != height ||
+                 params->i_csp != upipe_x264->chroma_subsampling ||
+                 params->vui.i_sar_width != upipe_x264->sar.num ||
+                 params->vui.i_sar_height != upipe_x264->sar.den ||
+                 params->vui.i_overscan != upipe_x264->overscan ||
+                 params->b_tff != tff);
+
+        if (!need_update)
+            return UBASE_ERR_NONE;
+
+        upipe_notice_va(upipe,
+                        "Flow parameters changed, reconfiguring encoder "
+                        "(%d:%zu, %d:%zu, %s:%s, %d:%" PRId64 ", %d:%" PRIu64
+                        ", %d:%d)",
+                        params->i_width, width, params->i_height, height,
+                        params->b_tff ? "tff" : "bff", tff ? "tff" : "bff",
+                        params->vui.i_sar_width, upipe_x264->sar.num,
+                        params->vui.i_sar_height, upipe_x264->sar.den,
+                        params->vui.i_overscan, upipe_x264->overscan);
+    }
 
     params->rc.psz_stat_out = NULL;
     params->rc.psz_stat_in = NULL;
@@ -687,60 +721,6 @@ static void upipe_x264_build_flow_def(struct upipe *upipe)
     upipe_x264_store_flow_def(upipe, flow_def);
 }
 
-/** @internal @This checks incoming pic against cached parameters and
- * reconfigure encoder if needed.
- *
- * @param upipe description structure of the pipe
- * @param uref new image to encode
- * @return an error code
- */
-static int upipe_x264_update(struct upipe *upipe, struct uref *uref)
-{
-    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
-    x264_param_t *params = &upipe_x264_from_upipe(upipe)->params;
-    size_t width = 0, height = 0;
-    bool need_update = true;
-    int ret = UBASE_ERR_NONE;
-
-    uref_pic_size(uref, &width, &height, NULL);
-    bool tff = uref_pic_check_tff(uref);
-
-    if (upipe_x264->encoder) {
-#ifdef HAVE_X264_MPEG2
-        if (upipe_x264_mpeg2_enabled(upipe))
-            need_update =
-                (params->i_width != width || params->i_height != height ||
-                 params->i_csp != upipe_x264->chroma_subsampling ||
-                 params->vui.i_aspect_ratio_information !=
-                     upipe_x264->mpeg2_ar);
-        else
-#endif
-            need_update =
-                (params->i_width != width || params->i_height != height ||
-                 params->i_csp != upipe_x264->chroma_subsampling ||
-                 params->vui.i_sar_width != upipe_x264->sar.num ||
-                 params->vui.i_sar_height != upipe_x264->sar.den ||
-                 params->vui.i_overscan != upipe_x264->overscan ||
-                 params->b_tff != tff);
-
-        if (need_update)
-            upipe_notice_va(upipe,
-                            "Flow parameters changed, reconfiguring encoder "
-                            "(%d:%zu, %d:%zu, %s:%s, %d:%" PRId64 ", %d:%" PRIu64
-                            ", %d:%d)",
-                            params->i_width, width, params->i_height, height,
-                            params->b_tff ? "tff" : "bff", tff ? "tff" : "bff",
-                            params->vui.i_sar_width, upipe_x264->sar.num,
-                            params->vui.i_sar_height, upipe_x264->sar.den,
-                            params->vui.i_overscan, upipe_x264->overscan);
-    }
-
-    if (unlikely(need_update))
-        ret = upipe_x264_open(upipe, uref);
-
-    return ret;
-}
-
 /** @internal @This returns the x264 color space from a flow definition.
  *
  * @param upipe description structure of the pipe
@@ -917,7 +897,7 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         pic.opaque = uref;
 
         /* open encoder if not already opened or if update needed */
-        if (unlikely(!ubase_check(upipe_x264_update(upipe, uref)))) {
+        if (unlikely(!ubase_check(upipe_x264_open(upipe, uref)))) {
             upipe_err(upipe, "Could not open encoder");
             uref_free(uref);
             return true;
