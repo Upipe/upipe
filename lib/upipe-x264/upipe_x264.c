@@ -741,6 +741,67 @@ static int upipe_x264_update(struct upipe *upipe, struct uref *uref)
     return ret;
 }
 
+/** @internal @This sets a new input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def new flow definition to set
+ */
+static void upipe_x264_set_flow_def_real(struct upipe *upipe,
+                                         struct uref *flow_def)
+{
+    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+
+    upipe_x264->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_x264->input_latency);
+    upipe_x264_store_flow_def(upipe, NULL);
+    upipe_x264_store_flow_def_requested(upipe, NULL);
+
+    if (upipe_x264_mpeg2_enabled(upipe)) {
+        struct urational dar = { .num = 4, .den = 3 };
+        uref_pic_flow_infer_dar(flow_def, &dar);
+        if (dar.num == 4 && dar.den == 3)
+            upipe_x264->mpeg2_ar = 2;
+        else if (dar.num == 16 && dar.den == 9)
+            upipe_x264->mpeg2_ar = 3;
+        else if (dar.num == 221 && dar.den == 100)
+            upipe_x264->mpeg2_ar = 4;
+        else {
+            upipe_warn_va(upipe,
+                          "unrecognized aspect ratio %" PRId64 "/%" PRIu64
+                          ", using square",
+                          dar.num, dar.den);
+            upipe_x264->mpeg2_ar = 1;
+        }
+    } else {
+        upipe_x264->sar.num = upipe_x264->sar.den = 1;
+        uref_pic_flow_get_sar(flow_def, &upipe_x264->sar);
+        bool overscan;
+        if (!ubase_check(uref_pic_flow_get_overscan(flow_def, &overscan)))
+            upipe_x264->overscan = 0; /* undef */
+        else
+            upipe_x264->overscan = overscan ? 2 : 1;
+    }
+
+    if (ubase_check(uref_pic_flow_check_yuv420p(flow_def)))
+        upipe_x264->chroma_subsampling = X264_CSP_I420;
+    else if (ubase_check(uref_pic_flow_check_yuv422p(flow_def)))
+        upipe_x264->chroma_subsampling = X264_CSP_I422;
+    else if (ubase_check(uref_pic_flow_check_yuv444p(flow_def)))
+        upipe_x264->chroma_subsampling = X264_CSP_I444;
+    else if (ubase_check(uref_pic_flow_check_nv12(flow_def)))
+        upipe_x264->chroma_subsampling = X264_CSP_NV12;
+    else if (ubase_check(uref_pic_flow_check_nv16(flow_def)))
+        upipe_x264->chroma_subsampling = X264_CSP_NV16;
+    else
+        upipe_err(upipe, "invalid chroma subsampling");
+
+    flow_def = upipe_x264_store_flow_def_input(upipe, flow_def);
+    if (flow_def != NULL) {
+        uref_pic_flow_clear_format(flow_def);
+        upipe_x264_require_flow_format(upipe, flow_def);
+    }
+}
+
 /** @internal @This processes pictures.
  *
  * @param upipe description structure of the pipe
@@ -754,56 +815,7 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     const char *def;
     if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, &def)))) {
-        upipe_x264->input_latency = 0;
-        uref_clock_get_latency(uref, &upipe_x264->input_latency);
-        upipe_x264_store_flow_def(upipe, NULL);
-        upipe_x264_store_flow_def_requested(upipe, NULL);
-
-        if (upipe_x264_mpeg2_enabled(upipe)) {
-            struct urational dar;
-            dar.num = 4;
-            dar.den = 3;
-            uref_pic_flow_infer_dar(uref, &dar);
-            if (dar.num == 4 && dar.den == 3)
-                upipe_x264->mpeg2_ar = 2;
-            else if (dar.num == 16 && dar.den == 9)
-                upipe_x264->mpeg2_ar = 3;
-            else if (dar.num == 221 && dar.den == 100)
-                upipe_x264->mpeg2_ar = 4;
-            else {
-                upipe_warn_va(upipe,
-                        "unrecognized aspect ratio %"PRId64"/%"PRIu64", using square",
-                        dar.num, dar.den);
-                upipe_x264->mpeg2_ar = 1;
-            }
-        } else {
-            upipe_x264->sar.num = upipe_x264->sar.den = 1;
-            uref_pic_flow_get_sar(uref, &upipe_x264->sar);
-            bool overscan;
-            if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
-                upipe_x264->overscan = 0; /* undef */
-            else
-                upipe_x264->overscan = overscan ? 2 : 1;
-        }
-
-        if (ubase_check(uref_pic_flow_check_yuv420p(uref)))
-            upipe_x264->chroma_subsampling = X264_CSP_I420;
-        else if (ubase_check(uref_pic_flow_check_yuv422p(uref)))
-            upipe_x264->chroma_subsampling = X264_CSP_I422;
-        else if (ubase_check(uref_pic_flow_check_yuv444p(uref)))
-            upipe_x264->chroma_subsampling = X264_CSP_I444;
-        else if (ubase_check(uref_pic_flow_check_nv12(uref)))
-            upipe_x264->chroma_subsampling = X264_CSP_NV12;
-        else if (ubase_check(uref_pic_flow_check_nv16(uref)))
-            upipe_x264->chroma_subsampling = X264_CSP_NV16;
-        else
-            upipe_err(upipe, "invalid chroma subsampling");
-
-        uref = upipe_x264_store_flow_def_input(upipe, uref);
-        if (uref != NULL) {
-            uref_pic_flow_clear_format(uref);
-            upipe_x264_require_flow_format(upipe, uref);
-        }
+        upipe_x264_set_flow_def_real(upipe, uref);
         return true;
     }
 
