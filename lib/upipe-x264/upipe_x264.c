@@ -741,6 +741,35 @@ static int upipe_x264_update(struct upipe *upipe, struct uref *uref)
     return ret;
 }
 
+/** @internal @This returns the x264 color space from a flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def input flow definition packet
+ * @return a x264 color space or -1
+  */
+static int upipe_x264_csp_from_flow_def(struct upipe *upipe,
+                                        struct uref *flow_def)
+{
+    static const struct {
+        const struct uref_pic_flow_format *format;
+        int csp;
+    } formats[] = {
+        { &uref_pic_flow_format_yuv420p, X264_CSP_I420 },
+        { &uref_pic_flow_format_yuv422p, X264_CSP_I422 },
+        { &uref_pic_flow_format_yuv444p, X264_CSP_I444 },
+        { &uref_pic_flow_format_nv12, X264_CSP_NV12 },
+        { &uref_pic_flow_format_nv16, X264_CSP_NV16 },
+    };
+    if (likely(flow_def)) {
+        for (int i = 0; i < UBASE_ARRAY_SIZE(formats); i++) {
+            const struct uref_pic_flow_format *f = formats[i].format;
+            if (ubase_check(uref_pic_flow_check_format(flow_def, f)))
+                return formats[i].csp;
+        }
+    }
+    return -1;
+}
+
 /** @internal @This sets a new input flow definition.
  *
  * @param upipe description structure of the pipe
@@ -782,18 +811,8 @@ static void upipe_x264_set_flow_def_real(struct upipe *upipe,
             upipe_x264->overscan = overscan ? 2 : 1;
     }
 
-    if (ubase_check(uref_pic_flow_check_yuv420p(flow_def)))
-        upipe_x264->chroma_subsampling = X264_CSP_I420;
-    else if (ubase_check(uref_pic_flow_check_yuv422p(flow_def)))
-        upipe_x264->chroma_subsampling = X264_CSP_I422;
-    else if (ubase_check(uref_pic_flow_check_yuv444p(flow_def)))
-        upipe_x264->chroma_subsampling = X264_CSP_I444;
-    else if (ubase_check(uref_pic_flow_check_nv12(flow_def)))
-        upipe_x264->chroma_subsampling = X264_CSP_NV12;
-    else if (ubase_check(uref_pic_flow_check_nv16(flow_def)))
-        upipe_x264->chroma_subsampling = X264_CSP_NV16;
-    else
-        upipe_err(upipe, "invalid chroma subsampling");
+    upipe_x264->chroma_subsampling =
+        upipe_x264_csp_from_flow_def(upipe, flow_def);
 
     flow_def = upipe_x264_store_flow_def_input(upipe, flow_def);
     if (flow_def != NULL) {
@@ -1159,12 +1178,11 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
 
     UBASE_RETURN(uref_flow_match_def(flow_def, EXPECTED_FLOW));
 
-    if (unlikely(!ubase_check(uref_pic_flow_check_yuv420p(flow_def)) &&
-                 !ubase_check(uref_pic_flow_check_yuv422p(flow_def)) &&
-                 !ubase_check(uref_pic_flow_check_yuv444p(flow_def)) &&
-                 !ubase_check(uref_pic_flow_check_nv12(flow_def)) &&
-                 !ubase_check(uref_pic_flow_check_nv16(flow_def))))
+    int csp = upipe_x264_csp_from_flow_def(upipe, flow_def);
+    if (unlikely(csp < 0)) {
+        upipe_err(upipe, "unsupported color space");
         return UBASE_ERR_INVALID;
+    }
 
     /* Extract relevant attributes to flow def check. */
     struct uref *flow_def_check =
