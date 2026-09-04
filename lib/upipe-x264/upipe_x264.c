@@ -63,8 +63,6 @@ struct upipe_x264 {
     x264_t *encoder;
     /** x264 params */
     x264_param_t params;
-    /** latency in the input flow */
-    uint64_t input_latency;
     /** supposed latency of the packets when leaving the encoder */
     uint64_t initial_latency;
     /** latency introduced by speedcontrol */
@@ -354,7 +352,6 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
 
     upipe_x264->encoder = NULL;
     _upipe_x264_set_default(upipe);
-    upipe_x264->input_latency = 0;
     upipe_x264->initial_latency = 0;
     upipe_x264->sc_latency = 0;
     upipe_x264->slice_type_enforce = false;
@@ -677,6 +674,7 @@ static void upipe_x264_close(struct upipe *upipe)
 static void upipe_x264_build_flow_def(struct upipe *upipe)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+    assert(upipe_x264->flow_def_input != NULL);
     assert(upipe_x264->flow_def_requested != NULL);
 
     struct uref *flow_def = uref_dup(upipe_x264->flow_def_requested);
@@ -686,7 +684,8 @@ static void upipe_x264_build_flow_def(struct upipe *upipe)
     }
 
     /* find latency */
-    uint64_t latency = upipe_x264->input_latency;
+    uint64_t latency = 0;
+    uref_clock_get_latency(upipe_x264->flow_def_input, &latency);
     int delayed = x264_encoder_maximum_delayed_frames(upipe_x264->encoder);
     if (delayed >= 0)
         latency += (uint64_t)delayed * UCLOCK_FREQ
@@ -812,8 +811,6 @@ static int upipe_x264_set_flow_def_real(struct upipe *upipe,
         uref_free(flow_def_check);
     }
 
-    upipe_x264->input_latency = 0;
-    uref_clock_get_latency(flow_def, &upipe_x264->input_latency);
     upipe_x264_store_flow_def(upipe, NULL);
     upipe_x264_store_flow_def_requested(upipe, NULL);
 
