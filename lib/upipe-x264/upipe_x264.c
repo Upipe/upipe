@@ -774,11 +774,63 @@ static int upipe_x264_csp_from_flow_def(struct upipe *upipe,
  *
  * @param upipe description structure of the pipe
  * @param flow_def new flow definition to set
+ * @return an error code
  */
-static void upipe_x264_set_flow_def_real(struct upipe *upipe,
-                                         struct uref *flow_def)
+static int upipe_x264_set_flow_def_real(struct upipe *upipe,
+                                        struct uref *flow_def)
 {
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
+
+    /* Extract relevant attributes to flow def check. */
+    struct uref *flow_def_check =
+        upipe_x264_alloc_flow_def_check(upipe, flow_def);
+    if (unlikely(flow_def_check == NULL)) {
+        uref_free(flow_def);
+        return UBASE_ERR_ALLOC;
+    }
+
+    int (*attrs[])(struct uref *dst, struct uref *src) = {
+        uref_pic_flow_copy_format,
+        uref_pic_flow_copy_fps,
+        uref_pic_flow_copy_hsize,
+        uref_pic_flow_copy_vsize,
+        uref_pic_copy_progressive,
+        uref_pic_flow_copy_full_range,
+        uref_pic_flow_copy_colour_primaries,
+        uref_pic_flow_copy_transfer_characteristics,
+        uref_pic_flow_copy_matrix_coefficients,
+    };
+    int ret = uref_attr_copy_array(flow_def_check, flow_def, attrs);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(flow_def_check);
+        uref_free(flow_def);
+        return ret;
+    }
+
+    /* close encoder if relevant attributes changed. */
+    if (!upipe_x264_check_flow_def_check(upipe, flow_def_check)) {
+        upipe_x264_close(upipe);
+#ifdef HAVE_X264_OBE
+        if (upipe_x264->sc_latency) {
+            struct urational fps;
+            uref_pic_flow_get_fps(flow_def_check, &fps);
+
+            upipe_x264->params.sc.i_buffer_size =
+                upipe_x264->sc_latency * fps.num / fps.den / UCLOCK_FREQ;
+            upipe_x264->params.sc.f_speed = 1.0;
+            upipe_x264->params.sc.f_buffer_init = 0.0;
+            upipe_x264->params.sc.b_alt_timer = 1;
+            uint64_t height;
+            if (ubase_check(uref_pic_flow_get_hsize(flow_def, &height)) && height >= 720)
+                upipe_x264->params.sc.max_preset = 7;
+            else
+                upipe_x264->params.sc.max_preset = 10;
+        }
+#endif
+        upipe_x264_store_flow_def_check(upipe, flow_def_check);
+    } else {
+        uref_free(flow_def_check);
+    }
 
     upipe_x264->input_latency = 0;
     uref_clock_get_latency(flow_def, &upipe_x264->input_latency);
@@ -819,6 +871,8 @@ static void upipe_x264_set_flow_def_real(struct upipe *upipe,
         uref_pic_flow_clear_format(flow_def);
         upipe_x264_require_flow_format(upipe, flow_def);
     }
+
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes pictures.
@@ -834,7 +888,17 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
     struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     const char *def;
     if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, &def)))) {
-        upipe_x264_set_flow_def_real(upipe, uref);
+        int ret = upipe_x264_set_flow_def_real(upipe, uref);
+        if (unlikely(!ubase_check(ret))) {
+            upipe_x264_store_flow_def_input(upipe, NULL);
+            upipe_throw_fatal(upipe, ret);
+        }
+        return true;
+    }
+
+    if (unlikely(!upipe_x264->flow_def_input)) {
+        upipe_warn(upipe, "no input flow defintion set, dropping...");
+        uref_free(uref);
         return true;
     }
 
@@ -1164,7 +1228,7 @@ static int upipe_x264_check_ubuf_mgr(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the input flow definition.
+/** @internal @This checks and queues a new input flow definition.
  *
  * @param upipe description structure of the pipe
  * @param flow_def flow definition packet
@@ -1184,63 +1248,17 @@ static int upipe_x264_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
     }
 
-    /* Extract relevant attributes to flow def check. */
-    struct uref *flow_def_check =
-        upipe_x264_alloc_flow_def_check(upipe, flow_def);
-    if (unlikely(flow_def_check == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
     struct urational fps;
     uint64_t hsize, vsize;
     if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps) ||
         !ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
         !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
         upipe_err(upipe, "incompatible flow def");
-        uref_free(flow_def_check);
         return UBASE_ERR_INVALID;
     }
 
-    if (unlikely(!ubase_check(uref_pic_flow_copy_format(flow_def_check, flow_def)) ||
-                 !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
-                 !ubase_check(uref_pic_flow_set_hsize(flow_def_check, hsize)) ||
-                 !ubase_check(uref_pic_flow_set_vsize(flow_def_check, vsize)))) {
-        uref_free(flow_def_check);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
-
-    if (upipe_x264->flow_def_check != NULL) {
-        /* Die if the attributes changed. */
-        if (!upipe_x264_check_flow_def_check(upipe, flow_def_check))
-            upipe_x264_close(upipe);
-        else {
-            uref_free(flow_def_check);
-            flow_def_check = NULL;
-        }
-    }
-
-    if (flow_def_check) {
-#ifdef HAVE_X264_OBE
-        if (upipe_x264->sc_latency) {
-            upipe_x264->params.sc.i_buffer_size =
-                upipe_x264->sc_latency * fps.num / fps.den / UCLOCK_FREQ;
-            upipe_x264->params.sc.f_speed = 1.0;
-            upipe_x264->params.sc.f_buffer_init = 0.0;
-            upipe_x264->params.sc.b_alt_timer = 1;
-            uint64_t height;
-            if (ubase_check(uref_pic_flow_get_hsize(flow_def, &height)) && height >= 720)
-                upipe_x264->params.sc.max_preset = 7;
-            else
-                upipe_x264->params.sc.max_preset = 10;
-        }
-#endif
-
-        upipe_x264_store_flow_def_check(upipe, flow_def_check);
-    }
+    if (upipe_x264_check_flow_def_input(upipe, flow_def))
+        return UBASE_ERR_NONE;
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
