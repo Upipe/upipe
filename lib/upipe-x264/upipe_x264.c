@@ -104,8 +104,6 @@ struct upipe_x264 {
     struct uref *flow_def_check;
     /** requested flow */
     struct uref *flow_def_requested;
-    /** requested headers */
-    bool headers_requested;
     /** requested encaps */
     enum uref_h26x_encaps encaps_requested;
     /** output flow */
@@ -366,7 +364,6 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264_init_flow_def(upipe);
     upipe_x264_init_flow_def_check(upipe);
     upipe_x264_init_flow_def_requested(upipe);
-    upipe_x264->headers_requested = false;
     upipe_x264->encaps_requested = UREF_H26X_ENCAPS_ANNEXB;
     upipe_x264->sar.num = upipe_x264->sar.den = 1;
     upipe_x264->overscan = 0; /* undef */
@@ -700,7 +697,7 @@ static void upipe_x264_build_flow_def(struct upipe *upipe)
     uref_clock_set_latency(flow_def, latency);
 
     /* global headers (extradata) */
-    if (upipe_x264->headers_requested) {
+    if (ubase_check(uref_flow_get_global(upipe_x264->flow_def_requested))) {
         int i, ret, nal_num, size = 0;
         x264_nal_t *nals;
         ret = x264_encoder_headers(upipe_x264->encoder, &nals, &nal_num);
@@ -1164,8 +1161,6 @@ static int upipe_x264_check_flow_format(struct upipe *upipe,
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 
-    upipe_x264->headers_requested =
-        ubase_check(uref_flow_get_global(flow_format));
     upipe_x264->encaps_requested = uref_h26x_flow_infer_encaps(flow_format);
     bool annexb = upipe_x264->encaps_requested == UREF_H26X_ENCAPS_ANNEXB;
     if (upipe_x264->params.b_annexb != annexb) {
