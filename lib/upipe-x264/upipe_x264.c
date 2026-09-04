@@ -164,6 +164,7 @@ UPIPE_HELPER_FLOW_FORMAT(upipe_x264, flow_format_request,
                          upipe_x264_unregister_output_request)
 UPIPE_HELPER_FLOW_DEF(upipe_x264, flow_def_input, flow_def_attr)
 UPIPE_HELPER_FLOW_DEF_CHECK(upipe_x264, flow_def_check)
+UPIPE_HELPER_FLOW_DEF_CHECK(upipe_x264, flow_def_requested)
 UPIPE_HELPER_UBUF_MGR(upipe_x264, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_x264_check_ubuf_mgr,
                       upipe_x264_register_output_request,
@@ -367,7 +368,7 @@ static struct upipe *upipe_x264_alloc(struct upipe_mgr *mgr,
     upipe_x264_init_flow_format(upipe);
     upipe_x264_init_flow_def(upipe);
     upipe_x264_init_flow_def_check(upipe);
-    upipe_x264->flow_def_requested = NULL;
+    upipe_x264_init_flow_def_requested(upipe);
     upipe_x264->headers_requested = false;
     upipe_x264->encaps_requested = UREF_H26X_ENCAPS_ANNEXB;
     upipe_x264->sar.num = upipe_x264->sar.den = 1;
@@ -604,8 +605,7 @@ static int upipe_x264_open(struct upipe *upipe, struct uref *uref)
     /* Find out if flow def attributes have changed. */
     if (!upipe_x264_check_flow_def_attr(upipe, flow_def_attr)) {
         upipe_x264_store_flow_def(upipe, NULL);
-        uref_free(upipe_x264->flow_def_requested);
-        upipe_x264->flow_def_requested = NULL;
+        upipe_x264_store_flow_def_requested(upipe, NULL);
         struct uref *flow_def =
             upipe_x264_store_flow_def_attr(upipe, flow_def_attr);
         if (flow_def != NULL) {
@@ -757,8 +757,7 @@ static bool upipe_x264_handle(struct upipe *upipe, struct uref *uref,
         upipe_x264->input_latency = 0;
         uref_clock_get_latency(uref, &upipe_x264->input_latency);
         upipe_x264_store_flow_def(upipe, NULL);
-        uref_free(upipe_x264->flow_def_requested);
-        upipe_x264->flow_def_requested = NULL;
+        upipe_x264_store_flow_def_requested(upipe, NULL);
 
         if (upipe_x264_mpeg2_enabled(upipe)) {
             struct urational dar;
@@ -1102,8 +1101,7 @@ static int upipe_x264_check_flow_format(struct upipe *upipe,
         _upipe_x264_reconfigure(upipe);
     }
 
-    uref_free(upipe_x264->flow_def_requested);
-    upipe_x264->flow_def_requested = NULL;
+    upipe_x264_store_flow_def_requested(upipe, NULL);
     upipe_x264_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
 }
@@ -1117,12 +1115,10 @@ static int upipe_x264_check_flow_format(struct upipe *upipe,
 static int upipe_x264_check_ubuf_mgr(struct upipe *upipe,
                                      struct uref *flow_format)
 {
-    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_NONE; /* should not happen */
 
-    uref_free(upipe_x264->flow_def_requested);
-    upipe_x264->flow_def_requested = flow_format;
+    upipe_x264_store_flow_def_requested(upipe, flow_format);
     upipe_x264_build_flow_def(upipe);
 
     bool was_buffered = !upipe_x264_check_input(upipe);
@@ -1335,7 +1331,6 @@ static int upipe_x264_control(struct upipe *upipe, int command, va_list args)
  */
 static void upipe_x264_free(struct upipe *upipe)
 {
-    struct upipe_x264 *upipe_x264 = upipe_x264_from_upipe(upipe);
     upipe_x264_close(upipe);
 
     upipe_throw_dead(upipe);
@@ -1343,7 +1338,7 @@ static void upipe_x264_free(struct upipe *upipe)
     upipe_x264_clean_ubuf_mgr(upipe);
     upipe_x264_clean_input(upipe);
     upipe_x264_clean_output(upipe);
-    uref_free(upipe_x264->flow_def_requested);
+    upipe_x264_clean_flow_def_requested(upipe);
     upipe_x264_clean_flow_format(upipe);
     upipe_x264_clean_flow_def(upipe);
     upipe_x264_clean_flow_def_check(upipe);
