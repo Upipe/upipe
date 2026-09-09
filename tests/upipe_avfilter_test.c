@@ -127,7 +127,7 @@ static void test_avfilt(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
 
     upump_mgr_run(upump_mgr, NULL);
 
-    assert(count_output == 2 * (count / 4) * 4);
+    assert(count_output == 2 * count);
 
     upipe_release(upipe_null);
     upipe_release(upipe_probe_uref);
@@ -223,7 +223,7 @@ static void test_avfilt_sub(struct upump_mgr *upump_mgr, struct uprobe *uprobe,
 
     upump_mgr_run(upump_mgr, NULL);
 
-    assert(count_output == 2 * (count / 4) * 4);
+    assert(count_output == 2 * count);
 
     upipe_release(upipe_null);
     upipe_release(upipe_probe_uref);
