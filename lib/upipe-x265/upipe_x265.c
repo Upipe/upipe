@@ -670,6 +670,7 @@ static bool upipe_x265_open(struct upipe *upipe, int width, int height)
     const char *def = OUT_FLOW;
     if (unlikely(!ubase_check(uref_flow_set_def(flow_def_attr, def)))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(flow_def_attr);
         return false;
     }
     UBASE_FATAL(upipe, uref_flow_set_complete(flow_def_attr))
