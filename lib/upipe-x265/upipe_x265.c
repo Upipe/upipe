@@ -1356,9 +1356,9 @@ static int upipe_x265_set_flow_def(struct upipe *upipe,
 
     struct urational fps;
     uint64_t hsize, vsize;
-    if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps) ||
+    if (!ubase_check(uref_pic_flow_get_fps(flow_def, &fps)) ||
         !ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
-        !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize)))) {
+        !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
         upipe_err(upipe, "incompatible flow def");
         uref_free(flow_def_check);
         return UBASE_ERR_INVALID;
