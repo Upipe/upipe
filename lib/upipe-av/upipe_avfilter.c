@@ -1946,6 +1946,12 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
     AVRational time_base = av_buffersink_get_time_base(
         upipe_avfilt->buffersink_ctx);
 
+    struct uref *uref = uref_from_opaque_ref(frame->opaque_ref);
+    if (uref == NULL) {
+        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+
     struct uref *flow_def_attr = upipe_avfilt_build_flow_def(upipe, frame);
     if (unlikely(flow_def_attr == NULL)) {
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
@@ -2006,12 +2012,6 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
         return;
     }
 
-    struct uref *uref = uref_from_opaque_ref(frame->opaque_ref);
-    if (uref == NULL) {
-        ubuf_free(ubuf);
-        upipe_throw_error(upipe, UBASE_ERR_ALLOC);
-        return;
-    }
     uref_attach_ubuf(uref, ubuf);
 
     /* set pts prog */
