@@ -22,12 +22,15 @@
 #include "upipe/upipe_helper_flow_def_check.h"
 #include "upipe/upipe_helper_ubuf_mgr.h"
 
+#include "upipe/uref_pic_flow_formats.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_pic.h"
 #include "upipe/ubuf_pic.h"
 #include "upipe/uref_void_flow.h"
 
 #include "upipe-modules/upipe_video_blank.h"
+
+#define UPIPE_VBLK_DEFAULT_FORMAT   uref_pic_flow_format_yuv420p
 
 /** @internal @This is the private structure of a video blank pipe. */
 struct upipe_vblk {
@@ -390,6 +393,14 @@ static int upipe_vblk_check_flow_format(struct upipe *upipe,
     struct upipe_vblk *upipe_vblk = upipe_vblk_from_upipe(upipe);
     uref_attr_import(flow_format, upipe_vblk->flow_attr);
     uref_pic_flow_delete_surface_type(flow_format);
+
+    const struct uref_pic_flow_format *format =
+        uref_pic_flow_get_format(flow_format);
+    if (unlikely(!format)) {
+        format = &UPIPE_VBLK_DEFAULT_FORMAT;
+        upipe_info_va(upipe, "using default format %s", format->name);
+        uref_pic_flow_set_format(flow_format, format);
+    }
 
     if (upipe_vblk->ubuf_mgr &&
         upipe_vblk_check_flow_def_provided(upipe, flow_format)) {
