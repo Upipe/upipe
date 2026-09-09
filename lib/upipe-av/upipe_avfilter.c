@@ -172,6 +172,8 @@ struct upipe_avfilt {
 
     /** input latency */
     uint64_t input_latency;
+    /** output latency */
+    uint64_t latency;
     /** last input pts prog */
     uint64_t last_input_pts_prog;
     /** last input pts sys */
@@ -1952,11 +1954,33 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
         return;
     }
 
+    uint64_t latency = upipe_avfilt->input_latency;
+    if (frame->pts != AV_NOPTS_VALUE &&
+        upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
+        uint64_t pts =
+            av_rescale_q(frame->pts, time_base, av_make_q(1, UCLOCK_FREQ));
+        if (upipe_avfilt->last_input_pts_prog >= pts) {
+            latency = upipe_avfilt->last_input_pts_prog - pts;
+            upipe_verbose_va(upipe, "latency: %" PRIu64 " ms",
+                             1000 * latency / UCLOCK_FREQ);
+        }
+    }
+
+    if (latency > upipe_avfilt->latency) {
+        upipe_notice_va(
+            upipe, "increase latency from %" PRIu64 " ms to %" PRIu64 " ms",
+            1000 * upipe_avfilt->latency / UCLOCK_FREQ,
+            1000 * latency / UCLOCK_FREQ);
+        upipe_avfilt->latency = latency;
+    }
+
     struct uref *flow_def_attr = upipe_avfilt_build_flow_def(upipe, frame);
     if (unlikely(flow_def_attr == NULL)) {
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
     }
+
+    uref_clock_set_latency(flow_def_attr, upipe_avfilt->latency);
 
     if (!upipe_avfilt_check_flow_def_attr(upipe, flow_def_attr)) {
         struct uref *flow_def =
@@ -1965,19 +1989,6 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
             upipe_throw_error(upipe, UBASE_ERR_ALLOC);
             return;
         }
-
-        uint64_t latency = 0;
-        if (frame->pts != AV_NOPTS_VALUE) {
-            uint64_t pts = av_rescale_q(frame->pts, time_base,
-                                        av_make_q(1, UCLOCK_FREQ));
-            if (upipe_avfilt->last_input_pts_prog != UINT64_MAX &&
-                upipe_avfilt->last_input_pts_prog >= pts) {
-                latency = upipe_avfilt->last_input_pts_prog - pts;
-                upipe_notice_va(upipe, "latency: %" PRIu64 " ms",
-                                1000 * latency / UCLOCK_FREQ);
-            }
-        }
-        uref_clock_set_latency(flow_def, upipe_avfilt->input_latency + latency);
 
         upipe_avfilt_store_flow_def(upipe, flow_def);
     } else {
@@ -2301,6 +2312,7 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt->buffersink_ctx = NULL;
     upipe_avfilt->options = NULL;
     upipe_avfilt->input_latency = 0;
+    upipe_avfilt->latency = 0;
     upipe_avfilt->last_input_pts_prog = UINT64_MAX;
     upipe_avfilt->configured = false;
     upipe_avfilt->has_input = false;
