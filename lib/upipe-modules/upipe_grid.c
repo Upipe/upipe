@@ -1366,6 +1366,7 @@ static int upipe_grid_out_flow_format_proxy(struct urequest *urequest,
         upipe_grid_out_flow_format_proxy_from_urequest(urequest);
     struct uref *flow_format = va_arg(args, struct uref *);
     uref_pic_flow_delete_surface_type(flow_format);
+    uref_free(proxy->flow_downstream_provided);
     proxy->flow_downstream_provided = flow_format;
     if (proxy->flow_upstream_provided)
         return UBASE_ERR_NONE;
