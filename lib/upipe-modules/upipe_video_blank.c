@@ -31,6 +31,8 @@
 #include "upipe-modules/upipe_video_blank.h"
 
 #define UPIPE_VBLK_DEFAULT_FORMAT   uref_pic_flow_format_yuv420p
+#define UPIPE_VBLK_DEFAULT_WIDTH    320
+#define UPIPE_VBLK_DEFAULT_HEIGHT   200
 
 /** @internal @This is the private structure of a video blank pipe. */
 struct upipe_vblk {
@@ -196,7 +198,15 @@ static struct ubuf *upipe_vblk_alloc_pic(struct upipe *upipe)
     struct uref *flow_def = upipe_vblk->flow_def;
     uint64_t hsize = 0, vsize = 0;
     uref_pic_flow_get_hsize(flow_def, &hsize);
+    if (unlikely(hsize == 0)) {
+        hsize = UPIPE_VBLK_DEFAULT_WIDTH;
+        upipe_info_va(upipe, "using default width %" PRIu64, hsize);
+    }
     uref_pic_flow_get_vsize(flow_def, &vsize);
+    if (unlikely(vsize == 0)) {
+        vsize = UPIPE_VBLK_DEFAULT_HEIGHT;
+        upipe_info_va(upipe, "using default height %" PRIu64, vsize);
+    }
     bool full_range = ubase_check(uref_pic_flow_get_full_range(flow_def));
 
     upipe_verbose_va(upipe, "allocate blank %"PRIu64"x%"PRIu64" picture",
