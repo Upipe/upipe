@@ -178,6 +178,8 @@ struct upipe_avfilt {
     uint64_t last_input_pts_prog;
     /** last input pts sys */
     uint64_t last_input_pts_sys;
+    /** last input discontinuity */
+    uint64_t last_input_disc;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -405,7 +407,9 @@ static struct uref *upipe_avfilt_sub_build_flow_def(struct upipe *upipe,
             av_rescale_q(frame->pts, time_base, av_make_q(1, UCLOCK_FREQ));
         if (upipe_avfilt->last_input_pts_prog != UINT64_MAX &&
             upipe_avfilt->last_input_pts_prog >= pts) {
-            latency = upipe_avfilt->last_input_pts_prog - pts;
+            if (upipe_avfilt->last_input_disc == UINT64_MAX ||
+                pts > upipe_avfilt->last_input_disc)
+                latency = upipe_avfilt->last_input_pts_prog - pts;
         } else if (upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
             upipe_warn_va(upipe, "pts in the past %.2f ms",
                           (pts - upipe_avfilt->last_input_pts_prog) * 1000. /
@@ -1116,13 +1120,6 @@ static void upipe_avfilt_sub_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
-    if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))) &&
-        upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
-        upipe_warn(upipe, "got discontinuity");
-        upipe_avfilt->last_input_pts_prog = UINT64_MAX;
-        upipe_avfilt_clean_filters(upipe_avfilt_to_upipe(upipe_avfilt));
-    }
-
     if (unlikely(!upipe_avfilt->configured)) {
         AVFrame *frame = av_frame_alloc();
         assert(frame);
@@ -1146,23 +1143,31 @@ static void upipe_avfilt_sub_input(struct upipe *upipe, struct uref *uref,
     }
     upipe_avfilt_sub->warn_not_configured = true;
 
+    uint64_t pts_sys = UINT64_MAX;
+    uint64_t pts_prog = UINT64_MAX;
+    if (ubase_check(uref_clock_get_pts_sys(uref, &pts_sys)) &&
+        ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))) {
+
+        if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))) &&
+            upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
+            upipe_warn(upipe, "got discontinuity");
+            if (upipe_avfilt->last_input_disc == UINT64_MAX ||
+                pts_prog > upipe_avfilt->last_input_disc)
+                upipe_avfilt->last_input_disc = pts_prog;
+        }
+        if (upipe_avfilt->last_input_pts_prog == UINT64_MAX ||
+            pts_prog > upipe_avfilt->last_input_pts_prog) {
+            upipe_avfilt->last_input_pts_prog = pts_prog;
+            upipe_avfilt->last_input_pts_sys = pts_sys;
+        }
+    }
+
     AVFrame *frame = av_frame_alloc();
     if (unlikely(!frame)) {
         upipe_err_va(upipe, "cannot allocate av frame");
         uref_free(uref);
         upipe_throw_error(upipe, UBASE_ERR_ALLOC);
         return;
-    }
-
-    uint64_t pts_sys = UINT64_MAX;
-    uint64_t pts_prog = UINT64_MAX;
-    if (ubase_check(uref_clock_get_pts_sys(uref, &pts_sys)) &&
-        ubase_check(uref_clock_get_pts_prog(uref, &pts_prog))) {
-        if (upipe_avfilt->last_input_pts_prog == UINT64_MAX ||
-            pts_prog > upipe_avfilt->last_input_pts_prog) {
-            upipe_avfilt->last_input_pts_prog = pts_prog;
-            upipe_avfilt->last_input_pts_sys = pts_sys;
-        }
     }
 
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
@@ -1399,6 +1404,7 @@ static int upipe_avfilt_init_filters(struct upipe *upipe)
     upipe_avfilt->filter_graph = avfilter_graph_alloc();
     upipe_avfilt->last_input_pts_prog = UINT64_MAX;
     upipe_avfilt->last_input_pts_sys = UINT64_MAX;
+    upipe_avfilt->last_input_disc = UINT64_MAX;
 
     AVDictionaryEntry *option = NULL;
     while ((option = av_dict_get(upipe_avfilt->options,
@@ -1959,7 +1965,9 @@ static void upipe_avfilt_output_frame(struct upipe *upipe,
         upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
         uint64_t pts =
             av_rescale_q(frame->pts, time_base, av_make_q(1, UCLOCK_FREQ));
-        if (upipe_avfilt->last_input_pts_prog >= pts) {
+        if (upipe_avfilt->last_input_pts_prog >= pts &&
+            (upipe_avfilt->last_input_disc == UINT64_MAX ||
+             pts >= upipe_avfilt->last_input_disc)) {
             latency = upipe_avfilt->last_input_pts_prog - pts;
             upipe_verbose_va(upipe, "latency: %" PRIu64 " ms",
                              1000 * latency / UCLOCK_FREQ);
@@ -2105,13 +2113,14 @@ static void upipe_avfilt_input(struct upipe *upipe,
         return;
     }
 
+    uint64_t pts_prog = UINT64_MAX;
+    uref_clock_get_pts_prog(uref, &pts_prog);
     if (unlikely(ubase_check(uref_flow_get_discontinuity(uref))) &&
         upipe_avfilt->last_input_pts_prog != UINT64_MAX) {
         upipe_warn(upipe, "got discontinuity");
-        upipe_avfilt_clean_filters(upipe);
+        upipe_avfilt->last_input_disc = pts_prog;
     }
-    upipe_avfilt->last_input_pts_prog = UINT64_MAX;
-    uref_clock_get_pts_prog(uref, &upipe_avfilt->last_input_pts_prog);
+    upipe_avfilt->last_input_pts_prog = pts_prog;
 
     if (!ubase_check(ubuf_av_get_avframe(uref->ubuf, frame))) {
         struct uref *uref_tmp = uref_dup(uref);
@@ -2314,6 +2323,7 @@ static struct upipe *upipe_avfilt_alloc(struct upipe_mgr *mgr,
     upipe_avfilt->input_latency = 0;
     upipe_avfilt->latency = 0;
     upipe_avfilt->last_input_pts_prog = UINT64_MAX;
+    upipe_avfilt->last_input_disc = UINT64_MAX;
     upipe_avfilt->configured = false;
     upipe_avfilt->has_input = false;
 
