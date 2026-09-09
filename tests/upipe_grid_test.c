@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2017 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Arnaud de Turckheim
  *
@@ -69,7 +70,6 @@ static struct ubuf_mgr *ubuf_pic_mgr = NULL;
 static struct ubuf_mgr *ubuf_sound_mgr = NULL;
 static struct upipe *outputs[N_OUTPUT * 2] = { 0 };
 static struct upipe *inputs[N_INPUT * 2] = { 0 };
-static uint64_t start_time = UINT64_MAX;
 static struct upump_mgr *upump_mgr = NULL;
 static struct upump *timer = NULL;
 static struct uref *pic_flow_def = NULL;
@@ -386,7 +386,6 @@ int main(int argc, char *argv[])
 
     struct uclock_test *uclock_test = uclock_test_from_uclock(uclock);
     uclock_test->now = DURATION;
-    start_time = uclock_now(uclock);
     timer = upump_alloc_idler(upump_mgr, timer_cb, NULL, NULL);
     assert(timer);
     upump_set_status(timer, false);
