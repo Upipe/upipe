@@ -48,23 +48,25 @@
 #include <x265_config.h>
 
 /* fix undef warnings in x265.h */
-#ifndef ENABLE_LIBVMAF
-# define ENABLE_LIBVMAF 0
-#endif
-#ifndef _MSC_VER
-# define _MSC_VER 0
-#endif
-#ifndef X265_DEPTH
-# define X265_DEPTH 0
-#endif
-#ifndef ENABLE_MULTIVIEW
-# define ENABLE_MULTIVIEW 0
-#endif
-#ifndef ENABLE_ALPHA
-# define ENABLE_ALPHA 0
-#endif
-#ifndef ENABLE_SCC_EXT
-# define ENABLE_SCC_EXT 0
+#if X265_BUILD < 217
+# ifndef ENABLE_LIBVMAF
+#  define ENABLE_LIBVMAF 0
+# endif
+# ifndef _MSC_VER
+#  define _MSC_VER 0
+# endif
+# ifndef X265_DEPTH
+#  define X265_DEPTH 0
+# endif
+# ifndef ENABLE_MULTIVIEW
+#  define ENABLE_MULTIVIEW 0
+# endif
+# ifndef ENABLE_ALPHA
+#  define ENABLE_ALPHA 0
+# endif
+# ifndef ENABLE_SCC_EXT
+#  define ENABLE_SCC_EXT 0
+# endif
 #endif
 
 #include <x265.h>
