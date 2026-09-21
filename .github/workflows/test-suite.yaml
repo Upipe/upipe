@@ -46,10 +46,6 @@ jobs:
             compiler: gcc
             version: 16
 
-          - name: macos-26-amd64-xcode
-            os: macos-26-intel
-            compiler: xcode
-
           - name: macos-26-arm64-xcode
             os: macos-26
             compiler: xcode
