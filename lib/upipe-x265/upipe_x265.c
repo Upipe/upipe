@@ -903,6 +903,60 @@ static void upipe_x265_get_aspect_ratio(struct upipe *upipe,
     upipe_x265->sar_height = sar.den;
 }
 
+/** @internal @This sets a new input flow definition.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_def new flow definition to set
+ * @return an error code
+ */
+static int upipe_x265_set_flow_def_real(struct upipe *upipe,
+                                        struct uref *flow_def)
+{
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
+    upipe_x265->input_latency = 0;
+    uref_clock_get_latency(flow_def, &upipe_x265->input_latency);
+    upipe_x265_store_flow_def(upipe, NULL);
+    uref_free(upipe_x265->flow_def_requested);
+    upipe_x265->flow_def_requested = NULL;
+
+    upipe_x265_get_aspect_ratio(upipe, flow_def);
+
+    bool overscan;
+    if (!ubase_check(uref_pic_flow_get_overscan(flow_def, &overscan)))
+        upipe_x265->overscan = OVERSCAN_UNKNOWN;
+    else
+        upipe_x265->overscan = overscan ? OVERSCAN_CROP : OVERSCAN_SHOW;
+
+    uint64_t hsize, vsize;
+    if (ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
+        ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
+        upipe_x265->width = hsize;
+        upipe_x265->height = vsize;
+    }
+
+    flow_def = upipe_x265_store_flow_def_input(upipe, flow_def);
+    if (flow_def != NULL) {
+        uref_pic_flow_clear_format(flow_def);
+        upipe_x265_require_flow_format(upipe, flow_def);
+    }
+
+    /* setup encoder params */
+    int bit_depth = upipe_x265->bit_depth;
+    UBASE_RETURN(
+        get_pixel_format(upipe_x265->flow_def_input, &upipe_x265->pixel_format))
+    if (bit_depth == 0)
+        bit_depth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
+    upipe_x265->color_space =
+        pixel_format_to_color_space(upipe_x265->pixel_format);
+
+    upipe_x265->api = x265_api_get(bit_depth);
+    if (unlikely(upipe_x265->api == NULL))
+        return UBASE_ERR_INVALID;
+
+    return setup_encoder_params(upipe);
+}
+
 /** @internal @This processes pictures.
  *
  * @param upipe description structure of the pipe
@@ -917,57 +971,9 @@ static bool upipe_x265_handle(struct upipe *upipe,
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
 
     if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, NULL)))) {
-        upipe_x265->input_latency = 0;
-        uref_clock_get_latency(uref, &upipe_x265->input_latency);
-        upipe_x265_store_flow_def(upipe, NULL);
-        uref_free(upipe_x265->flow_def_requested);
-        upipe_x265->flow_def_requested = NULL;
-
-        upipe_x265_get_aspect_ratio(upipe, uref);
-
-        bool overscan;
-        if (!ubase_check(uref_pic_flow_get_overscan(uref, &overscan)))
-            upipe_x265->overscan = OVERSCAN_UNKNOWN;
-        else
-            upipe_x265->overscan = overscan ?
-                OVERSCAN_CROP : OVERSCAN_SHOW;
-
-        uint64_t hsize, vsize;
-        if (ubase_check(uref_pic_flow_get_hsize(uref, &hsize)) &&
-            ubase_check(uref_pic_flow_get_vsize(uref, &vsize))) {
-            upipe_x265->width = hsize;
-            upipe_x265->height = vsize;
-        }
-
-        uref = upipe_x265_store_flow_def_input(upipe, uref);
-        if (uref != NULL) {
-            uref_pic_flow_clear_format(uref);
-            upipe_x265_require_flow_format(upipe, uref);
-        }
-
-        /* setup encoder params */
-        int bit_depth = upipe_x265->bit_depth;
-        int ret = get_pixel_format(upipe_x265->flow_def_input,
-                                   &upipe_x265->pixel_format);
+        int ret = upipe_x265_set_flow_def_real(upipe, uref);
         if (unlikely(!ubase_check(ret)))
-            goto err_invalid;
-        if (bit_depth == 0)
-            bit_depth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
-        upipe_x265->color_space =
-            pixel_format_to_color_space(upipe_x265->pixel_format);
-
-        upipe_x265->api = x265_api_get(bit_depth);
-        if (unlikely(upipe_x265->api == NULL))
-            goto err_invalid;
-
-        ret = setup_encoder_params(upipe);
-        if (unlikely(!ubase_check(ret)))
-            goto err_invalid;
-
-        return true;
-
-err_invalid:
-        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+            upipe_throw_fatal(upipe, ret);
         return true;
     }
 
