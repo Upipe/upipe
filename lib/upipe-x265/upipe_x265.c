@@ -116,8 +116,6 @@ struct upipe_x265 {
     char *profile;
     /** configured options */
     struct uchain options;
-    /** latency in the input flow */
-    uint64_t input_latency;
     /** buffered frames count */
     int latency_frames;
     /** supposed latency of the packets when leaving the encoder */
@@ -556,7 +554,6 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
     upipe_x265->tune = NULL;
     upipe_x265->profile = NULL;
     ulist_init(&upipe_x265->options);
-    upipe_x265->input_latency = 0;
     upipe_x265->latency_frames = 3;
     upipe_x265->initial_latency = 0;
     upipe_x265->sc_latency = 0;
@@ -786,9 +783,10 @@ static void upipe_x265_build_flow_def(struct upipe *upipe)
 
     /* find latency */
     upipe_notice_va(upipe, "latency: %d frames", upipe_x265->latency_frames);
-    uint64_t latency = upipe_x265->input_latency +
-            (uint64_t)upipe_x265->latency_frames * UCLOCK_FREQ *
-            upipe_x265->params.fpsDenom / upipe_x265->params.fpsNum;
+    uint64_t latency = 0;
+    uref_clock_get_latency(upipe_x265->flow_def_input, &latency);
+    latency += (uint64_t)upipe_x265->latency_frames * UCLOCK_FREQ *
+               upipe_x265->params.fpsDenom / upipe_x265->params.fpsNum;
 
     upipe_x265->initial_latency = latency;
     latency += upipe_x265->sc_latency;
@@ -914,8 +912,6 @@ static int upipe_x265_set_flow_def_real(struct upipe *upipe,
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
 
-    upipe_x265->input_latency = 0;
-    uref_clock_get_latency(flow_def, &upipe_x265->input_latency);
     upipe_x265_store_flow_def(upipe, NULL);
     upipe_x265_store_flow_def_requested(upipe, NULL);
 
