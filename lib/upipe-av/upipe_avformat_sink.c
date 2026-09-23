@@ -970,6 +970,17 @@ static void upipe_avfsink_mux(struct upipe *upipe, struct upump **upump_p)
         if (ubase_check(uref_flow_get_random(uref)))
             avpkt.flags |= AV_PKT_FLAG_KEY;
 
+        /* AAC is no longer intra-only since FFmpeg 7.1.1 (because of USAC)
+         * so the key flag must be set explicitly. */
+        AVCodecParameters *codecpar = stream->codecpar;
+        if ((codecpar->codec_id == AV_CODEC_ID_AAC ||
+             codecpar->codec_id == AV_CODEC_ID_AAC_LATM)
+#ifdef AV_PROFILE_AAC_USAC
+            && codecpar->profile != AV_PROFILE_AAC_USAC
+#endif
+           )
+            avpkt.flags |= AV_PKT_FLAG_KEY;
+
         AVRational uclock_time_base = av_make_q(1, UCLOCK_FREQ);
 
         uint64_t dts;
