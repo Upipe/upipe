@@ -68,8 +68,6 @@ UREF_ATTR_UNSIGNED(x265_test, counter, "x265_test.counter", frame counter);
 static struct umem_mgr *umem_mgr = NULL;
 static struct uref_mgr *uref_mgr = NULL;
 static struct uprobe *logger = NULL;
-static struct upipe_mgr *upipe_x265_mgr = NULL;
-static struct upipe *x265_test = NULL;
 static const char *prefix = NULL;
 static uint64_t pts = UINT32_MAX;
 
@@ -231,21 +229,6 @@ static void fill_pic(struct uref *uref, int counter)
     }
 }
 
-static struct upipe *test_alloc_x265(const char *profile)
-{
-    struct upipe *x265 = upipe_void_alloc(
-        upipe_x265_mgr,
-        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "x265"));
-    assert(x265);
-    ubase_assert(upipe_x265_set_profile(x265, profile));
-    ubase_assert(upipe_x265_set_default_preset(x265, "ultrafast", NULL));
-    /* disable assembly (not valgrind safe) */
-    ubase_assert(upipe_set_option(x265, "asm", "0"));
-    ubase_assert(upipe_set_output(x265, x265_test));
-
-    return x265;
-}
-
 /** definition of our uprobe */
 static int catch(struct uprobe *uprobe, struct upipe *upipe,
                  int event, va_list args)
@@ -380,32 +363,29 @@ int main(int argc, char **argv)
     upump_mgr_release(upump_mgr);
     assert(logger != NULL);
 
-    x265_test = upipe_void_alloc(
+    struct upipe *x265_test = upipe_void_alloc(
         &x265_test_mgr,
         uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "x265_test"));
 
     /* x265 manager */
-    upipe_x265_mgr = upipe_x265_mgr_alloc();
+    struct upipe_mgr *upipe_x265_mgr = upipe_x265_mgr_alloc();
 
-    {
-        /* x265 pipe */
-        struct upipe *x265 = upipe_void_alloc(
-            upipe_x265_mgr,
-            uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "x265"));
-        assert(x265);
-        /* x265_test */
-        ubase_assert(upipe_set_output(x265, x265_test));
-        /* test controls */
-        ubase_assert(upipe_x265_set_default_preset(x265, "placebo", "grain"));
-        ubase_assert(upipe_x265_set_profile(x265, "main"));
-        ubase_assert(upipe_x265_set_default_preset(x265, "faster", NULL));
-        ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
-        ubase_assert(upipe_x265_set_default(x265, 0));
-        ubase_assert(upipe_x265_set_default_preset(x265, "ultrafast", NULL));
-        /* disable assembly (not valgrind safe) */
-        ubase_assert(upipe_set_option(x265, "asm", "0"));
-        upipe_release(x265);
-    }
+    /* x265 pipe */
+    struct upipe *x265 = upipe_void_alloc(
+        upipe_x265_mgr,
+        uprobe_pfx_alloc(uprobe_use(logger), UPROBE_LOG_LEVEL, "x265"));
+    assert(x265);
+    /* x265_test */
+    ubase_assert(upipe_set_output(x265, x265_test));
+    /* test controls */
+    ubase_assert(upipe_x265_set_default_preset(x265, "placebo", "grain"));
+    ubase_assert(upipe_x265_set_profile(x265, "main"));
+    ubase_assert(upipe_x265_set_default_preset(x265, "faster", NULL));
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
+    ubase_assert(upipe_x265_set_default(x265, 0));
+    ubase_assert(upipe_x265_set_default_preset(x265, "ultrafast", NULL));
+    /* disable assembly (not valgrind safe) */
+    ubase_assert(upipe_set_option(x265, "asm", "0"));
 
     /* yuv420p */
     struct test_config config = {
@@ -416,84 +396,75 @@ int main(int argc, char **argv)
         .progressive = true,
     };
     struct test_config config_pic = config;
-    struct upipe *x265 = test_alloc_x265("mainstillpicture");
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* double input width/height */
-    x265 = test_alloc_x265("mainstillpicture");
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
     config.width = WIDTH * 2;
     config.height = HEIGHT * 2;
     config_pic.width = WIDTH * 2;
     config_pic.height = HEIGHT * 2;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* double input buffer width/height */
-    x265 = test_alloc_x265("mainstillpicture");
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
     config.width = WIDTH;
     config.height = HEIGHT;
     config_pic.width = WIDTH * 2;
     config_pic.height = HEIGHT * 2;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* double frame rate */
-    x265 = test_alloc_x265("mainstillpicture");
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
     config.fps.num = FPS * 2;
     config_pic.fps.num = FPS * 2;
     config_pic.width = WIDTH;
     config_pic.height = HEIGHT;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* interlaced */
-    x265 = test_alloc_x265("mainstillpicture");
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
     config.fps.num = FPS;
     config.progressive = false;
     config_pic.fps.num = FPS;
     config_pic.progressive = false;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* full range */
-    x265 = test_alloc_x265("mainstillpicture");
+    ubase_assert(upipe_x265_set_profile(x265, "mainstillpicture"));
     config.progressive = true;
     config.fullrange = true;
     config_pic.progressive = true;
     config_pic.fullrange = true;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* yuv422p */
-    x265 = test_alloc_x265("main422-10");
+    ubase_assert(upipe_x265_set_profile(x265, "main422-10"));
     config.format = &uref_pic_flow_format_yuv422p;
     config_pic.format = &uref_pic_flow_format_yuv422p;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* yuv422p10le */
-    x265 = test_alloc_x265("main422-10");
+    ubase_assert(upipe_x265_set_profile(x265, "main422-10"));
     config.format = &uref_pic_flow_format_yuv422p10le;
     config_pic.format = &uref_pic_flow_format_yuv422p10le;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* yuv444p */
-    x265 = test_alloc_x265("main444-8");
+    ubase_assert(upipe_x265_set_profile(x265, "main444-stillpicture"));
     config.format = &uref_pic_flow_format_yuv444p;
     config_pic.format = &uref_pic_flow_format_yuv444p;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* yuv420p again */
-    x265 = test_alloc_x265("main");
+    ubase_assert(upipe_x265_set_profile(x265, "main"));
     config.format = &uref_pic_flow_format_yuv420p;
     config_pic.format = &uref_pic_flow_format_yuv420p;
     ubase_assert(test_run(x265, &config, &config_pic));
-    upipe_release(x265);
 
     /* release pipes */
+    upipe_release(x265);
     test_free(x265_test);
 
     /* clean everything */

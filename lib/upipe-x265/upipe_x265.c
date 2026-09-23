@@ -169,23 +169,12 @@ struct upipe_x265 {
     /** list of output requests */
     struct uchain request_list;
 
-    /** input pixel format */
-    enum pixel_format {
-        PIX_FMT_YUV420P,
-        PIX_FMT_YUV422P,
-        PIX_FMT_YUV444P,
-        PIX_FMT_YUV420P10LE,
-        PIX_FMT_YUV422P10LE,
-        PIX_FMT_YUV444P10LE,
-        PIX_FMT_YUV420P12LE,
-        PIX_FMT_YUV422P12LE,
-        PIX_FMT_YUV444P12LE,
-    } pixel_format;
-
+    /** input flow format */
+    const struct uref_pic_flow_format *format;
     /** input width */
-    int width;
+    uint64_t width;
     /** input height */
-    int height;
+    uint64_t height;
     /** input aspect ratio idc (0 = unspecified) */
     int aspect_ratio_idc;
     /** input sar width (if aspect_ratio_idc == X265_EXTENDED_SAR) */
@@ -200,6 +189,10 @@ struct upipe_x265 {
     } overscan;
     /** color space */
     int color_space;
+    /** full range */
+    bool fullrange;
+    /** progressive */
+    bool progressive;
 
     /** last DTS */
     uint64_t last_dts;
@@ -255,55 +248,54 @@ UPIPE_HELPER_UBUF_MGR(upipe_x265, ubuf_mgr, flow_format, ubuf_mgr_request,
                       upipe_x265_unregister_output_request)
 UPIPE_HELPER_UCLOCK(upipe_x265, uclock, uclock_request, NULL, upipe_throw_provide_request, NULL)
 
-/** @internal @This describes the supported pixel formats. */
-static const struct uref_pic_flow_format *pixel_format_desc[] = {
-    [PIX_FMT_YUV420P] = &uref_pic_flow_format_yuv420p,
-    [PIX_FMT_YUV422P] = &uref_pic_flow_format_yuv422p,
-    [PIX_FMT_YUV444P] = &uref_pic_flow_format_yuv444p,
-    [PIX_FMT_YUV420P10LE] = &uref_pic_flow_format_yuv420p10le,
-    [PIX_FMT_YUV422P10LE] = &uref_pic_flow_format_yuv422p10le,
-    [PIX_FMT_YUV444P10LE] = &uref_pic_flow_format_yuv444p10le,
-    [PIX_FMT_YUV420P12LE] = &uref_pic_flow_format_yuv420p12le,
-    [PIX_FMT_YUV422P12LE] = &uref_pic_flow_format_yuv422p12le,
-    [PIX_FMT_YUV444P12LE] = &uref_pic_flow_format_yuv444p12le,
+/** @interal @This enumerates supported formats. */
+static const struct uref_pic_flow_format *supported_formats[] = {
+    &uref_pic_flow_format_yuv420p,
+    &uref_pic_flow_format_yuv422p,
+    &uref_pic_flow_format_yuv444p,
+    &uref_pic_flow_format_yuv420p10le,
+    &uref_pic_flow_format_yuv422p10le,
+    &uref_pic_flow_format_yuv444p10le,
+    &uref_pic_flow_format_yuv420p12le,
+    &uref_pic_flow_format_yuv422p12le,
+    &uref_pic_flow_format_yuv444p12le,
 };
 
-/** @internal @This gets the pixel format from the flow definition.
+/** @internal @This gets the supported format from the flow definition.
  *
  * @param flow_def flow definition
- * @param pixel_format pointer filled with the pixel format
- * @return an error code
+ * @return the corresponding supported flow format or NULL
  */
-static int get_pixel_format(struct uref *flow_def,
-                            enum pixel_format *pixel_format)
+static const struct uref_pic_flow_format *
+format_from_flow_def(struct uref *flow_def)
 {
-    for (size_t i = 0; i < UBASE_ARRAY_SIZE(pixel_format_desc); i++)
-        if (ubase_check(uref_pic_flow_check_format(flow_def,
-                                                   pixel_format_desc[i]))) {
-            *pixel_format = i;
-            return UBASE_ERR_NONE;
-        }
-    return UBASE_ERR_INVALID;
+    for (size_t i = 0; i < UBASE_ARRAY_SIZE(supported_formats); i++) {
+        const struct uref_pic_flow_format *f = supported_formats[i];
+        if (ubase_check(uref_pic_flow_check_format(flow_def, f)))
+            return f;
+    }
+    return NULL;
 }
 
-/** @internal @This get the bit depth from a pixel format.
+/** @internal @This get the bit depth from a format.
  *
- * @param pixel_format pixel format
+ * @param format format
  * @return the bit depth or -1
  */
-static int pixel_format_to_bit_depth(enum pixel_format pixel_format)
+static int format_to_bit_depth(const struct uref_pic_flow_format *format)
 {
-    return pixel_format_desc[pixel_format]->planes[0].mpixel_bits;
+    return format && format->nb_planes ? format->planes[0].mpixel_bits : -1;
 }
 
-/** @internal @This gets the color space from pixel format.
+/** @internal @This gets the color space from format.
  *
- * @param pixel_format pixel format
- * @return the color spave
+ * @param format format
+ * @return the color space
  */
-static int pixel_format_to_color_space(enum pixel_format pixel_format)
+static int format_to_color_space(const struct uref_pic_flow_format *fmt)
 {
-    const struct uref_pic_flow_format *fmt = pixel_format_desc[pixel_format];
+    if (!fmt || fmt->nb_planes < 3)
+        return -1;
     if (fmt->planes[1].hsub == 1 && fmt->planes[2].hsub == 1)
         return X265_CSP_I444;
     else if (fmt->planes[1].vsub == 1 && fmt->planes[2].vsub == 1)
@@ -318,13 +310,57 @@ static int pixel_format_to_color_space(enum pixel_format pixel_format)
  * @param color_space color spave
  * @return a pixel format
  */
-static enum pixel_format pixel_format_find(int bit_depth, int color_space)
+static const struct uref_pic_flow_format *format_find(int bit_depth, int color_space)
 {
-    for (size_t i = 0; i < UBASE_ARRAY_SIZE(pixel_format_desc); i++)
-        if (pixel_format_to_bit_depth(i) == bit_depth &&
-            pixel_format_to_color_space(i) == color_space)
-            return i;
-    return PIX_FMT_YUV420P;
+    for (size_t i = 0; i < UBASE_ARRAY_SIZE(supported_formats); i++) {
+        const struct uref_pic_flow_format *f = supported_formats[i];
+        if (format_to_bit_depth(f) == bit_depth &&
+            format_to_color_space(f) == color_space)
+            return f;
+    }
+    return NULL;
+}
+
+/** @internal @This returns the aspect ratio information from sar.
+ *
+ * @param sar sample aspect ratio
+ */
+static int get_aspect_ratio(struct urational *sar)
+{
+    static const struct {
+        int idc;
+        int num;
+        int den;
+    } sar_to_idc[] = {
+        {  1,   1,  1, },
+        {  2,  12, 11, },
+        {  3,  10, 11, },
+        {  4,  16, 11, },
+        {  5,  40, 33, },
+        {  6,  24, 11, },
+        {  7,  20, 11, },
+        {  8,  32, 11, },
+        {  9,  80, 33, },
+        { 10,  18, 11, },
+        { 11,  15, 11, },
+        { 12,  64, 33, },
+        { 13, 160, 99, },
+        { 14,   4,  3, },
+        { 15,   3,  2, },
+        { 16,   2,  1, },
+    };
+
+    if (!sar || !sar->den || !sar->num)
+        // unspecified aspect ratio
+        return 0;
+
+    // look for predefined aspect ratio
+    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(sar_to_idc); i++)
+        if (sar->num == sar_to_idc[i].num && sar->den == sar_to_idc[i].den)
+            return sar_to_idc[i].idc;
+
+    // extended aspect ratio
+    return X265_EXTENDED_SAR;
 }
 
 /** @internal @This sets the content of an x265 option.
@@ -381,6 +417,8 @@ static void apply_params(struct upipe *upipe, x265_param *params)
         return;
 
     params->logLevel = X265_LOG_DEBUG;
+    params->bAnnexB = upipe_x265->encaps_requested == UREF_H26X_ENCAPS_ANNEXB;
+    params->bRepeatHeaders = !upipe_x265->headers_requested;
 
     struct urational fps = {0, 0};
     if (likely(ubase_check(uref_pic_flow_get_fps(flow_def, &fps)))) {
@@ -400,13 +438,10 @@ static void apply_params(struct upipe *upipe, x265_param *params)
     params->sourceWidth = upipe_x265->width;
     params->sourceHeight = upipe_x265->height;
     params->internalCsp = upipe_x265->color_space;
-
-    params->interlaceMode =
-        !uref_pic_check_progressive(flow_def);
+    params->interlaceMode = !upipe_x265->progressive;
 
     upipe_x265_set_option(upipe, params, "range",
-                          ubase_check(uref_pic_flow_get_full_range(flow_def)) ?
-                          "full" : "limited");
+                          upipe_x265->fullrange ? "full" : "limited");
 
     if (ubase_check(uref_pic_flow_get_video_format(flow_def, &value)))
         upipe_x265_set_option(upipe, params, "videoformat", value);
@@ -424,11 +459,11 @@ static void apply_params(struct upipe *upipe, x265_param *params)
 static int setup_encoder_params(struct upipe *upipe)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-    const struct x265_api *api = upipe_x265->api;
     x265_param params;
 
-    if (unlikely(api == NULL))
-        return UBASE_ERR_NONE;
+    const struct x265_api *api = upipe_x265->api;
+    if (unlikely(upipe_x265->api == NULL))
+        return UBASE_ERR_INVALID;
 
     if (unlikely(api->param_default_preset(&params,
                                            upipe_x265->preset,
@@ -553,6 +588,7 @@ static struct upipe *upipe_x265_alloc(struct upipe_mgr *mgr,
     upipe_x265->preset = NULL;
     upipe_x265->tune = NULL;
     upipe_x265->profile = NULL;
+    upipe_x265->format = NULL;
     ulist_init(&upipe_x265->options);
     upipe_x265->latency_frames = 3;
     upipe_x265->initial_latency = 0;
@@ -627,21 +663,54 @@ static void speedcontrol_update(struct upipe *upipe)
     }
 }
 
+/** @internal @This requires a new flow format.
+ *
+ * @param upipe description structure of the pipe
+ * @param flow_format flow format to request
+ */
+static void upipe_x265_require(struct upipe *upipe, struct uref *flow_format)
+{
+    if (flow_format != NULL) {
+        uref_pic_flow_clear_format(flow_format);
+        if (!upipe_x265_check_flow_def_requested(upipe, flow_format)) {
+            upipe_x265_store_flow_def_requested(upipe, NULL);
+            return upipe_x265_require_flow_format(upipe, flow_format);
+        }
+        uref_free(flow_format);
+    }
+}
+
 /** @internal @This opens x265 encoder.
  *
  * @param upipe description structure of the pipe
- * @param width image width
- * @param height image height
+ * @param uref new image to encode
  */
-static bool upipe_x265_open(struct upipe *upipe, int width, int height)
+static bool upipe_x265_open(struct upipe *upipe, struct uref *uref)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     x265_param *params = &upipe_x265->params;
 
+    if (unlikely(!uref))
+        return upipe_x265->encoder != NULL;
+
+    size_t width = 0, height = 0;
+    uref_pic_size(uref, &width, &height, NULL);
+
+    if (likely(upipe_x265->encoder && upipe_x265->width == width &&
+               upipe_x265->height == height))
+        return true;
+
     upipe_x265->width = width;
     upipe_x265->height = height;
 
-    if (!ubase_check(setup_encoder_params(upipe)))
+    if (unlikely(upipe_x265->api == NULL)) {
+        int bit_depth = upipe_x265->bit_depth;
+        if (bit_depth == 0)
+            bit_depth = format_to_bit_depth(upipe_x265->format);
+        upipe_x265->api = x265_api_get(bit_depth);
+    }
+
+    if (unlikely(!ubase_check(setup_encoder_params(upipe))))
         return false;
 
     /* reconfigure encoder with new parameters and return */
@@ -650,6 +719,12 @@ static bool upipe_x265_open(struct upipe *upipe, int width, int height)
             return false;
     } else {
         /* open encoder */
+        if (upipe_x265->sc_latency) {
+            /* init speedcontrol */
+            upipe_x265->sc_buffer_size = upipe_x265->sc_latency;
+            upipe_x265->sc_buffer_fill = 0;
+            upipe_x265->sc_max_preset = 4;
+        }
         upipe_x265->encoder = upipe_x265->api->encoder_open(params);
         if (unlikely(!upipe_x265->encoder))
             return false;
@@ -736,14 +811,9 @@ static bool upipe_x265_open(struct upipe *upipe, int width, int height)
 
     /* Find out if flow def attributes have changed. */
     if (!upipe_x265_check_flow_def_attr(upipe, flow_def_attr)) {
-        upipe_x265_store_flow_def(upipe, NULL);
-        upipe_x265_store_flow_def_requested(upipe, NULL);
         struct uref *flow_def =
             upipe_x265_store_flow_def_attr(upipe, flow_def_attr);
-        if (flow_def != NULL) {
-            uref_pic_flow_clear_format(flow_def);
-            upipe_x265_require_flow_format(upipe, flow_def);
-        }
+        upipe_x265_require(upipe, flow_def);
     } else
         uref_free(flow_def_attr);
 
@@ -763,7 +833,11 @@ static void upipe_x265_close(struct upipe *upipe)
 
         upipe_notice(upipe, "closing encoder");
         upipe_x265->api->encoder_close(upipe_x265->encoder);
+        upipe_x265->api = NULL;
+        upipe_x265->encoder = NULL;
+        upipe_x265->last_dts = UINT64_MAX;
     }
+    upipe_x265_store_flow_def(upipe, NULL);
 }
 
 /** @internal @This builds the flow definition packet.
@@ -775,11 +849,13 @@ static void upipe_x265_build_flow_def(struct upipe *upipe)
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     assert(upipe_x265->flow_def_requested != NULL);
 
-    struct uref *flow_def = uref_dup(upipe_x265->flow_def_requested);
+    struct uref *flow_def = upipe_x265_make_flow_def(upipe);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return;
     }
+    uref_pic_flow_clear_format(flow_def);
+    uref_attr_import(flow_def, upipe_x265->flow_def_requested);
 
     /* find latency */
     upipe_notice_va(upipe, "latency: %d frames", upipe_x265->latency_frames);
@@ -817,88 +893,58 @@ static void upipe_x265_build_flow_def(struct upipe *upipe)
     upipe_x265_store_flow_def(upipe, flow_def);
 }
 
-static int params_overscan(x265_param *params)
-{
-    if (!params->vui.bEnableOverscanInfoPresentFlag)
-        return OVERSCAN_UNKNOWN;
-    return params->vui.bEnableOverscanAppropriateFlag ?
-        OVERSCAN_CROP : OVERSCAN_SHOW;
-}
-
-/** @internal @This checks incoming pic against cached parameters.
+/** @internal @This returns true if the encoder must be closed and reopened for
+ * the new flow format.
  *
  * @param upipe description structure of the pipe
- * @param width image width
- * @param height image height
- * @return true if parameters update needed
+ * @return true if the encoder must be reopened
  */
-static inline bool upipe_x265_need_update(struct upipe *upipe,
-                                          int width, int height)
+static bool upipe_x265_need_reopen(struct upipe *upipe)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-    x265_param *params = &upipe_x265->params;
-    return upipe_x265->width != width ||
-           upipe_x265->height != height ||
-           params->vui.aspectRatioIdc != upipe_x265->aspect_ratio_idc ||
-           (params->vui.aspectRatioIdc == X265_EXTENDED_SAR &&
-            (params->vui.sarWidth != upipe_x265->sar_width ||
-             params->vui.sarHeight != upipe_x265->sar_height)) ||
-           params_overscan(params) != upipe_x265->overscan ||
-           params->internalCsp != upipe_x265->color_space;
-}
+    struct uref *flow_def_input = upipe_x265->flow_def_input;
 
-/** @internal @This fetches aspect ratio information from flow def.
- *
- * @param upipe description structure of the pipe
- * @param flow_def flow definition packet
- */
-static void upipe_x265_get_aspect_ratio(struct upipe *upipe,
-                                        struct uref *flow_def)
-{
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
-    struct urational sar;
+    if (!upipe_x265->encoder)
+        return false;
 
-    static const struct {
-        int idc;
-        int num;
-        int den;
-    } sar_to_idc[] = {
-        {  1,   1,  1, },
-        {  2,  12, 11, },
-        {  3,  10, 11, },
-        {  4,  16, 11, },
-        {  5,  40, 33, },
-        {  6,  24, 11, },
-        {  7,  20, 11, },
-        {  8,  32, 11, },
-        {  9,  80, 33, },
-        { 10,  18, 11, },
-        { 11,  15, 11, },
-        { 12,  64, 33, },
-        { 13, 160, 99, },
-        { 14,   4,  3, },
-        { 15,   3,  2, },
-        { 16,   2,  1, },
+    struct uref *flow_def_check =
+        upipe_x265_alloc_flow_def_check(upipe, flow_def_input);
+    if (unlikely(!flow_def_check)) {
+        upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
+        return true;
+    }
+    int (*attrs[])(struct uref *dst, struct uref *src) = {
+        uref_pic_flow_copy_format,
+        uref_pic_flow_copy_hsize,
+        uref_pic_flow_copy_vsize,
+        uref_pic_flow_copy_fps,
+        uref_pic_flow_copy_full_range,
+        uref_pic_flow_copy_sar,
+        uref_pic_flow_copy_overscan,
+        uref_pic_copy_progressive,
+        uref_pic_flow_copy_colour_primaries,
+        uref_pic_flow_copy_transfer_characteristics,
+        uref_pic_flow_copy_matrix_coefficients,
     };
-
-    if (!ubase_check(uref_pic_flow_get_sar(flow_def, &sar))) {
-        // unspecified aspect ratio
-        upipe_x265->aspect_ratio_idc = 0;
-        return;
+    int ret = uref_attr_copy_array(flow_def_check, flow_def_input, attrs);
+    if (unlikely(!ubase_check(ret))) {
+        uref_free(flow_def_check);
+        upipe_throw_fatal(upipe, ret);
+        return true;
     }
 
-    // look for predefined aspect ratio
-    for (unsigned i = 0; i < UBASE_ARRAY_SIZE(sar_to_idc); i++)
-        if (sar.num == sar_to_idc[i].num &&
-            sar.den == sar_to_idc[i].den) {
-            upipe_x265->aspect_ratio_idc = sar_to_idc[i].idc;
-            return;
-        }
+    if (upipe_x265_check_flow_def_check(upipe, flow_def_check)) {
+        uref_free(flow_def_check);
+        return false;
+    }
 
-    // extended aspect ratio
-    upipe_x265->aspect_ratio_idc = X265_EXTENDED_SAR;
-    upipe_x265->sar_width = sar.num;
-    upipe_x265->sar_height = sar.den;
+    if (upipe_x265->flow_def_check) {
+        upipe_notice(upipe, "flow parameters changed, restarting encoder");
+        uref_dump_notice(upipe_x265->flow_def_check, upipe->uprobe);
+        uref_dump_notice(flow_def_check, upipe->uprobe);
+    }
+    upipe_x265_store_flow_def_check(upipe, flow_def_check);
+    return true;
 }
 
 /** @internal @This sets a new input flow definition.
@@ -911,45 +957,37 @@ static int upipe_x265_set_flow_def_real(struct upipe *upipe,
                                         struct uref *flow_def)
 {
     struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+    if (upipe_x265_check_flow_def_input(upipe, flow_def)) {
+        /* nothing changed */
+        uref_free(flow_def);
+        return UBASE_ERR_NONE;
+    }
 
-    upipe_x265_store_flow_def(upipe, NULL);
-    upipe_x265_store_flow_def_requested(upipe, NULL);
+    struct uref *flow_format =
+        upipe_x265_store_flow_def_input(upipe, flow_def);
 
-    upipe_x265_get_aspect_ratio(upipe, flow_def);
+    /* close encoder if relevant attributes changed. */
+    if (unlikely(upipe_x265_need_reopen(upipe)))
+        upipe_x265_close(upipe);
 
+    upipe_x265->format = format_from_flow_def(flow_def);
+    struct urational sar = { .num = 0, .den = 0 };
+    uref_pic_flow_get_sar(flow_def, &sar);
+    upipe_x265->aspect_ratio_idc = get_aspect_ratio(&sar);
+    uref_pic_flow_get_hsize(flow_def, &upipe_x265->width);
+    uref_pic_flow_get_vsize(flow_def, &upipe_x265->height);
+    upipe_x265->progressive = uref_pic_check_progressive(flow_def);
+    upipe_x265->fullrange = ubase_check(uref_pic_flow_get_full_range(flow_def));
+    upipe_x265->color_space = format_to_color_space(upipe_x265->format);
     bool overscan;
     if (!ubase_check(uref_pic_flow_get_overscan(flow_def, &overscan)))
         upipe_x265->overscan = OVERSCAN_UNKNOWN;
     else
         upipe_x265->overscan = overscan ? OVERSCAN_CROP : OVERSCAN_SHOW;
 
-    uint64_t hsize, vsize;
-    if (ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) &&
-        ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
-        upipe_x265->width = hsize;
-        upipe_x265->height = vsize;
-    }
+    upipe_x265_require(upipe, flow_format);
 
-    flow_def = upipe_x265_store_flow_def_input(upipe, flow_def);
-    if (flow_def != NULL) {
-        uref_pic_flow_clear_format(flow_def);
-        upipe_x265_require_flow_format(upipe, flow_def);
-    }
-
-    /* setup encoder params */
-    int bit_depth = upipe_x265->bit_depth;
-    UBASE_RETURN(
-        get_pixel_format(upipe_x265->flow_def_input, &upipe_x265->pixel_format))
-    if (bit_depth == 0)
-        bit_depth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
-    upipe_x265->color_space =
-        pixel_format_to_color_space(upipe_x265->pixel_format);
-
-    upipe_x265->api = x265_api_get(bit_depth);
-    if (unlikely(upipe_x265->api == NULL))
-        return UBASE_ERR_INVALID;
-
-    return setup_encoder_params(upipe);
+    return UBASE_ERR_NONE;
 }
 
 /** @internal @This processes pictures.
@@ -967,31 +1005,26 @@ static bool upipe_x265_handle(struct upipe *upipe,
 
     if (unlikely(uref != NULL && ubase_check(uref_flow_get_def(uref, NULL)))) {
         int ret = upipe_x265_set_flow_def_real(upipe, uref);
-        if (unlikely(!ubase_check(ret)))
+        if (unlikely(!ubase_check(ret))) {
+            upipe_err(upipe, "fail to configure encoder");
+            upipe_x265_store_flow_def_input(upipe, NULL);
             upipe_throw_fatal(upipe, ret);
+        }
         return true;
     }
 
-    static const char *const chromas_list[][3] = {
-        [PIX_FMT_YUV420P]     = {"y8", "u8", "v8"},
-        [PIX_FMT_YUV422P]     = {"y8", "u8", "v8"},
-        [PIX_FMT_YUV444P]     = {"y8", "u8", "v8"},
-        [PIX_FMT_YUV420P10LE] = {"y10l", "u10l", "v10l"},
-        [PIX_FMT_YUV422P10LE] = {"y10l", "u10l", "v10l"},
-        [PIX_FMT_YUV444P10LE] = {"y10l", "u10l", "v10l"},
-        [PIX_FMT_YUV420P12LE] = {"y12l", "u12l", "v12l"},
-        [PIX_FMT_YUV422P12LE] = {"y12l", "u12l", "v12l"},
-        [PIX_FMT_YUV444P12LE] = {"y12l", "u12l", "v12l"},
-    };
-    const char * const *chromas = chromas_list[upipe_x265->pixel_format];
-    size_t width, height;
+    if (unlikely(!upipe_x265->flow_def_input)) {
+        upipe_warn(upipe, "no input flow defintion set, dropping...");
+        uref_free(uref);
+        return true;
+    }
+
     x265_picture pic;
     x265_nal *nals = NULL;
-    int i, size = 0, header_size = 0;
+    int size = 0, header_size = 0;
     uint32_t nals_num = 0;
     struct ubuf *ubuf_block;
     uint8_t *buf = NULL;
-    bool needopen = false;
     int ret = 0;
 
 #if X265_BUILD >= 210 && X265_BUILD < 213
@@ -1000,6 +1033,13 @@ static bool upipe_x265_handle(struct upipe *upipe,
     x265_picture *pic_out = &pic;
 #endif
 
+    /* open encoder if not already opened or if update needed */
+    if (unlikely(!upipe_x265_open(upipe, uref))) {
+        upipe_err(upipe, "Could not open encoder");
+        uref_free(uref);
+        return true;
+    }
+
     /* init x265 picture */
     upipe_x265->api->picture_init(&upipe_x265->params, &pic);
 
@@ -1007,39 +1047,12 @@ static bool upipe_x265_handle(struct upipe *upipe,
         likely(upipe_x265->encoder))
         speedcontrol_update(upipe);
 
+    const struct uref_pic_flow_format *format = upipe_x265->format;
     if (likely(uref)) {
         pic.userData = uref;
-        pic.bitDepth = pixel_format_to_bit_depth(upipe_x265->pixel_format);
-        pic.colorSpace = pixel_format_to_color_space(upipe_x265->pixel_format);
+        pic.bitDepth = format_to_bit_depth(format);
+        pic.colorSpace = format_to_color_space(format);
 
-        uref_pic_size(uref, &width, &height, NULL);
-
-        /* open encoder if not already opened or if update needed */
-        if (unlikely(!upipe_x265->encoder)) {
-            needopen = true;
-        } else if (unlikely(upipe_x265_need_update(upipe, width, height))) {
-            x265_param *params = &upipe_x265->params;
-            upipe_notice_va(upipe, "Flow parameters changed, reconfiguring encoder "
-                            "(%d:%zu, %d:%zu, %d/%d/%d:%d/%d/%d, %s:%s)",
-                upipe_x265->width, width,
-                upipe_x265->height, height,
-                params->vui.aspectRatioIdc,
-                params->vui.aspectRatioIdc == X265_EXTENDED_SAR ? params->vui.sarWidth : 0,
-                params->vui.aspectRatioIdc == X265_EXTENDED_SAR ? params->vui.sarHeight : 0,
-                upipe_x265->aspect_ratio_idc,
-                upipe_x265->aspect_ratio_idc == X265_EXTENDED_SAR ? upipe_x265->sar_width : 0,
-                upipe_x265->aspect_ratio_idc == X265_EXTENDED_SAR ? upipe_x265->sar_height : 0,
-                overscan_to_str(params_overscan(params)),
-                overscan_to_str(upipe_x265->overscan));
-            needopen = true;
-        }
-        if (unlikely(needopen)) {
-            if (unlikely(!upipe_x265_open(upipe, width, height))) {
-                upipe_err(upipe, "Could not open encoder");
-                uref_free(uref);
-                return true;
-            }
-        }
         if (upipe_x265->flow_def_requested == NULL)
             return false;
 
@@ -1070,15 +1083,15 @@ static bool upipe_x265_handle(struct upipe *upipe,
         }
 
         /* map */
-        for (i = 0; i < 3; i++) {
+        for (int i = 0; i < format->nb_planes; i++) {
+            const char *chroma = format->planes[i].chroma;
             size_t stride;
             const uint8_t *plane;
-            if (unlikely(!ubase_check(uref_pic_plane_size(uref, chromas[i], &stride,
-                                              NULL, NULL, NULL)) ||
-                         !ubase_check(uref_pic_plane_read(uref, chromas[i], 0, 0, -1, -1,
-                                              &plane)))) {
-                upipe_err_va(upipe, "Could not read origin chroma %s",
-                             chromas[i]);
+            if (unlikely(!ubase_check(uref_pic_plane_size(uref, chroma, &stride,
+                                                          NULL, NULL, NULL)) ||
+                         !ubase_check(uref_pic_plane_read(uref, chroma, 0, 0,
+                                                          -1, -1, &plane)))) {
+                upipe_err_va(upipe, "Could not read origin chroma %s", chroma);
                 uref_free(uref);
                 return true;
             }
@@ -1092,14 +1105,16 @@ static bool upipe_x265_handle(struct upipe *upipe,
                                               &pic, pic_out);
 
         /* unmap */
-        for (i = 0; i < 3; i++)
-            uref_pic_plane_unmap(uref, chromas[i], 0, 0, -1, -1);
+        for (int i = 0; i < format->nb_planes; i++)
+            uref_pic_plane_unmap(uref, format->planes[i].chroma, 0, 0, -1, -1);
 
         ubuf_free(uref_detach_ubuf(uref));
 
         /* delayed frame, increase latency */
-        if (unlikely(ret == 0))
-                upipe_x265->latency_frames++;
+        if (unlikely(ret == 0)) {
+            upipe_x265->latency_frames++;
+            upipe_x265->delayed_frames = true;
+        }
 
     } else {
         /* NULL uref, flushing delayed frame */
@@ -1123,7 +1138,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
     uref = pic.userData;
     assert(uref);
 
-    for (i = 0; i < nals_num; i++) {
+    for (int i = 0; i < nals_num; i++) {
         size += nals[i].sizeBytes;
         if (nals[i].type == NAL_UNIT_VPS ||
             nals[i].type == NAL_UNIT_SPS ||
@@ -1147,7 +1162,7 @@ static bool upipe_x265_handle(struct upipe *upipe,
 
     /* NAL offsets */
     uint64_t offset = 0;
-    for (i = 0; i < nals_num - 1; i++) {
+    for (int i = 0; i < nals_num - 1; i++) {
         offset += nals[i].sizeBytes;
         uref_h26x_set_nal_offset(uref, offset, i);
     }
@@ -1261,20 +1276,13 @@ static void upipe_x265_input(struct upipe *upipe, struct uref *uref,
 static int upipe_x265_check_flow_format(struct upipe *upipe,
                                         struct uref *flow_format)
 {
-    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
     if (flow_format == NULL)
         return UBASE_ERR_INVALID;
 
-    upipe_x265->headers_requested =
-        ubase_check(uref_flow_get_global(flow_format));
-    upipe_x265->encaps_requested = uref_h26x_flow_infer_encaps(flow_format);
-    bool annexb = upipe_x265->encaps_requested == UREF_H26X_ENCAPS_ANNEXB;
-    if (upipe_x265->params.bAnnexB != annexb) {
-        upipe_x265->params.bAnnexB = annexb;
-        _upipe_x265_reconfigure(upipe);
+    if (upipe_x265_check_flow_def_requested(upipe, flow_format)) {
+        uref_free(flow_format);
+        return UBASE_ERR_NONE;
     }
-
-    upipe_x265_store_flow_def(upipe, NULL);
     upipe_x265_store_flow_def_requested(upipe, NULL);
     upipe_x265_require_ubuf_mgr(upipe, flow_format);
     return UBASE_ERR_NONE;
@@ -1289,10 +1297,27 @@ static int upipe_x265_check_flow_format(struct upipe *upipe,
 static int upipe_x265_check_ubuf_mgr(struct upipe *upipe,
                                      struct uref *flow_format)
 {
+    struct upipe_x265 *upipe_x265 = upipe_x265_from_upipe(upipe);
+
     if (flow_format == NULL)
         return UBASE_ERR_NONE; /* should not happen */
 
+    if (upipe_x265_check_flow_def_requested(upipe, flow_format)) {
+        uref_free(flow_format);
+        return UBASE_ERR_NONE;
+    }
+
     upipe_x265_store_flow_def_requested(upipe, flow_format);
+    enum uref_h26x_encaps encaps_requested =
+        uref_h26x_flow_infer_encaps(flow_format);
+    bool headers_requested = ubase_check(uref_flow_get_global(flow_format));
+    if (unlikely(upipe_x265->encaps_requested != encaps_requested ||
+                 upipe_x265->headers_requested != headers_requested)) {
+        upipe_notice(upipe, "encaps changed, restarting encoder");
+        upipe_x265_close(upipe);
+    }
+    upipe_x265->encaps_requested = encaps_requested;
+    upipe_x265->headers_requested = headers_requested;
 
     bool was_buffered = !upipe_x265_check_input(upipe);
     upipe_x265_output_input(upipe);
@@ -1327,29 +1352,19 @@ static int upipe_x265_set_flow_def(struct upipe *upipe,
         return UBASE_ERR_INVALID;
 
     /* check bit depth */
-    enum pixel_format pixel_format;
-    int ret = get_pixel_format(flow_def, &pixel_format);
-    if (unlikely(!ubase_check(ret)))
-        return ret;
-    int bit_depth = upipe_x265->bit_depth;
-    int input_bit_depth = pixel_format_to_bit_depth(pixel_format);
-    if (bit_depth == 0)
-        bit_depth = input_bit_depth;
-    else if (bit_depth != input_bit_depth)
+    const struct uref_pic_flow_format *fmt = format_from_flow_def(flow_def);
+    if (unlikely(!fmt))
         return UBASE_ERR_INVALID;
-
+    int bit_depth = format_to_bit_depth(fmt);
+    if (upipe_x265->bit_depth != 0 && upipe_x265->bit_depth != bit_depth) {
+        upipe_err_va(upipe, "bit depth %d doesn't match configuration (%d)",
+                     bit_depth, upipe_x265->bit_depth);
+        return UBASE_ERR_INVALID;
+    }
     const struct x265_api *api = x265_api_get(bit_depth);
     if (unlikely(api == NULL)) {
         upipe_err_va(upipe, "unsupported bit depth %d", bit_depth);
         return UBASE_ERR_INVALID;
-    }
-
-    /* Extract relevant attributes to flow def check. */
-    struct uref *flow_def_check =
-        upipe_x265_alloc_flow_def_check(upipe, flow_def);
-    if (unlikely(flow_def_check == NULL)) {
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
     }
 
     struct urational fps;
@@ -1358,37 +1373,11 @@ static int upipe_x265_set_flow_def(struct upipe *upipe,
         !ubase_check(uref_pic_flow_get_hsize(flow_def, &hsize)) ||
         !ubase_check(uref_pic_flow_get_vsize(flow_def, &vsize))) {
         upipe_err(upipe, "incompatible flow def");
-        uref_free(flow_def_check);
         return UBASE_ERR_INVALID;
     }
 
-    if (unlikely(!ubase_check(uref_pic_flow_copy_format(flow_def_check, flow_def)) ||
-                 !ubase_check(uref_pic_flow_set_fps(flow_def_check, fps)) ||
-                 !ubase_check(uref_pic_flow_set_hsize(flow_def_check, hsize)) ||
-                 !ubase_check(uref_pic_flow_set_vsize(flow_def_check, vsize)))) {
-        uref_free(flow_def_check);
-        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
-        return UBASE_ERR_ALLOC;
-    }
-
-    if (upipe_x265->flow_def_check != NULL) {
-        /* Die if the attributes changed. */
-        if (!upipe_x265_check_flow_def_check(upipe, flow_def_check)) {
-            uref_free(flow_def_check);
-            return UBASE_ERR_BUSY;
-        }
-        uref_free(flow_def_check);
-
-    } else {
-        if (upipe_x265->sc_latency) {
-            /* init speedcontrol */
-            upipe_x265->sc_buffer_size = upipe_x265->sc_latency;
-            upipe_x265->sc_buffer_fill = 0;
-            upipe_x265->sc_max_preset = 4;
-        }
-
-        upipe_x265_store_flow_def_check(upipe, flow_def_check);
-    }
+    if (upipe_x265_check_flow_def_input(upipe, flow_def))
+        return UBASE_ERR_NONE;
 
     flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
@@ -1412,19 +1401,20 @@ static int _upipe_x265_provide_flow_format(struct upipe *upipe,
     struct uref *flow_format = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow_format);
 
-    enum pixel_format pixel_format;
-    if (unlikely(!ubase_check(get_pixel_format(flow_format, &pixel_format)))) {
+    const struct uref_pic_flow_format *fmt = format_from_flow_def(flow_format);
+    if (unlikely(!fmt)) {
         uref_pic_flow_set_yuv420p(flow_format);
         return urequest_provide_flow_format(request, flow_format);
     }
 
-    int bit_depth = pixel_format_to_bit_depth(pixel_format);
-    int color_space = pixel_format_to_color_space(pixel_format);
+    int bit_depth = format_to_bit_depth(fmt);
+    int color_space = format_to_color_space(fmt);
     if (upipe_x265->bit_depth == 0 || upipe_x265->bit_depth == bit_depth)
         return urequest_provide_flow_format(request, flow_format);
 
-    pixel_format = pixel_format_find(upipe_x265->bit_depth, color_space);
-    const struct uref_pic_flow_format *fmt = pixel_format_desc[pixel_format];
+    fmt = format_find(upipe_x265->bit_depth, color_space);
+    if (unlikely(!fmt))
+        fmt = &uref_pic_flow_format_yuv420p;
     uref_pic_flow_set_format(flow_format, fmt);
     return urequest_provide_flow_format(request, flow_format);
 }
