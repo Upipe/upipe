@@ -568,7 +568,7 @@ upipe_x264_test-libs = libupipe libupipe_x264
 
 tests += upipe_x265_test
 upipe_x265_test-src = upipe_x265_test.c
-upipe_x265_test-libs = libupipe libupipe_x265
+upipe_x265_test-libs = libupump_ev libupipe libupipe_modules libupipe_x265
 check-$(builddir)/upipe_x265_test: log-env += ASAN_OPTIONS="detect_leaks=0"
 
 tests += upipe_zoneplate_source_test
