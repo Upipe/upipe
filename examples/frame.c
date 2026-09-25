@@ -67,10 +67,13 @@
 
 static const char *source = NULL;
 static const char *framer = "(none)";
+static const char *decode_hw_type = NULL;
+static const char *decode_hw_device = NULL;
 static enum uprobe_log_level uprobe_log_level = UPROBE_LOG_DEBUG;
 static struct uref_mgr *uref_mgr = NULL;
 static struct uclock *uclock = NULL;
 static struct uprobe *main_probe = NULL;
+static struct upipe *upipe_src = NULL;
 static unsigned additional_framer = 0;
 static bool decode = false;
 static bool dump_date = false;
@@ -94,6 +97,8 @@ enum {
     OPT_RANDOM,
     OPT_HEX,
     OPT_HEX_SIZE,
+    OPT_DECODE_HW_TYPE,
+    OPT_DECODE_HW_DEVICE,
 };
 
 static struct option options[] = {
@@ -111,6 +116,8 @@ static struct option options[] = {
     { "random", no_argument, NULL, OPT_RANDOM },
     { "hex", no_argument, NULL, OPT_HEX},
     { "hex-size", required_argument, NULL, OPT_HEX_SIZE },
+    { "decode-hw-type", required_argument, NULL, OPT_DECODE_HW_TYPE },
+    { "decode-hw-device", required_argument, NULL, OPT_DECODE_HW_DEVICE },
     { NULL, 0, NULL, 0 },
 };
 
@@ -297,9 +304,14 @@ static int catch_es(struct uprobe *uprobe, struct upipe *upipe,
                 assert(upipe);
                 upipe_mgr_release(upipe_fdec_mgr);
 
-                if (!strcmp(framer, "video")) {
+                if (!strcmp(framer, "video") || !strcmp(framer, "h264") ||
+                    !strcmp(framer, "h265")) {
                     upipe_set_option(upipe, "threads", "auto");
                     upipe_set_option(upipe, "ec", "1");
+                    if (decode_hw_type && decode_hw_device) {
+                        ubase_assert(upipe_avcdec_set_hw_config(
+                            upipe, decode_hw_type, decode_hw_device));
+                    }
                 }
 
                 upipe = upipe_void_chain_output(
@@ -508,6 +520,13 @@ static struct upipe *upipe_source_alloc(const char *uri, struct uprobe *uprobe)
     return upipe_src;
 }
 
+static void stop(void)
+{
+    struct upipe *src = upipe_src;
+    upipe_src = NULL;
+    upipe_release(src);
+}
+
 static void usage(const char *name)
 {
     fprintf(stderr, "usage: %s [options] <source>\n", name);
@@ -520,6 +539,20 @@ static void usage(const char *name)
             fprintf(stderr, " [<value>]");
         fprintf(stderr, "\n");
     }
+}
+
+static void sighandler(struct upump *upump)
+{
+    static bool forced = false;
+
+    if (forced)
+        exit(-1);
+    forced = true;
+
+    int signal = (int)upump_get_opaque(upump, ptrdiff_t);
+    uprobe_err_va(main_probe, NULL, "signal %s received, exiting",
+                  strsignal(signal));
+    stop();
 }
 
 int main(int argc, char *argv[])
@@ -592,6 +625,14 @@ int main(int argc, char *argv[])
                 dump_hex_size = atoi(optarg);
                 break;
 
+            case OPT_DECODE_HW_TYPE:
+                decode_hw_type = optarg;
+                break;
+
+            case OPT_DECODE_HW_DEVICE:
+                decode_hw_device = optarg;
+                break;
+
             default:
                 fprintf(stderr, "unknown option -%c\n", opt);
                 break;
@@ -632,7 +673,7 @@ int main(int argc, char *argv[])
     }
 
     /* create source */
-    struct upipe *upipe_src = upipe_source_alloc(source, uprobe);
+    upipe_src = upipe_source_alloc(source, uprobe);
 
     if (ts) {
         struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
@@ -687,6 +728,41 @@ int main(int argc, char *argv[])
         upipe_mgr_release(upipe_framer_mgr);
         upipe_set_output(upipe_src, upipe_framer);
 
+        struct upipe *upipe = upipe_framer;
+
+        if (decode) {
+            struct upipe_mgr *upipe_fdec_mgr = upipe_fdec_mgr_alloc();
+            struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+            upipe_fdec_mgr_set_avcdec_mgr(upipe_fdec_mgr, upipe_avcdec_mgr);
+            upipe_mgr_release(upipe_avcdec_mgr);
+
+            upipe = upipe_void_chain_output(upipe, upipe_fdec_mgr,
+                                            uprobe_pfx_alloc(uprobe_use(uprobe),
+                                                             UPROBE_LOG_VERBOSE,
+                                                             "fdec"));
+            assert(upipe);
+            upipe_mgr_release(upipe_fdec_mgr);
+
+            if (!strcmp(framer, "video") || !strcmp(framer, "h264") ||
+                !strcmp(framer, "h265")) {
+                upipe_set_option(upipe, "threads", "auto");
+                upipe_set_option(upipe, "ec", "1");
+                if (decode_hw_type && decode_hw_device) {
+                    ubase_assert(upipe_avcdec_set_hw_config(
+                        upipe, decode_hw_type, decode_hw_device));
+                }
+            }
+
+            struct upipe_mgr *upipe_probe_uref_mgr =
+                upipe_probe_uref_mgr_alloc();
+            upipe = upipe_void_chain_output(
+                upipe, upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(uprobe_alloc(catch_uref, uprobe_use(uprobe)),
+                                 UPROBE_LOG_VERBOSE, "probe dec"));
+            assert(upipe);
+            upipe_mgr_release(upipe_probe_uref_mgr);
+        }
+
         struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
         assert(upipe_null_mgr);
         struct upipe *upipe_null = upipe_void_alloc(
@@ -695,13 +771,25 @@ int main(int argc, char *argv[])
                 uprobe_use(uprobe),
                 UPROBE_LOG_VERBOSE, "null"));
         upipe_mgr_release(upipe_null_mgr);
-        upipe_set_output(upipe_framer, upipe_null);
-        upipe_release(upipe_framer);
+        upipe_set_output(upipe, upipe_null);
+        upipe_release(upipe);
         upipe_release(upipe_null);
     }
 
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
+    struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGTERM, NULL, SIGTERM);
+    upump_set_status(sigterm_pump, false);
+    upump_start(sigterm_pump);
+
     /* main loop */
     upump_mgr_run(upump_mgr, NULL);
+
+    upump_free(sigterm_pump);
+    upump_free(sigint_pump);
 
     ulist_delete_foreach(&es_list, uchain, uchain_tmp) {
         struct es *es = es_from_uchain(uchain);
