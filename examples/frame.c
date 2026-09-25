@@ -67,6 +67,8 @@
 
 static const char *source = NULL;
 static const char *framer = "(none)";
+static const char *decode_hw_type = NULL;
+static const char *decode_hw_device = NULL;
 static enum uprobe_log_level uprobe_log_level = UPROBE_LOG_DEBUG;
 static struct uref_mgr *uref_mgr = NULL;
 static struct uclock *uclock = NULL;
@@ -95,6 +97,8 @@ enum {
     OPT_RANDOM,
     OPT_HEX,
     OPT_HEX_SIZE,
+    OPT_DECODE_HW_TYPE,
+    OPT_DECODE_HW_DEVICE,
 };
 
 static struct option options[] = {
@@ -112,6 +116,8 @@ static struct option options[] = {
     { "random", no_argument, NULL, OPT_RANDOM },
     { "hex", no_argument, NULL, OPT_HEX},
     { "hex-size", required_argument, NULL, OPT_HEX_SIZE },
+    { "decode-hw-type", required_argument, NULL, OPT_DECODE_HW_TYPE },
+    { "decode-hw-device", required_argument, NULL, OPT_DECODE_HW_DEVICE },
     { NULL, 0, NULL, 0 },
 };
 
@@ -301,6 +307,10 @@ static int catch_es(struct uprobe *uprobe, struct upipe *upipe,
                 if (!strcmp(framer, "video")) {
                     upipe_set_option(upipe, "threads", "auto");
                     upipe_set_option(upipe, "ec", "1");
+                    if (decode_hw_type && decode_hw_device) {
+                        ubase_assert(upipe_avcdec_set_hw_config(
+                            upipe, decode_hw_type, decode_hw_device));
+                    }
                 }
 
                 upipe = upipe_void_chain_output(
@@ -612,6 +622,14 @@ int main(int argc, char *argv[])
 
             case OPT_HEX_SIZE:
                 dump_hex_size = atoi(optarg);
+                break;
+
+            case OPT_DECODE_HW_TYPE:
+                decode_hw_type = optarg;
+                break;
+
+            case OPT_DECODE_HW_DEVICE:
+                decode_hw_device = optarg;
                 break;
 
             default:
