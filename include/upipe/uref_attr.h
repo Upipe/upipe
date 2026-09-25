@@ -30,6 +30,13 @@ extern "C" {
  */
 static inline int uref_attr_import(struct uref *uref, struct uref *uref_attr)
 {
+    /* duration and rate live in struct uref but were dictionary attributes,
+     * which an import copies: keep copying them when the source has them */
+    if (uref_attr->duration != UINT64_MAX)
+        uref->duration = uref_attr->duration;
+    if (uref_attr->rate.den != 0)
+        uref->rate = uref_attr->rate;
+
     if (uref_attr->udict == NULL)
         return UBASE_ERR_NONE;
     if (uref->udict == NULL) {
