@@ -71,6 +71,7 @@ static enum uprobe_log_level uprobe_log_level = UPROBE_LOG_DEBUG;
 static struct uref_mgr *uref_mgr = NULL;
 static struct uclock *uclock = NULL;
 static struct uprobe *main_probe = NULL;
+static struct upipe *upipe_src = NULL;
 static unsigned additional_framer = 0;
 static bool decode = false;
 static bool dump_date = false;
@@ -508,6 +509,13 @@ static struct upipe *upipe_source_alloc(const char *uri, struct uprobe *uprobe)
     return upipe_src;
 }
 
+static void stop(void)
+{
+    struct upipe *src = upipe_src;
+    upipe_src = NULL;
+    upipe_release(src);
+}
+
 static void usage(const char *name)
 {
     fprintf(stderr, "usage: %s [options] <source>\n", name);
@@ -520,6 +528,20 @@ static void usage(const char *name)
             fprintf(stderr, " [<value>]");
         fprintf(stderr, "\n");
     }
+}
+
+static void sighandler(struct upump *upump)
+{
+    static bool forced = false;
+
+    if (forced)
+        exit(-1);
+    forced = true;
+
+    int signal = (int)upump_get_opaque(upump, ptrdiff_t);
+    uprobe_err_va(main_probe, NULL, "signal %s received, exiting",
+                  strsignal(signal));
+    stop();
 }
 
 int main(int argc, char *argv[])
@@ -632,7 +654,7 @@ int main(int argc, char *argv[])
     }
 
     /* create source */
-    struct upipe *upipe_src = upipe_source_alloc(source, uprobe);
+    upipe_src = upipe_source_alloc(source, uprobe);
 
     if (ts) {
         struct upipe_mgr *upipe_ts_demux_mgr = upipe_ts_demux_mgr_alloc();
@@ -699,6 +721,15 @@ int main(int argc, char *argv[])
         upipe_release(upipe_framer);
         upipe_release(upipe_null);
     }
+
+    struct upump *sigint_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGINT, NULL, SIGINT);
+    upump_set_status(sigint_pump, false);
+    upump_start(sigint_pump);
+    struct upump *sigterm_pump = upump_alloc_signal(upump_mgr, sighandler,
+            (void *)SIGTERM, NULL, SIGTERM);
+    upump_set_status(sigterm_pump, false);
+    upump_start(sigterm_pump);
 
     /* main loop */
     upump_mgr_run(upump_mgr, NULL);
