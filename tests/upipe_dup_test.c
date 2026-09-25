@@ -35,6 +35,9 @@
 #define UPROBE_LOG_LEVEL UPROBE_LOG_DEBUG
 
 static int counter = 0;
+/* the uref given to the dup, and how many sinks received it rather than a copy */
+static struct uref *original = NULL;
+static int originals = 0;
 static int flow_foo_counter = 0;
 static int flow_bar_counter = 0;
 
@@ -71,6 +74,8 @@ static void test_input(struct upipe *upipe, struct uref *uref,
 {
     assert(uref != NULL);
     counter++;
+    if (uref == original)
+        originals++;
     uref_free(uref);
 }
 
@@ -154,8 +159,11 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    original = uref;
     upipe_input(upipe_dup, uref, NULL);
     assert(counter == 1);
+    /* the only sub takes the original: nothing was copied */
+    assert(originals == 1);
     counter = 0;
 
     struct upipe *upipe_dup_output1 = upipe_void_alloc_sub(upipe_dup,
@@ -172,8 +180,11 @@ int main(int argc, char *argv[])
 
     uref = uref_alloc(uref_mgr);
     assert(uref != NULL);
+    original = uref;
     upipe_input(upipe_dup, uref, NULL);
     assert(counter == 2);
+    /* one copy for the first sub, the original to the last */
+    assert(originals == 2);
     assert(flow_foo_counter == 1);
     assert(flow_bar_counter == 2);
 
