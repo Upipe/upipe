@@ -304,7 +304,8 @@ static int catch_es(struct uprobe *uprobe, struct upipe *upipe,
                 assert(upipe);
                 upipe_mgr_release(upipe_fdec_mgr);
 
-                if (!strcmp(framer, "video")) {
+                if (!strcmp(framer, "video") || !strcmp(framer, "h264") ||
+                    !strcmp(framer, "h265")) {
                     upipe_set_option(upipe, "threads", "auto");
                     upipe_set_option(upipe, "ec", "1");
                     if (decode_hw_type && decode_hw_device) {
@@ -727,6 +728,41 @@ int main(int argc, char *argv[])
         upipe_mgr_release(upipe_framer_mgr);
         upipe_set_output(upipe_src, upipe_framer);
 
+        struct upipe *upipe = upipe_framer;
+
+        if (decode) {
+            struct upipe_mgr *upipe_fdec_mgr = upipe_fdec_mgr_alloc();
+            struct upipe_mgr *upipe_avcdec_mgr = upipe_avcdec_mgr_alloc();
+            upipe_fdec_mgr_set_avcdec_mgr(upipe_fdec_mgr, upipe_avcdec_mgr);
+            upipe_mgr_release(upipe_avcdec_mgr);
+
+            upipe = upipe_void_chain_output(upipe, upipe_fdec_mgr,
+                                            uprobe_pfx_alloc(uprobe_use(uprobe),
+                                                             UPROBE_LOG_VERBOSE,
+                                                             "fdec"));
+            assert(upipe);
+            upipe_mgr_release(upipe_fdec_mgr);
+
+            if (!strcmp(framer, "video") || !strcmp(framer, "h264") ||
+                !strcmp(framer, "h265")) {
+                upipe_set_option(upipe, "threads", "auto");
+                upipe_set_option(upipe, "ec", "1");
+                if (decode_hw_type && decode_hw_device) {
+                    ubase_assert(upipe_avcdec_set_hw_config(
+                        upipe, decode_hw_type, decode_hw_device));
+                }
+            }
+
+            struct upipe_mgr *upipe_probe_uref_mgr =
+                upipe_probe_uref_mgr_alloc();
+            upipe = upipe_void_chain_output(
+                upipe, upipe_probe_uref_mgr,
+                uprobe_pfx_alloc(uprobe_alloc(catch_uref, uprobe_use(uprobe)),
+                                 UPROBE_LOG_VERBOSE, "probe dec"));
+            assert(upipe);
+            upipe_mgr_release(upipe_probe_uref_mgr);
+        }
+
         struct upipe_mgr *upipe_null_mgr = upipe_null_mgr_alloc();
         assert(upipe_null_mgr);
         struct upipe *upipe_null = upipe_void_alloc(
@@ -735,8 +771,8 @@ int main(int argc, char *argv[])
                 uprobe_use(uprobe),
                 UPROBE_LOG_VERBOSE, "null"));
         upipe_mgr_release(upipe_null_mgr);
-        upipe_set_output(upipe_framer, upipe_null);
-        upipe_release(upipe_framer);
+        upipe_set_output(upipe, upipe_null);
+        upipe_release(upipe);
         upipe_release(upipe_null);
     }
 
