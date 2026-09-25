@@ -788,6 +788,9 @@ int main(int argc, char *argv[])
     /* main loop */
     upump_mgr_run(upump_mgr, NULL);
 
+    upump_free(sigterm_pump);
+    upump_free(sigint_pump);
+
     ulist_delete_foreach(&es_list, uchain, uchain_tmp) {
         struct es *es = es_from_uchain(uchain);
         es_del(es);
