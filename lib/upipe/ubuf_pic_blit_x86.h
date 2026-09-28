@@ -39,6 +39,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
 
     else if (threshold != 0xff && alpha_multiplier == 0xff) {
         if (hsub == 1) {
+            if (__builtin_cpu_supports("avx512bw")) {
+                upipe_blit8_threshold_hsub1_avx512(dst, bg, src, alpha, hsize, threshold);
+                return true;
+            }
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit8_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
@@ -47,6 +51,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
         }
 
         if (hsub == 2) {
+            if (__builtin_cpu_supports("avx512bw")) {
+                upipe_blit8_threshold_hsub2_avx512(dst, bg, src, alpha, hsize, threshold);
+                return true;
+            }
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit8_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
@@ -112,6 +120,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
 
     else if (threshold != 0x3ff && alpha_multiplier == 0x3ff) {
         if (hsub == 1) {
+            if (__builtin_cpu_supports("avx512bw")) {
+                upipe_blit10_threshold_hsub1_avx512(dst, bg, src, alpha, hsize, threshold);
+                return true;
+            }
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit10_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
@@ -120,6 +132,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
         }
 
         if (hsub == 2) {
+            if (__builtin_cpu_supports("avx512bw")) {
+                upipe_blit10_threshold_hsub2_avx512(dst, bg, src, alpha, hsize, threshold);
+                return true;
+            }
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit10_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;

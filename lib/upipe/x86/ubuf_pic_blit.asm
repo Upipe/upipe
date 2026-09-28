@@ -9,6 +9,10 @@ blit10_alpha_shuffle: db 0,1, 4,5, 8,9, 12,13
     times 8 db -1
 blit8_alpha_shuffle: db 0, 2, 4, 6, 8, 10, 12, 14
     times 8 db -1
+; vpermt2w indices selecting the even words of two concatenated zmm registers
+blit10_alpha_permute:
+    dw  0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30
+    dw 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62
 blit8_blend_bias: dw 0x7f81
 blit8_blend_101: dw 0x101
 blit8_blend_80: db 0x80
@@ -424,5 +428,199 @@ cglobal blit10_blend_hsub2, 5, 11, 9, dst_, bg_, src_, alpha_, hsize_
     jae .ret
     ALIGN 16
     SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
+    .ret:
+RET
+
+; The avx512 kernels replace the +0x80 bias and the pand/pandn/por select with an
+; unsigned compare into a mask register and a merge-masked load, and predicate the
+; trailing samples instead of falling back to scalar code.  Masked loads suppress
+; faults on masked-out samples, so the tail never reads past the end of the row
+; and any hsize is accepted.
+
+; Build k2, the predicate for the trailing hsize_q samples, and leave -1 in r6q
+; for the alpha predicates below.  %1 is the mask width: q for byte samples,
+; d for word samples.
+%macro TAIL_MASK 1
+    mov r6q, -1
+    bzhi r7q, r6q, hsize_q
+    kmov%1 k2, r7 %+ %1
+%endmacro
+
+; Build k3 and k4, the predicates for the two alpha vectors feeding the trailing
+; samples of a subsampled kernel.  %2 is the number of alpha samples per vector.
+%macro TAIL_MASK_ALPHA 2
+    add hsize_q, hsize_q   ; alpha samples for the trailing destination samples
+    bzhi r7q, r6q, hsize_q ; bzhi leaves every bit set when the count exceeds the width
+    kmov%1 k3, r7 %+ %1
+    sub hsize_q, %2
+    jle %%lo_only
+        bzhi r7q, r6q, hsize_q
+        kmov%1 k4, r7 %+ %1
+        jmp %%done
+    %%lo_only:
+        kxor%1 k4, k4, k4
+    %%done:
+%endmacro
+
+INIT_ZMM avx512
+
+%define threshold m0
+%define blend m1
+%define alp m2
+
+cglobal blit8_threshold_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
+    vpbroadcastb threshold, threshold_d
+    mov r6q, hsize_q
+    and r6q, -mmsize ; samples handled by the vector loop
+    add dst_q, r6q
+    add bg_q, r6q
+    add src_q, r6q
+    add alpha_q, r6q
+    neg r6q          ; count the index up to zero
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        vpcmpub k1, threshold, [alpha_q + r6q], 1 ; threshold < alpha
+        movu blend, [bg_q + r6q]
+        vmovdqu8 blend{k1}, [src_q + r6q]
+        movu [dst_q + r6q], blend
+        add r6q, mmsize
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize-1
+    jz .ret
+    TAIL_MASK q
+    vmovdqu8 alp{k2}{z}, [alpha_q]
+    vpcmpub k1, threshold, alp, 1
+    kandq k1, k1, k2 ; a zero threshold would otherwise select samples past the row
+    vmovdqu8 blend{k2}{z}, [bg_q]
+    vmovdqu8 blend{k1}, [src_q]
+    vmovdqu8 [dst_q]{k2}, blend
+    .ret:
+RET
+
+%define threshold m0
+%define blend m1
+%define alp m2
+%define alp2 m3
+
+cglobal blit8_threshold_hsub2, 6, 8, 4, dst_, bg_, src_, alpha_, hsize_, threshold_
+    vpbroadcastb threshold, threshold_d
+    mov r6q, hsize_q
+    and r6q, -mmsize
+    add dst_q, r6q
+    add bg_q, r6q
+    add src_q, r6q
+    lea alpha_q, [alpha_q + 2*r6q]
+    neg r6q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        movu alp, [alpha_q + 2*r6q]
+        movu alp2, [alpha_q + 2*r6q + mmsize]
+        ; vpmovwb keeps the low byte of every word, i.e. every second alpha sample
+        vpmovwb ymm %+ alp, alp
+        vpmovwb ymm %+ alp2, alp2
+        vinserti64x4 alp, alp, ymm %+ alp2, 1
+        vpcmpub k1, threshold, alp, 1
+        movu blend, [bg_q + r6q]
+        vmovdqu8 blend{k1}, [src_q + r6q]
+        movu [dst_q + r6q], blend
+        add r6q, mmsize
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize-1
+    jz .ret
+    TAIL_MASK q
+    TAIL_MASK_ALPHA q, mmsize
+    vmovdqu8 alp{k3}{z}, [alpha_q]
+    vmovdqu8 alp2{k4}{z}, [alpha_q + mmsize]
+    vpmovwb ymm %+ alp, alp
+    vpmovwb ymm %+ alp2, alp2
+    vinserti64x4 alp, alp, ymm %+ alp2, 1
+    vpcmpub k1, threshold, alp, 1
+    kandq k1, k1, k2
+    vmovdqu8 blend{k2}{z}, [bg_q]
+    vmovdqu8 blend{k1}, [src_q]
+    vmovdqu8 [dst_q]{k2}, blend
+    .ret:
+RET
+
+%define threshold m0
+%define blend m1
+%define alp m2
+
+cglobal blit10_threshold_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
+    vpbroadcastw threshold, threshold_d
+    mov r6q, hsize_q
+    and r6q, -(mmsize/2)
+    lea dst_q, [dst_q + 2*r6q]
+    lea bg_q, [bg_q + 2*r6q]
+    lea src_q, [src_q + 2*r6q]
+    lea alpha_q, [alpha_q + 2*r6q]
+    neg r6q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        vpcmpuw k1, threshold, [alpha_q + 2*r6q], 1
+        movu blend, [bg_q + 2*r6q]
+        vmovdqu16 blend{k1}, [src_q + 2*r6q]
+        movu [dst_q + 2*r6q], blend
+        add r6q, mmsize/2
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize/2-1
+    jz .ret
+    TAIL_MASK d
+    vmovdqu16 alp{k2}{z}, [alpha_q]
+    vpcmpuw k1, threshold, alp, 1
+    kandd k1, k1, k2
+    vmovdqu16 blend{k2}{z}, [bg_q]
+    vmovdqu16 blend{k1}, [src_q]
+    vmovdqu16 [dst_q]{k2}, blend
+    .ret:
+RET
+
+%define threshold m0
+%define blend m1
+%define alp m2
+%define alp2 m3
+%define alp_idx m4
+
+cglobal blit10_threshold_hsub2, 6, 8, 5, dst_, bg_, src_, alpha_, hsize_, threshold_
+    vpbroadcastw threshold, threshold_d
+    movu alp_idx, [blit10_alpha_permute]
+    mov r6q, hsize_q
+    and r6q, -(mmsize/2)
+    lea dst_q, [dst_q + 2*r6q]
+    lea bg_q, [bg_q + 2*r6q]
+    lea src_q, [src_q + 2*r6q]
+    lea alpha_q, [alpha_q + 4*r6q]
+    neg r6q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        movu alp, [alpha_q + 4*r6q]
+        ; gather the even words of both alpha vectors in one pass
+        vpermt2w alp, alp_idx, [alpha_q + 4*r6q + mmsize]
+        vpcmpuw k1, threshold, alp, 1
+        movu blend, [bg_q + 2*r6q]
+        vmovdqu16 blend{k1}, [src_q + 2*r6q]
+        movu [dst_q + 2*r6q], blend
+        add r6q, mmsize/2
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize/2-1
+    jz .ret
+    TAIL_MASK d
+    TAIL_MASK_ALPHA d, mmsize/2
+    vmovdqu16 alp{k3}{z}, [alpha_q]
+    vmovdqu16 alp2{k4}{z}, [alpha_q + mmsize]
+    vpermt2w alp, alp_idx, alp2
+    vpcmpuw k1, threshold, alp, 1
+    kandd k1, k1, k2
+    vmovdqu16 blend{k2}{z}, [bg_q]
+    vmovdqu16 blend{k1}, [src_q]
+    vmovdqu16 [dst_q]{k2}, blend
     .ret:
 RET
