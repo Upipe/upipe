@@ -143,8 +143,84 @@ static void check_blend8(void (*func)(uint8_t *, const uint8_t *,
     bench_new(dst1, bg, src, alpha, NUM_SAMPLES);
 }
 
+/* The selection the threshold kernels replace. */
+#define THRESHOLD_REF(name, type, hsub)                                     \
+static void name(type *dst, const type *bg, const type *src,                \
+                 const type *alpha, size_t hsize, int threshold)            \
+{                                                                           \
+    for (size_t j = 0; j < hsize; j++)                                      \
+        dst[j] = alpha[j * (hsub)] > threshold ? src[j] : bg[j];            \
+}
+
+THRESHOLD_REF(blit8_threshold_hsub1_ref, uint8_t, 1)
+THRESHOLD_REF(blit8_threshold_hsub2_ref, uint8_t, 2)
+THRESHOLD_REF(blit10_threshold_hsub1_ref, uint16_t, 1)
+THRESHOLD_REF(blit10_threshold_hsub2_ref, uint16_t, 2)
+
+/* A multiple of every vector width, the short tail above, a tail long enough
+ * to need both alpha vectors of a subsampled kernel, and the smallest width
+ * the dispatcher passes on. */
+#define THRESHOLD_MAX 562
+
+#define CHECK_THRESHOLD(bits, type, max, min_hsize)                         \
+static void check_threshold##bits(void (*func)(type *, const type *,        \
+                                               const type *, const type *,  \
+                                               size_t, int),                \
+                                  const char *name)                         \
+{                                                                           \
+    static const size_t widths[] = { 512, NUM_SAMPLES, THRESHOLD_MAX,       \
+                                     min_hsize };                           \
+                                                                            \
+    if (!check_func(func, "%s", name))                                      \
+        return;                                                             \
+                                                                            \
+    type bg[THRESHOLD_MAX];                                                 \
+    type src[THRESHOLD_MAX];                                                \
+    type alpha[THRESHOLD_MAX * 2];                                          \
+    type dst0[THRESHOLD_MAX + GUARD];                                       \
+    type dst1[THRESHOLD_MAX + GUARD];                                       \
+                                                                            \
+    declare_func(void, type *dst, const type *bg, const type *src,          \
+                 const type *alpha, size_t hsize, int threshold);           \
+                                                                            \
+    for (size_t i = 0; i < THRESHOLD_MAX; i++) {                            \
+        bg[i]  = rnd() & (max);                                             \
+        src[i] = rnd() & (max);                                             \
+    }                                                                       \
+    for (size_t i = 0; i < THRESHOLD_MAX * 2; i++)                          \
+        alpha[i] = rnd() & (max);                                           \
+    /* neither 0 nor the maximum, which the dispatcher sends elsewhere */   \
+    int threshold = 1 + rnd() % ((max) - 1);                                \
+                                                                            \
+    for (size_t w = 0; w < sizeof(widths) / sizeof(widths[0]); w++) {       \
+        memset(dst0, 0xa5, sizeof dst0);                                    \
+        memset(dst1, 0xa5, sizeof dst1);                                    \
+        call_ref(dst0, bg, src, alpha, widths[w], threshold);               \
+        call_new(dst1, bg, src, alpha, widths[w], threshold);               \
+        if (memcmp(dst0, dst1, sizeof dst0))                                \
+            fail();                                                         \
+    }                                                                       \
+                                                                            \
+    bench_new(dst1, bg, src, alpha, NUM_SAMPLES, threshold);                \
+}
+
+CHECK_THRESHOLD(8, uint8_t, 0xff, 32)
+CHECK_THRESHOLD(10, uint16_t, 0x3ff, 16)
+
 void checkasm_check_ubuf_pic_blit(void)
 {
+    void (*threshold8_hsub1)(uint8_t *, const uint8_t *, const uint8_t *,
+                             const uint8_t *, size_t, int) =
+        blit8_threshold_hsub1_ref;
+    void (*threshold8_hsub2)(uint8_t *, const uint8_t *, const uint8_t *,
+                             const uint8_t *, size_t, int) =
+        blit8_threshold_hsub2_ref;
+    void (*threshold10_hsub1)(uint16_t *, const uint16_t *, const uint16_t *,
+                              const uint16_t *, size_t, int) =
+        blit10_threshold_hsub1_ref;
+    void (*threshold10_hsub2)(uint16_t *, const uint16_t *, const uint16_t *,
+                              const uint16_t *, size_t, int) =
+        blit10_threshold_hsub2_ref;
     void (*blend_hsub1)(uint16_t *, const uint16_t *, const uint16_t *,
                         const uint16_t *, size_t) = blit10_blend_hsub1_ref;
     void (*blend_hsub2)(uint16_t *, const uint16_t *, const uint16_t *,
@@ -162,6 +238,10 @@ void checkasm_check_ubuf_pic_blit(void)
         blend_hsub2 = upipe_blit10_blend_hsub2_avx2;
         blend8_hsub1 = upipe_blit8_blend_hsub1_avx2;
         blend8_hsub2 = upipe_blit8_blend_hsub2_avx2;
+        threshold8_hsub1 = upipe_blit8_threshold_hsub1_avx2;
+        threshold8_hsub2 = upipe_blit8_threshold_hsub2_avx2;
+        threshold10_hsub1 = upipe_blit10_threshold_hsub1_avx2;
+        threshold10_hsub2 = upipe_blit10_threshold_hsub2_avx2;
     }
 #endif
 
@@ -176,4 +256,16 @@ void checkasm_check_ubuf_pic_blit(void)
 
     check_blend8(blend8_hsub2, "blit8_blend_hsub2", 2);
     report("blit8_blend_hsub2");
+
+    check_threshold8(threshold8_hsub1, "blit8_threshold_hsub1");
+    report("blit8_threshold_hsub1");
+
+    check_threshold8(threshold8_hsub2, "blit8_threshold_hsub2");
+    report("blit8_threshold_hsub2");
+
+    check_threshold10(threshold10_hsub1, "blit10_threshold_hsub1");
+    report("blit10_threshold_hsub1");
+
+    check_threshold10(threshold10_hsub2, "blit10_threshold_hsub2");
+    report("blit10_threshold_hsub2");
 }
