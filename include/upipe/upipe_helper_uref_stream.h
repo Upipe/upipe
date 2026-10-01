@@ -123,20 +123,18 @@ static void STRUCTURE##_append_uref_stream(struct upipe *upipe,             \
     uref_attr_set_priv(uref, size);                                         \
     ulist_add(&STRUCTURE->UREFS, uref_to_uchain(uref));                     \
 }                                                                           \
-/** @internal @This consumes the given number of octets from the uref       \
- * stream, and rotates the buffers accordingly.                             \
+/** @internal @This rotates the buffers of the uref stream past the given   \
+ * number of octets, ubuf holding what remains after them.                  \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param consumed number of octets consumed from the uref stream           \
+ * @param ubuf remaining buffer space, attached to the next uref            \
  */                                                                         \
-static UBASE_UNUSED void                                                    \
-    STRUCTURE##_consume_uref_stream(struct upipe *upipe, size_t consumed)   \
+static void STRUCTURE##_rotate_uref_stream(struct upipe *upipe,             \
+                                           size_t consumed,                 \
+                                           struct ubuf *ubuf)               \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
-    assert(STRUCTURE->NEXT_UREF != NULL);                                   \
-    assert(STRUCTURE->NEXT_UREF->ubuf != NULL);                             \
-    struct ubuf *ubuf = ubuf_block_splice(STRUCTURE->NEXT_UREF->ubuf,       \
-                                          consumed, -1);                    \
     while (consumed >= STRUCTURE->NEXT_UREF_SIZE) {                         \
         struct uchain *uchain = ulist_pop(&STRUCTURE->UREFS);               \
         if (uchain == NULL) {                                               \
@@ -158,8 +156,27 @@ static UBASE_UNUSED void                                                    \
     STRUCTURE->NEXT_UREF_SIZE -= consumed;                                  \
     uref_attach_ubuf(STRUCTURE->NEXT_UREF, ubuf);                           \
 }                                                                           \
-/** @internal @This extracts the given number of octets from the uref       \
+/** @internal @This consumes the given number of octets from the uref       \
  * stream, and rotates the buffers accordingly.                             \
+ *                                                                          \
+ * @param upipe description structure of the pipe                           \
+ * @param consumed number of octets consumed from the uref stream           \
+ */                                                                         \
+static UBASE_UNUSED void                                                    \
+    STRUCTURE##_consume_uref_stream(struct upipe *upipe, size_t consumed)   \
+{                                                                           \
+    struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
+    assert(STRUCTURE->NEXT_UREF != NULL);                                   \
+    assert(STRUCTURE->NEXT_UREF->ubuf != NULL);                             \
+    struct ubuf *ubuf = ubuf_block_splice(STRUCTURE->NEXT_UREF->ubuf,       \
+                                          consumed, -1);                    \
+    STRUCTURE##_rotate_uref_stream(upipe, consumed, ubuf);                  \
+}                                                                           \
+/** @internal @This extracts the given number of octets from the uref       \
+ * stream, and rotates the buffers accordingly.  The extracted uref takes   \
+ * over the segments up to the boundary, and only the segment at the        \
+ * boundary is duplicated, rather than duplicating the whole chain and      \
+ * truncating it.                                                           \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param extracted number of octets to extract from the uref stream        \
@@ -170,11 +187,22 @@ static struct uref *STRUCTURE##_extract_uref_stream(struct upipe *upipe,    \
 {                                                                           \
     struct STRUCTURE *STRUCTURE = STRUCTURE##_from_upipe(upipe);            \
     assert(STRUCTURE->NEXT_UREF != NULL);                                   \
-    struct uref *uref = uref_dup(STRUCTURE->NEXT_UREF);                     \
+    assert(STRUCTURE->NEXT_UREF->ubuf != NULL);                             \
+    struct uref *uref = uref_dup_inner(STRUCTURE->NEXT_UREF);               \
     if (unlikely(uref == NULL))                                             \
         return NULL;                                                        \
-    uref_block_truncate(uref, extracted);                                   \
-    STRUCTURE##_consume_uref_stream(upipe, extracted);                      \
+    size_t size = 0;                                                        \
+    ubuf_block_size(STRUCTURE->NEXT_UREF->ubuf, &size);                     \
+    struct ubuf *rest = NULL;                                               \
+    if (extracted < size) {                                                 \
+        rest = ubuf_block_split(STRUCTURE->NEXT_UREF->ubuf, extracted);     \
+        if (unlikely(rest == NULL)) {                                       \
+            uref_free(uref);                                                \
+            return NULL;                                                    \
+        }                                                                   \
+    }                                                                       \
+    uref->ubuf = uref_detach_ubuf(STRUCTURE->NEXT_UREF);                    \
+    STRUCTURE##_rotate_uref_stream(upipe, extracted, rest);                 \
     return uref;                                                            \
 }                                                                           \
 /** @internal @This cleans up the private members for this helper.          \

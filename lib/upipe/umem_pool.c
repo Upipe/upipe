@@ -15,6 +15,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <assert.h>
+#ifdef __linux__
+#include <sys/mman.h>
+#endif
 
 /** @This defines the private data structures of the umem pool manager. */
 struct umem_pool_mgr {
@@ -58,6 +61,28 @@ static unsigned int umem_pool_find(struct umem_mgr *mgr, size_t wanted,
     return pool;
 }
 
+/* Buffers of this size and above are aligned to and advised for transparent
+ * huge pages.  Large buffers such as uncompressed video frames are usually
+ * streamed in full by their producer and again by their consumer, so on
+ * 4 KiB pages every pass pays a TLB miss per page.  Only takes effect when
+ * THP is set to "madvise" or "always"; the buffers still come from malloc
+ * and are freed with free(). */
+#define UMEM_POOL_HUGE_SIZE ((size_t)2 * 1024 * 1024)
+
+static uint8_t *umem_pool_buffer_alloc(size_t real_size)
+{
+#ifdef MADV_HUGEPAGE
+    if (real_size >= UMEM_POOL_HUGE_SIZE) {
+        void *buffer;
+        if (posix_memalign(&buffer, UMEM_POOL_HUGE_SIZE, real_size))
+            return NULL;
+        madvise(buffer, real_size & ~(UMEM_POOL_HUGE_SIZE - 1), MADV_HUGEPAGE);
+        return buffer;
+    }
+#endif
+    return malloc(real_size);
+}
+
 /** @This allocates a new umem buffer space.
  *
  * @param mgr management structure
@@ -77,7 +102,7 @@ static bool umem_pool_alloc(struct umem_mgr *mgr, struct umem *umem,
     if (likely(pool < pool_mgr->nb_pools))
         buffer = ulifo_pop(&pool_mgr->pools[pool], uint8_t *);
     if (unlikely(buffer == NULL))
-        buffer = malloc(real_size);
+        buffer = umem_pool_buffer_alloc(real_size);
     if (unlikely(buffer == NULL))
         return false;
 

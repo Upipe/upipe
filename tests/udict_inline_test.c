@@ -128,6 +128,44 @@ int main(int argc, char **argv)
     udict_dump(udict2, uprobe);
     udict_free(udict2);
 
+    /* small dictionary: duplicated, then both outgrow the embedded space */
+    struct udict *udict3 = udict_alloc(mgr, 0);
+    assert(udict3 != NULL);
+    ubase_assert(udict_set_unsigned(udict3, 42, UDICT_TYPE_CLOCK_DURATION,
+                                    NULL));
+    ubase_assert(udict_set_string(udict3, "small", UDICT_TYPE_STRING,
+                                  "x.name"));
+    struct udict *udict4 = udict_dup(udict3);
+    assert(udict4 != NULL);
+    ubase_assert(udict_set_string(udict3, SALUTATION, UDICT_TYPE_STRING,
+                                  "x.salutation"));
+    ubase_assert(udict_set_string(udict4, SALUTATION, UDICT_TYPE_STRING,
+                                  "x.salutation"));
+    ubase_assert(udict_set_string(udict4, SALUTATION, UDICT_TYPE_STRING,
+                                  "x.salutation2"));
+    ubase_assert(udict_get_unsigned(udict3, &u, UDICT_TYPE_CLOCK_DURATION,
+                                    NULL));
+    assert(u == 42);
+    ubase_assert(udict_get_string(udict3, &string, UDICT_TYPE_STRING,
+                                  "x.name"));
+    assert(!strcmp(string, "small"));
+    ubase_assert(udict_get_string(udict3, &string, UDICT_TYPE_STRING,
+                                  "x.salutation"));
+    assert(!strcmp(string, SALUTATION));
+    ubase_assert(udict_get_unsigned(udict4, &u, UDICT_TYPE_CLOCK_DURATION,
+                                    NULL));
+    assert(u == 42);
+    ubase_assert(udict_get_string(udict4, &string, UDICT_TYPE_STRING,
+                                  "x.name"));
+    assert(!strcmp(string, "small"));
+    ubase_assert(udict_get_string(udict4, &string, UDICT_TYPE_STRING,
+                                  "x.salutation2"));
+    assert(!strcmp(string, SALUTATION));
+    ubase_nassert(udict_get_string(udict3, &string, UDICT_TYPE_STRING,
+                                   "x.salutation2"));
+    udict_free(udict4);
+    udict_free(udict3);
+
     udict_free(udict1);
 
     {
