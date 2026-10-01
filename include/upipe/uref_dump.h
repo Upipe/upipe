@@ -87,7 +87,11 @@ static inline void uref_dump_lvl(struct uref *uref, struct uprobe *uprobe,
     UREF_DUMP_UNSIGNED("k.dts_pts_delay", dts_pts_delay)
     UREF_DUMP_UNSIGNED("k.cr_dts_delay", cr_dts_delay)
     UREF_DUMP_UNSIGNED("k.rap_cr_delay", rap_cr_delay)
+    UREF_DUMP_UNSIGNED("k.duration", duration)
 #undef UREF_DUMP_UNSIGNED
+    if (uref->rate.den != 0)
+        uprobe_dbg_va(uprobe, NULL, " - \"k.rate\" [rational]: %" PRId64 "/%" PRIu64,
+                      uref->rate.num, uref->rate.den);
 
     if (uref->udict != NULL)
         udict_dump_lvl(uref->udict, uprobe, level);

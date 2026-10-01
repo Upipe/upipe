@@ -71,9 +71,9 @@ enum udict_type {
     UDICT_TYPE_EVENT_EVENTS,
 
     /** k.duration */
-    UDICT_TYPE_CLOCK_DURATION,
+    UDICT_TYPE_CLOCK_DURATION, /* unused: duration lives in struct uref */
     /** k.rate */
-    UDICT_TYPE_CLOCK_RATE,
+    UDICT_TYPE_CLOCK_RATE, /* unused: rate lives in struct uref */
     /** k.latency */
     UDICT_TYPE_CLOCK_LATENCY,
     /** k.wrap */
