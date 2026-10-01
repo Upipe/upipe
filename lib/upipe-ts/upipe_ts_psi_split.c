@@ -218,7 +218,8 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
         if (ubase_check(uref_ts_flow_get_psi_filter(output->flow_def, &filter,
                         &mask, &size)) &&
             ubase_check(uref_block_match(uref, filter, mask, size))) {
-            if (likely(uchain->next == NULL)) {
+            /* the list is circular: the last sub is followed by the head */
+            if (likely(uchain->next == &upipe_ts_psi_split->subs)) {
                 upipe_ts_psi_split_sub_output(
                         upipe_ts_psi_split_sub_to_upipe(output), uref,
                         upump_p);
