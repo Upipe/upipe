@@ -261,7 +261,7 @@ static void upipe_blit_sub_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(sub->hsize == UINT64_MAX || sub->vsize == UINT64_MAX ||
                  sub->hposition == UINT64_MAX ||
                  sub->vposition == UINT64_MAX)) {
-        upipe_warn(upipe, "dropping incompatible subpicture");
+        upipe_warn(upipe, "dropping subpicture with no destination rectangle");
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
         uref_free(uref);
         return;
@@ -270,10 +270,21 @@ static void upipe_blit_sub_input(struct upipe *upipe, struct uref *uref,
     size_t hsize, vsize;
     uint8_t macropixel;
     if (unlikely(!ubase_check(uref_pic_size(uref, &hsize, &vsize,
-                                            &macropixel)) ||
-                 hsize != sub->hsize || vsize != sub->vsize ||
+                                            &macropixel)))) {
+        upipe_warn(upipe, "dropping subpicture of unknown size");
+        upipe_throw_error(upipe, UBASE_ERR_INVALID);
+        uref_free(uref);
+        return;
+    }
+
+    if (unlikely(hsize != sub->hsize || vsize != sub->vsize ||
                  macropixel != upipe_blit->macropixel)) {
-        upipe_warn(upipe, "dropping incompatible subpicture");
+        upipe_warn_va(upipe,
+                "dropping incompatible subpicture: %zux%zu macropixel %"PRIu8
+                ", destination rectangle %"PRIu64"x%"PRIu64
+                " macropixel %"PRIu8,
+                hsize, vsize, macropixel,
+                sub->hsize, sub->vsize, upipe_blit->macropixel);
         upipe_throw_error(upipe, UBASE_ERR_INVALID);
         uref_free(uref);
         return;
@@ -414,7 +425,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
 
         if (src_vsize) {
             tpad = tpad * dest_vsize / src_vsize;
-            bpad = tpad * dest_vsize / src_vsize;
+            bpad = bpad * dest_vsize / src_vsize;
             vsize -= tpad + bpad;
             vsize -= vsize % vround;
             vposition += (dest_vsize - vsize - tpad - bpad) / 2 + tpad;
@@ -499,7 +510,12 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         if (proxy->uref == NULL)
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
 
-        upipe_dbg_va(upipe, "providing flow format for urequest %p", urequest);
+        upipe_dbg_va(upipe, "providing flow format for urequest %p: "
+                "%"PRIu64"x%"PRIu64"@%"PRIu64":%"PRIu64
+                " out of a %"PRIu64"x%"PRIu64" canvas, padding %"PRIu64
+                "/%"PRIu64"/%"PRIu64"/%"PRIu64,
+                urequest, hsize, vsize, hposition, vposition,
+                src_hsize, src_vsize, lpad, rpad, tpad, bpad);
         int err = urequest_provide_flow_format(urequest, uref);
         if (!ubase_check(err))
             upipe_throw_error(upipe, err);
