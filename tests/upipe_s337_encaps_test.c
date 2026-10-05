@@ -96,7 +96,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     uref_dump(uref, upipe->uprobe);
 
     size_t samples;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(uref_sound_size(uref, &samples, &sample_size));
     assert(samples == A52_FRAME_SAMPLES);
     assert(sample_size == 2 * 4);

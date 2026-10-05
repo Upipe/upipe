@@ -59,7 +59,7 @@ int ubuf_sound_common_plane_dup(struct ubuf *ubuf, struct ubuf *new_ubuf,
  * @return an error code
  */
 int ubuf_sound_common_size(struct ubuf *ubuf, size_t *size_p,
-                           uint8_t *sample_size_p)
+                           uint16_t *sample_size_p)
 {
     struct ubuf_sound_common_mgr *common_mgr =
         ubuf_sound_common_mgr_from_ubuf_mgr(ubuf->mgr);
@@ -197,7 +197,7 @@ void ubuf_sound_common_mgr_clean(struct ubuf_mgr *mgr)
  * ubuf_sound_common_mgr
  * @param sample_size size in octets of a sample
  */
-void ubuf_sound_common_mgr_init(struct ubuf_mgr *mgr, uint8_t sample_size)
+void ubuf_sound_common_mgr_init(struct ubuf_mgr *mgr, uint16_t sample_size)
 {
     assert(sample_size);
 

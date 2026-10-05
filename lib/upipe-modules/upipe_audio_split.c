@@ -42,9 +42,9 @@ struct upipe_audio_split {
     /** flow definition packet */
     struct uref *flow_def;
     /** sample size in octets */
-    uint8_t sample_size;
+    uint16_t sample_size;
     /** sample size in octets for 1 channel */
-    uint8_t channel_sample_size;
+    uint16_t channel_sample_size;
     /** number of channels */
     uint8_t channels;
 
@@ -97,7 +97,7 @@ struct upipe_audio_split_sub {
     /** bit field of channels to copy */
     uint64_t bitfield;
     /** sample size in octets */
-    uint8_t sample_size;
+    uint16_t sample_size;
 
     /** public upipe structure */
     struct upipe upipe;

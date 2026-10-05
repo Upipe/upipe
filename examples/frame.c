@@ -192,10 +192,11 @@ static int catch_uref(struct uprobe *uprobe, struct upipe *upipe,
     if (dump_size) {
         size_t size = 0, vsize = 0;
         uint8_t sample_size = 0;
+        uint16_t sound_sample_size = 0;
         if (ubase_check(uref_block_size(uref, &size)))
             upipe_dbg_va(upipe, "block size %zu", size);
-        else if (ubase_check(uref_sound_size(uref, &size, &sample_size)))
-            upipe_dbg_va(upipe, "sound size %zu (sample %u)", size, sample_size);
+        else if (ubase_check(uref_sound_size(uref, &size, &sound_sample_size)))
+            upipe_dbg_va(upipe, "sound size %zu (sample %u)", size, sound_sample_size);
         else if (ubase_check(uref_pic_size(uref, &size, &vsize, &sample_size)))
             upipe_dbg_va(upipe, "pic size %zux%zu (sample %u)",
                          size, vsize, sample_size);

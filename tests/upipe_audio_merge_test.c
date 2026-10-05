@@ -67,7 +67,7 @@ int count = 0;
 static void fill_in(struct ubuf *ubuf, float value)
 {
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
 
     const char *channel = NULL;
@@ -86,7 +86,7 @@ static void fill_in(struct ubuf *ubuf, float value)
 static void fill_in_int(struct ubuf *ubuf, int16_t value)
 {
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
 
     const char *channel = NULL;
@@ -105,7 +105,7 @@ static void fill_in_int(struct ubuf *ubuf, int16_t value)
 static void fill_in_interleaved(struct ubuf *ubuf, const int32_t *value)
 {
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
 
     const char *channel = NULL;
@@ -158,7 +158,7 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     const float *r;
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(uref->ubuf, &size, &sample_size));
 
     ubase_assert(uref_sound_plane_read_float(uref, "l", 0, -1, &r));
@@ -184,7 +184,7 @@ static void test_input_int(struct upipe *upipe, struct uref *uref,
     const int16_t *r;
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(uref->ubuf, &size, &sample_size));
 
     ubase_assert(uref_sound_plane_read_int16_t(uref, "l", 0, -1, &r));
@@ -210,7 +210,7 @@ static void test_input_idx(struct upipe *upipe, struct uref *uref,
     const int16_t *r;
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(uref->ubuf, &size, &sample_size));
 
     ubase_assert(uref_sound_plane_read_int16_t(uref, "l", 0, -1, &r));
@@ -249,7 +249,7 @@ static void test_input_interleaved(struct upipe *upipe, struct uref *uref,
     } };
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(uref->ubuf, &size, &sample_size));
 
     ubase_assert(uref_sound_plane_read_uint8_t(uref, "lrcLRS0123456789", 0, -1, &r));

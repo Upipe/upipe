@@ -107,7 +107,7 @@ struct ubuf_mgr *ubuf_mem_mgr_alloc_from_flow_def(uint16_t ubuf_pool_depth,
     }
 
     if (!ubase_ncmp(def, "sound.")) {
-        uint8_t sample_size;
+        uint16_t sample_size;
         uint8_t planes;
         if (unlikely(!ubase_check(uref_sound_flow_get_sample_size(flow_def,
                                                                &sample_size) ||
