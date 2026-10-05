@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012-2015 OpenHeadend S.A.R.L.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Christophe Massiot
  *          Benjamin Cohen
@@ -226,7 +227,8 @@ write_buffer:
         size_t payload_len = 0;
         if (unlikely(!ubase_check(uref_block_size(uref, &payload_len)))) {
             upipe_warn(upipe, "cannot read ubuf size");
-            return false;
+            uref_free(uref);
+            return true;
         }
 
         int iovec_count = uref_block_iovec_count(uref, 0, -1);
