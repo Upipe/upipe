@@ -237,7 +237,7 @@ static int upipe_time_limit_set_flow_def(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This gets the time limit in octets/s.
+/** @internal @This gets the time limit in @ref #UCLOCK_FREQ units.
  *
  * @param upipe description structure of the pipe
  * @param time_limit_p pointer filled with the time limit
@@ -252,7 +252,7 @@ static int _upipe_time_limit_get_limit(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
-/** @internal @This sets the time limit in octets/s.
+/** @internal @This sets the time limit in @ref #UCLOCK_FREQ units.
  *
  * @param upipe description structure of the pipe
  * @param time_limit time limit to set
