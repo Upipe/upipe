@@ -29,8 +29,8 @@ extern "C" {
  * @item @code
  *  struct upipe *upipe_foo_alloc_void(struct upipe_mgr *mgr,
  *                                     struct uprobe *uprobe,
- *                                     uint32_t signature, va_list args,
- *                                     struct uref **flow_def_p)
+ *                                     uint32_t signature,
+ *                                     va_list args)
  * @end code
  * Allocates and initializes the private structure upipe_foo.
  *
