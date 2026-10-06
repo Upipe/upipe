@@ -236,6 +236,8 @@ static struct upipe *upipe_m3u_reader_alloc(struct upipe_mgr *mgr,
 {
     struct upipe *upipe =
         upipe_m3u_reader_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
+        return NULL;
 
     upipe_m3u_reader_init_urefcount(upipe);
     upipe_m3u_reader_init_output(upipe);
