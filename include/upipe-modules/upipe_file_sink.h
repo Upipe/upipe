@@ -44,7 +44,7 @@ enum upipe_fsink_command {
     UPIPE_FSINK_GET_PATH,
     /** asks to open the given path (const char *, enum upipe_fsink_mode) */
     UPIPE_FSINK_SET_PATH,
-    /** associates a stream with the upipe (int fildes, enum upip_fsink_mode) */
+    /** associates a stream with the upipe (int fildes, enum upipe_fsink_mode) */
     UPIPE_FSINK_SET_FD,
     /** returns the file descriptor of the currently opened file (int *) */
     UPIPE_FSINK_GET_FD,
