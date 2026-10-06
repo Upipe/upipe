@@ -55,7 +55,7 @@ typedef int (*upipe_helper_flow_format_register)(struct upipe *,
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  int upipe_foo_provide_flow_format(struct upipe *upipe, va_list args)
+ *  int upipe_foo_provide_flow_format(struct urequest *urequest, va_list args)
  * @end code
  * Internal function called when the request is answered.
  *
@@ -75,7 +75,7 @@ typedef int (*upipe_helper_flow_format_register)(struct upipe *,
  * @param STRUCTURE name of your private upipe structure
  * @param REQUEST name of the @tt {struct urequest} field of
  * your private upipe structure
- * @param CHECK function called after a uref manager has been received
+ * @param CHECK function called after a flow format has been received
  * @param REGISTER function called to register a request
  * @param UNREGISTER function called to unregister a request
  */
