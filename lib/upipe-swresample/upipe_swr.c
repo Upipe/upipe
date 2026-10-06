@@ -468,6 +468,7 @@ static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
         && upipe_swr->out_planes != 0
         && (swr_init(upipe_swr->swr) < 0)) {
         upipe_err_va(upipe, "failed to init swresample with format %s", def);
+        swr_free(&upipe_swr->swr);
         uref_free(flow_def);
         upipe_swr_free_flow(upipe);
         return NULL;
