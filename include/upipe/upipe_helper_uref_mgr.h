@@ -52,12 +52,12 @@ typedef int (*upipe_helper_uref_mgr_register)(struct upipe *, struct urequest *)
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  int upipe_foo_provide_uref_mgr(struct upipe *upipe, va_list args)
+ *  int upipe_foo_provide_uref_mgr(struct urequest *urequest, va_list args)
  * @end code
  * Internal function called when the request is answered.
  *
  * @item @code
- *  int upipe_foo_require_uref_mgr(struct upipe *upipe)
+ *  void upipe_foo_require_uref_mgr(struct upipe *upipe)
  * @end code
  * Initializes and registers the request to get a uref manager.
  *
