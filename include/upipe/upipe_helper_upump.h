@@ -90,10 +90,11 @@ static void STRUCTURE##_set_##UPUMP(struct upipe *upipe,                    \
     }                                                                       \
     s->UPUMP = upump;                                                       \
 }                                                                           \
-/** @internal @This sets the upump to use.                                  \
+/** @internal @This allocates and starts a timer upump.                     \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @param timeout time to wait before waking up                             \
+ * @param cb function to call when the timer expires                        \
  */                                                                         \
 static void UBASE_UNUSED STRUCTURE##_wait_##UPUMP(struct upipe *upipe,      \
                                                   uint64_t timeout,         \
