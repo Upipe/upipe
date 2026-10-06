@@ -127,6 +127,8 @@ static struct upipe *upipe_sinesrc_alloc(struct upipe_mgr *mgr,
                                       va_list args)
 {
     struct upipe *upipe = upipe_sinesrc_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
+        return NULL;
     struct upipe_sinesrc *upipe_sinesrc = upipe_sinesrc_from_upipe(upipe);
     upipe_sinesrc_init_urefcount(upipe);
     upipe_sinesrc_init_uref_mgr(upipe);
