@@ -57,6 +57,8 @@ static struct upipe *upipe_dump_alloc(struct upipe_mgr *mgr,
                                       va_list args)
 {
     struct upipe *upipe = upipe_dump_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
+        return NULL;
 
     upipe_dump_init_urefcount(upipe);
     upipe_dump_init_output(upipe);
