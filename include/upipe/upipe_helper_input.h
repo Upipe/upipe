@@ -120,12 +120,16 @@ extern "C" {
  *  bool upipe_foo_flush_input(struct upipe *upipe)
  * @end code
  * Free all urefs that have been held, unblocks all pumps, and reinitializes
- * the input. Returns true if the input was previously blocked.
+ * the input. Returns true if urefs were held.
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
  * @param UREFS name of the @tt {struct uchain} field of
  * your private upipe structure, corresponding to a list of urefs
+ * @param NB_UREFS name of the @tt {unsigned int} field of
+ * your private upipe structure, counting the held urefs
+ * @param MAX_UREFS name of the @tt {unsigned int} field of
+ * your private upipe structure, holding the max number of urefs
  * @param BLOCKERS name of the @tt {struct uchain} field of
  * your private upipe structure, corresponding to a list of blockers
  * @param OUTPUT function to use to output urefs (struct upipe *, struct uref *,
@@ -307,7 +311,7 @@ static void STRUCTURE##_clean_input(struct upipe *upipe)                    \
  * sources.                                                                 \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @return false if the input was previously blocked                        \
+ * @return true if urefs were held and have been flushed                    \
  */                                                                         \
 static UBASE_UNUSED bool STRUCTURE##_flush_input(struct upipe *upipe)       \
 {                                                                           \
