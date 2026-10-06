@@ -250,11 +250,11 @@ static int upipe_dvbsrc_check(struct upipe *upipe, struct uref *flow_format)
     if (upipe_dvbsrc->ubuf_mgr == NULL) {
         struct uref *flow_format =
             uref_block_flow_alloc_def(upipe_dvbsrc->uref_mgr, NULL);
-        uref_block_flow_set_size(flow_format, MTU);
         if (unlikely(flow_format == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
+        uref_block_flow_set_size(flow_format, MTU);
         upipe_dvbsrc_require_ubuf_mgr(upipe, flow_format);
         return UBASE_ERR_NONE;
     }
