@@ -77,8 +77,8 @@ static void STRUCTURE##_init_dvb_string(struct upipe *upipe)                \
  * @param upipe description structure of the pipe                           \
  * @param string input string in NATIVE_ENCODING                            \
  * @param encoding name of encoding in iconv (must be persistent)           \
- * @param filled in with the length of the allocated DVB string             \
- * @return an error code                                                    \
+ * @param out_length_p filled in with the length of the DVB string          \
+ * @return allocated DVB string (must be freed), or NULL in case of error   \
  */                                                                         \
 static uint8_t *STRUCTURE##_alloc_dvb_string(struct upipe *upipe,           \
         const char *string, const char *encoding, size_t *out_length_p)     \
