@@ -273,6 +273,7 @@ struct upipe_http_src_hook *https_src_hook_openssl_alloc(struct uref *flow_def)
         BIO_free(wbio);
         SSL_free(ssl);
         SSL_CTX_free(ssl_ctx);
+        free(https);
         return NULL;
     }
     SSL_set_bio(ssl, rbio, wbio);
