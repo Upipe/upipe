@@ -51,7 +51,7 @@ struct upipe_mgr *upipe_vanc_mgr_alloc(void);
  * have to use it if you want to keep the pointer.
  *
  * @param upipe description structure of the super pipe
- * @param upipe_p filled in with a pointer to the scte104 subpipe
+ * @param upipe_p filled in with a pointer to the afd subpipe
  * @return an error code
  */
 static inline int upipe_vanc_get_afd_sub(struct upipe *upipe,
