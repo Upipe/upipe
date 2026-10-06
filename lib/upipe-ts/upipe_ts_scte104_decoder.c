@@ -524,6 +524,7 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     uint16_t data_length = scte104o_get_data_length(op);
     if (data_length < SCTE104ISDRD_HEADER_SIZE) {
         upipe_warn(upipe, "drop invalid isdrd");
+        uref_free(desc);
         return UBASE_ERR_INVALID;
     }
     const uint8_t *data = scte104o_get_data(op);
@@ -534,6 +535,7 @@ upipe_ts_scte104d_insert_segmentation_descriptor(struct upipe *upipe,
     uint8_t upid_length = scte104isdrd_get_upid_length(data);
     if (data_length < SCTE104ISDRD_HEADER_SIZE + upid_length) {
         upipe_warn(upipe, "drop invalid isdrd");
+        uref_free(desc);
         return UBASE_ERR_INVALID;
     }
     uint8_t *upid = scte104isdrd_get_upid(data);
