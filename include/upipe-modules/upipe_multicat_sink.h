@@ -38,7 +38,7 @@ enum upipe_multicat_sink_command {
     UPIPE_MULTICAT_SINK_GET_PATH,
     /** asks to open the given path (const char *, const char *) */
     UPIPE_MULTICAT_SINK_SET_PATH,
-    /** asks to open the given path (enum upipe_fsink_mode) */
+    /** sets the open mode of the next files (enum upipe_fsink_mode) */
     UPIPE_MULTICAT_SINK_SET_MODE,
     /** get rotate interval (uint64_t *, uint64_t *) */
     UPIPE_MULTICAT_SINK_GET_ROTATE,
