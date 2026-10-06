@@ -778,7 +778,7 @@ static int _upipe_audiocont_set_input(struct upipe *upipe, const char *name)
 {
     struct upipe_audiocont *upipe_audiocont = upipe_audiocont_from_upipe(upipe);
     char *name_dup = NULL;
-    free(upipe_audiocont->input_name);
+    ubase_clean_str(&upipe_audiocont->input_name);
 
     if (name) {
         name_dup = strdup(name);
