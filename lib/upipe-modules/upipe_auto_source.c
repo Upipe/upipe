@@ -268,7 +268,6 @@ static struct upipe *upipe_auto_src_alloc(struct upipe_mgr *mgr,
 {
     struct upipe *upipe =
         upipe_auto_src_alloc_void(mgr, uprobe, signature, args);
-    upipe_auto_src_init_urefcount(upipe);
     if (unlikely(upipe == NULL))
         return NULL;
 
