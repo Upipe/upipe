@@ -249,6 +249,7 @@ static int upipe_glx_sink_init_glx(struct upipe *upipe, int x, int y, int width,
     }
     if (!glXQueryExtension(display, &errorBase, &eventBase)) {
         upipe_err(upipe, "X server has no GLX extension");
+        XCloseDisplay(display);
         return UBASE_ERR_EXTERNAL;
     }
 
