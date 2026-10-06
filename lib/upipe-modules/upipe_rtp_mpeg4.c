@@ -132,6 +132,7 @@ static void upipe_rtp_mpeg4_input(struct upipe *upipe, struct uref *uref,
 
     if (!ubase_check(uref_block_truncate(uref, 7))) {
         upipe_err(upipe, "could not truncate uref");
+        ubuf_free(au);
         uref_free(uref);
         return;
     }
