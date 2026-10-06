@@ -55,13 +55,13 @@ typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *)
  * Typically called in your upipe_foo_alloc() function.
  *
  * @item @code
- *  int upipe_foo_provide_ubuf_mgr(struct upipe *upipe, va_list args)
+ *  int upipe_foo_provide_ubuf_mgr(struct urequest *urequest, va_list args)
  * @end code
  * Internal function called when the request is answered.
  *
  * @item @code
- *  int upipe_foo_require_ubuf_mgr(struct upipe *upipe,
- *                                 struct uref *flow_format)
+ *  void upipe_foo_require_ubuf_mgr(struct upipe *upipe,
+ *                                  struct uref *flow_format)
  * @end code
  * Initializes and registers the request to get a ubuf manager. The flow
  * format belongs to the callee and will be eventually freed.
@@ -95,7 +95,7 @@ typedef int (*upipe_helper_ubuf_mgr_register)(struct upipe *, struct urequest *)
  * your private upipe structure
  * @param REQUEST name of the @tt {struct urequest} field of
  * your private upipe structure
- * @param CHECK function called after a uref manager has been received
+ * @param CHECK function called after a ubuf manager has been received
  * @param REGISTER function called to register a request
  * @param UNREGISTER function called to unregister a request
  */
