@@ -577,7 +577,7 @@ static int _upipe_videocont_set_input(struct upipe *upipe, const char *name)
 {
     struct upipe_videocont *upipe_videocont = upipe_videocont_from_upipe(upipe);
     char *name_dup = NULL;
-    free(upipe_videocont->input_name);
+    ubase_clean_str(&upipe_videocont->input_name);
 
     if (name) {
         name_dup = strdup(name);
