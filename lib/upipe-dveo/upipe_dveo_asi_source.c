@@ -294,11 +294,11 @@ static int upipe_dveo_asi_src_check(struct upipe *upipe, struct uref *flow_forma
     if (upipe_dveo_asi_src->ubuf_mgr == NULL) {
         struct uref *flow_format =
             uref_block_flow_alloc_def(upipe_dveo_asi_src->uref_mgr, NULL);
-        uref_block_flow_set_size(flow_format, CAPTURE_DEFAULT_SIZE);
         if (unlikely(flow_format == NULL)) {
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return UBASE_ERR_ALLOC;
         }
+        uref_block_flow_set_size(flow_format, CAPTURE_DEFAULT_SIZE);
         upipe_dveo_asi_src_require_ubuf_mgr(upipe, flow_format);
         return UBASE_ERR_NONE;
     }
