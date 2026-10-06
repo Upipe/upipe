@@ -91,12 +91,68 @@ static void check_blend10(void (*func)(uint16_t *, const uint16_t *,
     bench_new(dst1, bg, src, alpha, NUM_SAMPLES);
 }
 
+/* The 8 bit blending, as ubuf_pic_blit_alpha8_bg() spells it for a saturated
+ * threshold and a saturated alpha multiplier. */
+#define BLEND8_REF(name, hsub)                                              \
+static void name(uint8_t *dst, const uint8_t *bg, const uint8_t *src,       \
+                 const uint8_t *alpha, size_t hsize)                        \
+{                                                                           \
+    for (size_t j = 0; j < hsize; j++) {                                    \
+        const uint8_t a = alpha[j * (hsub)];                                \
+        dst[j] = (bg[j] * (0xff - a) + src[j] * a) / 0xff;                  \
+    }                                                                       \
+}
+
+BLEND8_REF(blit8_blend_hsub1_ref, 1)
+BLEND8_REF(blit8_blend_hsub2_ref, 2)
+
+static void check_blend8(void (*func)(uint8_t *, const uint8_t *,
+                                      const uint8_t *, const uint8_t *,
+                                      size_t),
+                         const char *name, uint8_t hsub)
+{
+    if (!check_func(func, "%s", name))
+        return;
+
+    uint8_t bg[NUM_SAMPLES];
+    uint8_t src[NUM_SAMPLES];
+    uint8_t alpha[NUM_SAMPLES * 2];
+    uint8_t dst0[NUM_SAMPLES + GUARD];
+    uint8_t dst1[NUM_SAMPLES + GUARD];
+
+    declare_func(void, uint8_t *dst, const uint8_t *bg, const uint8_t *src,
+                 const uint8_t *alpha, size_t hsize);
+
+    for (size_t i = 0; i < NUM_SAMPLES; i++) {
+        bg[i]  = rnd();
+        src[i] = rnd();
+    }
+    /* the extremes of alpha and of the samples too */
+    for (size_t i = 0; i < NUM_SAMPLES * hsub; i++)
+        alpha[i] = i < 8 ? (i & 1 ? 0xff : 0) : rnd();
+    bg[0] = src[1] = 0;
+    bg[1] = src[0] = 0xff;
+    memset(dst0, 0xa5, sizeof dst0);
+    memset(dst1, 0xa5, sizeof dst1);
+
+    call_ref(dst0, bg, src, alpha, NUM_SAMPLES);
+    call_new(dst1, bg, src, alpha, NUM_SAMPLES);
+    if (memcmp(dst0, dst1, sizeof dst0))
+        fail();
+
+    bench_new(dst1, bg, src, alpha, NUM_SAMPLES);
+}
+
 void checkasm_check_ubuf_pic_blit(void)
 {
     void (*blend_hsub1)(uint16_t *, const uint16_t *, const uint16_t *,
                         const uint16_t *, size_t) = blit10_blend_hsub1_ref;
     void (*blend_hsub2)(uint16_t *, const uint16_t *, const uint16_t *,
                         const uint16_t *, size_t) = blit10_blend_hsub2_ref;
+    void (*blend8_hsub1)(uint8_t *, const uint8_t *, const uint8_t *,
+                         const uint8_t *, size_t) = blit8_blend_hsub1_ref;
+    void (*blend8_hsub2)(uint8_t *, const uint8_t *, const uint8_t *,
+                         const uint8_t *, size_t) = blit8_blend_hsub2_ref;
 
 #ifdef HAVE_X86ASM
     int cpu_flags = av_get_cpu_flags();
@@ -104,6 +160,8 @@ void checkasm_check_ubuf_pic_blit(void)
     if (cpu_flags & AV_CPU_FLAG_AVX2) {
         blend_hsub1 = upipe_blit10_blend_hsub1_avx2;
         blend_hsub2 = upipe_blit10_blend_hsub2_avx2;
+        blend8_hsub1 = upipe_blit8_blend_hsub1_avx2;
+        blend8_hsub2 = upipe_blit8_blend_hsub2_avx2;
     }
 #endif
 
@@ -112,4 +170,10 @@ void checkasm_check_ubuf_pic_blit(void)
 
     check_blend10(blend_hsub2, "blit10_blend_hsub2", 2);
     report("blit10_blend_hsub2");
+
+    check_blend8(blend8_hsub1, "blit8_blend_hsub1", 1);
+    report("blit8_blend_hsub1");
+
+    check_blend8(blend8_hsub2, "blit8_blend_hsub2", 2);
+    report("blit8_blend_hsub2");
 }
