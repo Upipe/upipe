@@ -130,6 +130,8 @@ static struct upipe *upipe_netmap_source_alloc(struct upipe_mgr *mgr,
                                         uint32_t signature, va_list args)
 {
     struct upipe *upipe = upipe_netmap_source_alloc_void(mgr, uprobe, signature, args);
+    if (unlikely(upipe == NULL))
+        return NULL;
     struct upipe_netmap_source *upipe_netmap_source = upipe_netmap_source_from_upipe(upipe);
     upipe_netmap_source_init_urefcount(upipe);
     upipe_netmap_source_init_uref_mgr(upipe);
