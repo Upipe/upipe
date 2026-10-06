@@ -23,7 +23,7 @@ extern "C" {
 
 #include <stdbool.h>
 
-/** @This declares three functions dealing with the upump manager.
+/** @This declares four functions dealing with the upump manager.
  *
  * You must add one pointer to your private upipe structure, for instance:
  * @code
@@ -74,7 +74,7 @@ static void STRUCTURE##_init_upump_mgr(struct upipe *upipe)                 \
     struct STRUCTURE *s = STRUCTURE##_from_upipe(upipe);                    \
     s->UPUMP_MGR = NULL;                                                    \
 }                                                                           \
-/** @internal @This sends a probe to attach a uref manager.                 \
+/** @internal @This sends a probe to attach a upump manager.                \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
  * @return an error code                                                    \
