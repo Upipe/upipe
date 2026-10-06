@@ -2188,6 +2188,7 @@ static struct upipe *upipe_avcenc_alloc(struct upipe_mgr *mgr,
 
     struct uref *options = uref_alloc_control(flow_def->mgr);
     if (options == NULL) {
+        uref_free(flow_def);
         av_frame_free(&frame);
         av_packet_free(&avpkt);
         upipe_avcenc_free_flow(upipe);
