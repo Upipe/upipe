@@ -265,6 +265,7 @@ static bool upipe_sws_thumbs_handle(struct upipe *upipe, struct uref *uref,
                                            thumbsize->vsize * thumbnum->vsize);
         if (unlikely(!ubuf)) {
             uref_free(gallery);
+            upipe_sws_thumbs->gallery = NULL;
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return true;
