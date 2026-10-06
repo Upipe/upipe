@@ -218,6 +218,7 @@ struct upipe_mgr *upipe_pthread_xfer_mgr_alloc_prio_named(
     return xfer_mgr;
 
 upipe_pthread_xfer_mgr_alloc_err5:
+    free(pthread_ctx->name);
     umutex_release(mutex);
     upipe_mgr_release(pthread_ctx->xfer_mgr);
     upipe_mgr_release(xfer_mgr);
