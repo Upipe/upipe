@@ -29,7 +29,7 @@ extern "C" {
  * which internally implement an inner pipeline to handle a given task. It also
  * acts as a proxy to the last element of the inner pipeline.
  *
- * @strong{You must} add four members to your private upipe structure,
+ * @strong{You must} add two members to your private upipe structure,
  * for instance:
  * @code
  *  struct upipe *output;
@@ -43,13 +43,12 @@ extern "C" {
  * Supposing the name of your structure is upipe_foo, it declares:
  * @list
  * @item @code
- *  int upipe_foo_store_bin_output(struct upipe *upipe, struct upipe *inner)
+ *  void upipe_foo_store_bin_output(struct upipe *upipe, struct upipe *inner)
  * @end code
  * Called whenever you change the last inner pipe of this bin.
  *
  * @item @code
- *  void upipe_foo_init_bin_output(struct upipe *upipe,
- *                                 struct urefcount *refcount)
+ *  void upipe_foo_init_bin_output(struct upipe *upipe)
  * @end code
  * Typically called in your upipe_foo_alloc() function.
  *
@@ -67,7 +66,8 @@ extern "C" {
  * @end list
  *
  * @param STRUCTURE name of your private upipe structure
- * your private upipe structure
+ * @param LAST_INNER name of the @tt{struct upipe *} field of
+ * your private upipe structure, pointing to the last inner pipe of the bin
  * @param OUTPUT name of the @tt{struct upipe *} field of
  * your private upipe structure, pointing to the output of the bin
  * @param REQUEST_LIST name of the @tt{struct uchain} field of
@@ -90,7 +90,6 @@ static void STRUCTURE##_store_bin_output(struct upipe *upipe,               \
 /** @internal @This initializes the private members for this helper.        \
  *                                                                          \
  * @param upipe description structure of the pipe                           \
- * @param refcount refcount to pass to the inner probe                      \
  */                                                                         \
 static void STRUCTURE##_init_bin_output(struct upipe *upipe)                \
 {                                                                           \
