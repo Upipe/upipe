@@ -474,6 +474,7 @@ static bool upipe_h264f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     struct ubuf_block_stream *s = &f.s;
     if (!ubase_check(ubuf_block_stream_init(s, upipe_h264f->sps[sps_id], 1))) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(flow_def);
         return false;
     }
 
