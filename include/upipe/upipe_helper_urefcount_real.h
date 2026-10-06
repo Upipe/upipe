@@ -33,7 +33,12 @@ extern "C" {
  * Internal wrapper.
  *
  * @item @code
- *  void upipe_foo_release_urefcount_real(struct urefcount *urefcount)
+ *  struct upipe *upipe_foo_use_urefcount_real(struct upipe *upipe)
+ * @end code
+ * Increments the refcount.
+ *
+ * @item @code
+ *  void upipe_foo_release_urefcount_real(struct upipe *upipe)
  * @end code
  * Typically called in the main urefcount callback.
  *
