@@ -153,6 +153,7 @@ static struct upipe *upipe_rtpsrc_alloc(struct upipe_mgr *mgr,
             goto upipe_rtpsrc_alloc_err;
         upipe_setflowdef_set_dict(output, flow_def);
         uref_free(flow_def);
+        flow_def = NULL;
     }
 
     output = upipe_void_chain_output(output,
