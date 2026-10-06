@@ -641,6 +641,7 @@ static struct upipe_ts_demux_psi_pid *
                                   flow_def)))) {
         if (flow_def != NULL)
             uref_free(flow_def);
+        upipe_release(psi_pid->psi_split);
         free(psi_pid);
         return NULL;
     }
