@@ -589,6 +589,7 @@ static struct upipe *upipe_v210dec_alloc(struct upipe_mgr *manager,
 
     else {
         upipe_err(upipe, "unknown output format");
+        uref_free(flow_def);
         upipe_v210dec_free_flow(upipe);
         return NULL;
     }
