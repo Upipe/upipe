@@ -212,6 +212,7 @@ static void upipe_ablk_input(struct upipe *upipe,
     if (unlikely(!ubuf)) {
         upipe_err(upipe, "fail to duplicate blank buffer");
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        uref_free(uref);
         return;
     }
 
