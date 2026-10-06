@@ -169,8 +169,6 @@ extern "C" {
  * structure
  * @param UCHAIN name of the @tt{struct uchain} member of your private subpipe
  * structure
- * @param UPIPE name of the @tt{struct upipe} field of
- * your private upipe structure
  */
 #define UPIPE_HELPER_SUBPIPE(STRUCTURE, STRUCTURE_SUB, SUB, MGR, ULIST,     \
                              UCHAIN)                                        \
