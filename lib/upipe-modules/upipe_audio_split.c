@@ -152,6 +152,7 @@ static struct upipe *upipe_audio_split_sub_alloc(struct upipe_mgr *mgr,
                                                          &sub->planes)) ||
                  !ubase_check(uref_sound_flow_get_channels(flow_def,
                                                            &sub->channels)))) {
+        uref_free(flow_def);
         upipe_clean(upipe);
         free(sub);
         return NULL;
