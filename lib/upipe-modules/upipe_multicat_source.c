@@ -271,6 +271,7 @@ static int upipe_msrc_start(struct upipe *upipe)
     if (unlikely(fstat(fd, &aux_stat) == -1 ||
                  aux_stat.st_size < sizeof(uint64_t))) {
         upipe_warn_va(upipe, "invalid segment %"PRIu64, upipe_msrc->fileidx);
+        close(fd);
         /* try next file anyway */
         return upipe_msrc_skip(upipe);
     }
@@ -280,6 +281,7 @@ static int upipe_msrc_start(struct upipe *upipe)
     if (unlikely(aux_buf == MAP_FAILED)) {
         upipe_err_va(upipe,
                      "unable to mmap segment %"PRIu64, upipe_msrc->fileidx);
+        close(fd);
         return UBASE_ERR_EXTERNAL;
     }
 
