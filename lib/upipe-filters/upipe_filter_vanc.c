@@ -374,6 +374,9 @@ static struct upipe *_upipe_vanc_alloc(struct upipe_mgr *mgr,
 
     struct upipe_vanc *upipe_vanc = malloc(sizeof(struct upipe_vanc));
     if (unlikely(upipe_vanc == NULL)) {
+        uprobe_release(uprobe);
+        uprobe_release(uprobe_afd);
+        uprobe_release(uprobe_scte104);
         uprobe_release(uprobe_op47);
         uprobe_release(uprobe_cea708);
         uprobe_release(uprobe_st2031);
