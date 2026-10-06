@@ -134,6 +134,8 @@ static bool upipe_pack10bit_handle(struct upipe *upipe, struct uref *uref,
         int buf_size = -1;
         /* Map input buffer. */
         if (unlikely(!ubase_check(uref_block_read(uref, input_offset, &buf_size, &src)))) {
+            ubuf_block_unmap(ubuf_dst, 0);
+            ubuf_free(ubuf_dst);
             uref_free(uref);
             upipe_throw_fatal(upipe, UBASE_ERR_INVALID);
             return true;
