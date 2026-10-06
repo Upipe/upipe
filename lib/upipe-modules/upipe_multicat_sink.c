@@ -155,6 +155,7 @@ static int _upipe_multicat_sink_output_alloc(struct upipe *upipe)
         (err = upipe_set_flow_def(fsink, upipe_multicat_sink->flow_def)) !=
         UBASE_ERR_NONE) {
         upipe_warn(upipe, "set_flow_def failed");
+        upipe_release(fsink);
         return err;
     }
     upipe_multicat_sink->fsink = fsink;
