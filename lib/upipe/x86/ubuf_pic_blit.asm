@@ -9,6 +9,9 @@ blit10_alpha_shuffle: db 0,1, 4,5, 8,9, 12,13
     times 8 db -1
 blit8_alpha_shuffle: db 0, 2, 4, 6, 8, 10, 12, 14
     times 8 db -1
+blit8_blend_bias: dw 0x7f81
+blit8_blend_101: dw 0x101
+blit8_blend_80: db 0x80
 
 SECTION .text
 
@@ -278,54 +281,59 @@ cglobal blit10_threshold_hsub2, 6, 9, 6, dst_, bg_, src_, alpha_, hsize_, thresh
     .ret:
 RET
 
-%define zero m0
-%define pw1 m1
-%define pw255 m2
+; The 8 bit blend kernels compute dst = (bg * (0xff - a) + src * a) / 0xff,
+; matching the C bit for bit, with one multiply-add per pair of samples.
+;
+; pmaddubsw multiplies unsigned bytes by signed bytes and sums adjacent pairs:
+; with the weights (a, 0xff - a) unsigned and the samples flipped to signed,
+; (src - 0x80, bg - 0x80), it gives N - 0x7f80 for the numerator N, which
+; lies between -0x7f80 and 0x7e81, so the sum never saturates.  Adding 0x7f81
+; leaves N + 1 as an unsigned word, and the division is then one pmulhuw:
+; (N + 1) * 0x101 >> 16 == N / 0xff for every N up to 0xff * 0xff (checked
+; over all of them).
+
+%define pb_80   m0
+%define pw_bias m1
+%define pw_101  m2
+%define pb_ff   m10
+
+%macro BLEND8_CONSTANTS 0
+    vpbroadcastb pb_80, [blit8_blend_80]
+    vpbroadcastw pw_bias, [blit8_blend_bias]
+    vpbroadcastw pw_101, [blit8_blend_101]
+    pcmpeqb pb_ff, pb_ff
+%endmacro
+
+; Takes alpha in m3, loads src and bg at r6q, leaves the finished samples in
+; m3 and clobbers m4 to m8.
+%macro BLEND8 0
+    pxor      m4, m3, pb_ff     ; 0xff - a
+    punpckhbw m5, m3, m4        ; (a, 0xff - a) pairs, high half
+    punpcklbw m3, m4            ; and low half
+    movu      m6, [src_q + r6q - mmsize]
+    movu      m7, [bg_q + r6q - mmsize]
+    pxor      m6, pb_80         ; src - 0x80
+    pxor      m7, pb_80         ; bg - 0x80
+    punpckhbw m8, m6, m7        ; the matching (src, bg) pairs
+    punpcklbw m6, m7
+    pmaddubsw m3, m6            ; N - 0x7f80
+    pmaddubsw m5, m8
+    paddw     m3, pw_bias       ; N + 1
+    paddw     m5, pw_bias
+    pmulhuw   m3, pw_101        ; / 0xff
+    pmulhuw   m5, pw_101
+    packuswb  m3, m5
+%endmacro
 
 cglobal blit8_blend_hsub1, 5, 10, 11, dst_, bg_, src_, alpha_, hsize_
-    pxor zero, zero
-    pcmpeqw pw255, pw255
+    BLEND8_CONSTANTS
     mov r6d, mmsize
-    psrlw pw1, pw255, 15
-    psrlw pw255, 8
     ALIGN 16
     .loop_simd:
-        ; Load and unpack alpha
         movu m3, [alpha_q + r6q - mmsize]
-        punpckhbw m4, m3, zero
-        punpcklbw m3, zero
         mov r7q, r6q
-        ; Load and unpack src
-        movu m5, [src_q + r6q - mmsize]
-        punpckhbw m6, m5, zero
-        punpcklbw m5, zero
-        ; 255-a
-        psubw m8, pw255, m4
-        psubw m7, pw255, m3
-        ; Load and unpack bg
-        movu m9, [bg_q + r6q - mmsize]
-        punpckhbw m10, m9, zero
-        punpcklbw m9, zero
-        ; src*a
-        pmullw m6, m4
-        pmullw m5, m3
-        ; bg*(255-a)
-        pmullw m10, m8
-        pmullw m9, m7
-        ; bg*(255-a) + src*a
-        paddw m4, m10, m6
-        paddw m3, m9, m5
-        ; /255 -> (t + 1 + (t>>8)) >> 8
-        paddw m6, m4, pw1
-        paddw m5, m3, pw1
-        psrlw m4, 8
-        psrlw m3, 8
-        paddw m6, m4
-        paddw m5, m3
-        psrlw m6, 8
-        psrlw m5, 8
-        packuswb m5, m6
-        movu [dst_q + r6q - mmsize], m5
+        BLEND8
+        movu [dst_q + r6q - mmsize], m3
         lea r6q, [r6q + mmsize]
         cmp hsize_q, r6q
     jae .loop_simd
@@ -339,56 +347,21 @@ RET
 %define shuffle m11
 
 cglobal blit8_blend_hsub2, 5, 10, 12, dst_, bg_, src_, alpha_, hsize_
-    pxor zero, zero
-    pcmpeqw pw255, pw255
-    mov r6d, mmsize
-    psrlw pw1, pw255, 15
-    psrlw pw255, 8
+    BLEND8_CONSTANTS
     VBROADCASTI128 shuffle, [blit8_alpha_shuffle]
+    mov r6d, mmsize
     ALIGN 16
     .loop_simd:
-        ; Load and unpack alpha
+        ; Load alpha and compress every second byte
         movu m5, [alpha_q + 2*r6q - 2*mmsize]
         movu m6, [alpha_q + 2*r6q - 1*mmsize]
-        ; Need to compress every second byte
         pshufb m5, shuffle
         pshufb m6, shuffle
         punpcklqdq m3, m5, m6
         vpermq m3, m3, q3120 ; Permute to get correct order of qwords
-        punpckhbw m4, m3, zero
-        punpcklbw m3, zero
         mov r7q, r6q
-        ; Load and unpack src
-        movu m5, [src_q + r6q - mmsize]
-        punpckhbw m6, m5, zero
-        punpcklbw m5, zero
-        ; 255-a
-        psubw m8, pw255, m4
-        psubw m7, pw255, m3
-        ; Load and unpack bg
-        movu m9, [bg_q + r6q - mmsize]
-        punpckhbw m10, m9, zero
-        punpcklbw m9, zero
-        ; src*a
-        pmullw m6, m4
-        pmullw m5, m3
-        ; bg*(255-a)
-        pmullw m10, m8
-        pmullw m9, m7
-        ; bg*(255-a) + src*a
-        paddw m4, m10, m6
-        paddw m3, m9, m5
-        ; /255 -> (t + 1 + (t>>8)) >> 8
-        paddw m6, m4, pw1
-        paddw m5, m3, pw1
-        psrlw m4, 8
-        psrlw m3, 8
-        paddw m6, m4
-        paddw m5, m3
-        psrlw m6, 8
-        psrlw m5, 8
-        packuswb m5, m6
-        movu [dst_q + r6q - mmsize], m5
+        BLEND8
+        movu [dst_q + r6q - mmsize], m3
         lea r6q, [r6q + mmsize]
         cmp hsize_q, r6q
     jae .loop_simd
@@ -398,6 +371,12 @@ cglobal blit8_blend_hsub2, 5, 10, 12, dst_, bg_, src_, alpha_, hsize_
     SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
     .ret:
 RET
+
+%undef pb_80
+%undef pw_bias
+%undef pw_101
+%undef pb_ff
+%undef shuffle
 
 cglobal blit10_blend_hsub1, 5, 11, 8, dst_, bg_, src_, alpha_, hsize_
     BLEND10_CONSTANTS
