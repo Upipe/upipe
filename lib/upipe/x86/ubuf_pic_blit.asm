@@ -587,11 +587,15 @@ RET
 
 ; Build k2, the predicate for the trailing hsize_q samples, and leave -1 in r6q
 ; for the alpha predicates below.  %1 is the mask width: q for byte samples,
-; d for word samples.
+; d for word samples, w for the words of a ymm.
 %macro TAIL_MASK 1
     mov r6q, -1
     bzhi r7q, r6q, hsize_q
-    kmov%1 k2, r7 %+ %1
+%ifidn %1, q
+    kmovq k2, r7q
+%else
+    kmov%1 k2, r7d ; kmovw takes a 32 bit register, which nasm 2 insists on
+%endif
 %endmacro
 
 ; Build k3 and k4, the predicates for the two alpha vectors feeding the trailing
