@@ -624,3 +624,195 @@ cglobal blit10_threshold_hsub2, 6, 8, 5, dst_, bg_, src_, alpha_, hsize_, thresh
     vmovdqu16 [dst_q]{k2}, blend
     .ret:
 RET
+
+; In place, bg == dst: the selected source samples are stored under the compare
+; mask and the others are not touched, so the background is never loaded, and a
+; vector with no selected sample is neither loaded nor stored, which leaves the
+; cache lines of transparent areas clean.
+
+%macro INPLACE_STORE 3 ; mask width q or d, sample bits 8 or 16, offset
+        kortest%1 k1, k1
+        jz .next
+        movu m1, [src_q + %3]
+        vmovdqu%2 [dst_q + %3]{k1}, m1
+%endmacro
+
+cglobal blit8_threshold_inplace_hsub1, 5, 8, 2, dst_, src_, alpha_, hsize_, threshold_
+    vpbroadcastb m0, threshold_d
+    mov r5q, hsize_q
+    and r5q, -mmsize
+    add dst_q, r5q
+    add src_q, r5q
+    add alpha_q, r5q
+    neg r5q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        vpcmpub k1, m0, [alpha_q + r5q], 1 ; threshold < alpha
+        INPLACE_STORE q, 8, r5q
+    .next:
+        add r5q, mmsize
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize-1
+    jz .ret
+    TAIL_MASK q
+    vmovdqu8 m1{k2}{z}, [alpha_q]
+    vpcmpub k1, m0, m1, 1
+    kandq k1, k1, k2
+    vmovdqu8 m1{k1}{z}, [src_q]
+    vmovdqu8 [dst_q]{k1}, m1
+    .ret:
+RET
+
+cglobal blit8_threshold_inplace_hsub2, 5, 8, 3, dst_, src_, alpha_, hsize_, threshold_
+    vpbroadcastb m0, threshold_d
+    mov r5q, hsize_q
+    and r5q, -mmsize
+    add dst_q, r5q
+    add src_q, r5q
+    lea alpha_q, [alpha_q + 2*r5q]
+    neg r5q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        movu m1, [alpha_q + 2*r5q]
+        movu m2, [alpha_q + 2*r5q + mmsize]
+        vpmovwb ym1, m1
+        vpmovwb ym2, m2
+        vinserti64x4 m1, m1, ym2, 1
+        vpcmpub k1, m0, m1, 1
+        INPLACE_STORE q, 8, r5q
+    .next:
+        add r5q, mmsize
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize-1
+    jz .ret
+    TAIL_MASK q
+    TAIL_MASK_ALPHA q, mmsize
+    vmovdqu8 m1{k3}{z}, [alpha_q]
+    vmovdqu8 m2{k4}{z}, [alpha_q + mmsize]
+    vpmovwb ym1, m1
+    vpmovwb ym2, m2
+    vinserti64x4 m1, m1, ym2, 1
+    vpcmpub k1, m0, m1, 1
+    kandq k1, k1, k2
+    vmovdqu8 m1{k1}{z}, [src_q]
+    vmovdqu8 [dst_q]{k1}, m1
+    .ret:
+RET
+
+cglobal blit10_threshold_inplace_hsub1, 5, 8, 2, dst_, src_, alpha_, hsize_, threshold_
+    vpbroadcastw m0, threshold_d
+    mov r5q, hsize_q
+    and r5q, -(mmsize/2)
+    lea dst_q, [dst_q + 2*r5q]
+    lea src_q, [src_q + 2*r5q]
+    lea alpha_q, [alpha_q + 2*r5q]
+    neg r5q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        vpcmpuw k1, m0, [alpha_q + 2*r5q], 1
+        INPLACE_STORE d, 16, 2*r5q
+    .next:
+        add r5q, mmsize/2
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize/2-1
+    jz .ret
+    TAIL_MASK d
+    vmovdqu16 m1{k2}{z}, [alpha_q]
+    vpcmpuw k1, m0, m1, 1
+    kandd k1, k1, k2
+    vmovdqu16 m1{k1}{z}, [src_q]
+    vmovdqu16 [dst_q]{k1}, m1
+    .ret:
+RET
+
+cglobal blit10_threshold_inplace_hsub2, 5, 8, 4, dst_, src_, alpha_, hsize_, threshold_
+    vpbroadcastw m0, threshold_d
+    movu m3, [blit10_alpha_permute]
+    mov r5q, hsize_q
+    and r5q, -(mmsize/2)
+    lea dst_q, [dst_q + 2*r5q]
+    lea src_q, [src_q + 2*r5q]
+    lea alpha_q, [alpha_q + 4*r5q]
+    neg r5q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        movu m1, [alpha_q + 4*r5q]
+        vpermt2w m1, m3, [alpha_q + 4*r5q + mmsize]
+        vpcmpuw k1, m0, m1, 1
+        INPLACE_STORE d, 16, 2*r5q
+    .next:
+        add r5q, mmsize/2
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize/2-1
+    jz .ret
+    TAIL_MASK d
+    TAIL_MASK_ALPHA d, mmsize/2
+    vmovdqu16 m1{k3}{z}, [alpha_q]
+    vmovdqu16 m2{k4}{z}, [alpha_q + mmsize]
+    vpermt2w m1, m3, m2
+    vpcmpuw k1, m0, m1, 1
+    kandd k1, k1, k2
+    vmovdqu16 m1{k1}{z}, [src_q]
+    vmovdqu16 [dst_q]{k1}, m1
+    .ret:
+RET
+
+
+; Candidates for the fused hsub1 kernels, which lose to avx2 once the planes
+; overflow the cache: _blendm selects with a register blend after plain loads,
+; no masked load in the loop; _ymm is the current kernel at 256 bits.
+
+; %1 8 or 10, %2 blendm or ymm, %3 mask width, %4 b or w, %5 bytes per sample,
+; %6 bits of the vmovdqu element
+%macro THRESHOLD_HSUB1_FUSED 6
+cglobal blit%1_threshold_%2_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
+    vpbroadcast%4 m0, threshold_d
+    mov r6q, hsize_q
+    and r6q, -(mmsize/%5)
+    lea dst_q, [dst_q + %5*r6q]
+    lea bg_q, [bg_q + %5*r6q]
+    lea src_q, [src_q + %5*r6q]
+    lea alpha_q, [alpha_q + %5*r6q]
+    neg r6q
+    jz .tail
+    ALIGN 16
+    .loop_simd:
+        vpcmpu%4 k1, m0, [alpha_q + %5*r6q], 1
+        movu m1, [bg_q + %5*r6q]
+%ifidn %2, blendm
+        movu m2, [src_q + %5*r6q]
+        vpblendm%4 m1{k1}, m1, m2
+%else
+        vmovdqu%6 m1{k1}, [src_q + %5*r6q]
+%endif
+        movu [dst_q + %5*r6q], m1
+        add r6q, mmsize/%5
+    jl .loop_simd
+    .tail:
+    and hsize_q, mmsize/%5-1
+    jz .ret
+    TAIL_MASK %3
+    vmovdqu%6 m2{k2}{z}, [alpha_q]
+    vpcmpu%4 k1, m0, m2, 1
+    kand%3 k1, k1, k2
+    vmovdqu%6 m1{k2}{z}, [bg_q]
+    vmovdqu%6 m1{k1}, [src_q]
+    vmovdqu%6 [dst_q]{k2}, m1
+    .ret:
+RET
+%endmacro
+
+THRESHOLD_HSUB1_FUSED 8, blendm, q, b, 1, 8
+THRESHOLD_HSUB1_FUSED 10, blendm, d, w, 2, 16
+
+INIT_YMM avx512
+THRESHOLD_HSUB1_FUSED 8, ymm, d, b, 1, 8
+THRESHOLD_HSUB1_FUSED 10, ymm, w, w, 2, 16
