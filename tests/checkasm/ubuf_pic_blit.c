@@ -440,13 +440,6 @@ void checkasm_check_ubuf_pic_blit(void)
     void (*inplace10[2])(uint16_t *, const uint16_t *, const uint16_t *,
                          size_t, int) = {
         blit10_inplace_hsub1_ref, blit10_inplace_hsub2_ref };
-    /* candidates for the avx512 hsub1 kernels: blendm, ymm */
-    void (*candidate8[2])(uint8_t *, const uint8_t *, const uint8_t *,
-                          const uint8_t *, size_t, int) = {
-        blit8_threshold_hsub1_ref, blit8_threshold_hsub1_ref };
-    void (*candidate10[2])(uint16_t *, const uint16_t *, const uint16_t *,
-                           const uint16_t *, size_t, int) = {
-        blit10_threshold_hsub1_ref, blit10_threshold_hsub1_ref };
 
 #ifdef HAVE_X86ASM
     int cpu_flags = av_get_cpu_flags();
@@ -471,10 +464,6 @@ void checkasm_check_ubuf_pic_blit(void)
         inplace8[1] = upipe_blit8_threshold_inplace_hsub2_avx512;
         inplace10[0] = upipe_blit10_threshold_inplace_hsub1_avx512;
         inplace10[1] = upipe_blit10_threshold_inplace_hsub2_avx512;
-        candidate8[0] = upipe_blit8_threshold_blendm_hsub1_avx512;
-        candidate8[1] = upipe_blit8_threshold_ymm_hsub1_avx512;
-        candidate10[0] = upipe_blit10_threshold_blendm_hsub1_avx512;
-        candidate10[1] = upipe_blit10_threshold_ymm_hsub1_avx512;
     }
 #endif
 #endif
@@ -503,7 +492,6 @@ void checkasm_check_ubuf_pic_blit(void)
     check_threshold10(threshold10_hsub2, "blit10_threshold_hsub2");
     report("blit10_threshold_hsub2");
 
-    static const char *const candidate_names[2] = { "blendm", "ymm" };
     char name[64];
 
     for (int h = 0; h < 2; h++) {
@@ -512,17 +500,6 @@ void checkasm_check_ubuf_pic_blit(void)
         report("%s", name);
         snprintf(name, sizeof name, "blit10_threshold_inplace_hsub%d", h + 1);
         check_inplace10(inplace10[h], name);
-        report("%s", name);
-    }
-
-    for (int c = 0; c < 2; c++) {
-        snprintf(name, sizeof name, "blit8_threshold_%s_hsub1",
-                 candidate_names[c]);
-        check_threshold8(candidate8[c], name);
-        report("%s", name);
-        snprintf(name, sizeof name, "blit10_threshold_%s_hsub1",
-                 candidate_names[c]);
-        check_threshold10(candidate10[c], name);
         report("%s", name);
     }
 
@@ -558,17 +535,6 @@ void checkasm_check_ubuf_pic_blit(void)
         report("%s_frame", name);
         snprintf(name, sizeof name, "blit10_threshold_inplace_hsub%d", h + 1);
         check_frame_inplace10(inplace10[h], ref_inplace10[h], name, h + 1);
-        report("%s_frame", name);
-    }
-
-    for (int c = 0; c < 2; c++) {
-        snprintf(name, sizeof name, "blit8_threshold_%s_hsub1",
-                 candidate_names[c]);
-        check_frame8(candidate8[c], ref8[0], name, 1);
-        report("%s_frame", name);
-        snprintf(name, sizeof name, "blit10_threshold_%s_hsub1",
-                 candidate_names[c]);
-        check_frame10(candidate10[c], ref10[0], name, 1);
         report("%s_frame", name);
     }
 }

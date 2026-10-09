@@ -467,41 +467,6 @@ INIT_ZMM avx512
 %define threshold m0
 %define blend m1
 %define alp m2
-
-cglobal blit8_threshold_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
-    vpbroadcastb threshold, threshold_d
-    mov r6q, hsize_q
-    and r6q, -mmsize ; samples handled by the vector loop
-    add dst_q, r6q
-    add bg_q, r6q
-    add src_q, r6q
-    add alpha_q, r6q
-    neg r6q          ; count the index up to zero
-    jz .tail
-    ALIGN 16
-    .loop_simd:
-        vpcmpub k1, threshold, [alpha_q + r6q], 1 ; threshold < alpha
-        movu blend, [bg_q + r6q]
-        vmovdqu8 blend{k1}, [src_q + r6q]
-        movu [dst_q + r6q], blend
-        add r6q, mmsize
-    jl .loop_simd
-    .tail:
-    and hsize_q, mmsize-1
-    jz .ret
-    TAIL_MASK q
-    vmovdqu8 alp{k2}{z}, [alpha_q]
-    vpcmpub k1, threshold, alp, 1
-    kandq k1, k1, k2 ; a zero threshold would otherwise select samples past the row
-    vmovdqu8 blend{k2}{z}, [bg_q]
-    vmovdqu8 blend{k1}, [src_q]
-    vmovdqu8 [dst_q]{k2}, blend
-    .ret:
-RET
-
-%define threshold m0
-%define blend m1
-%define alp m2
 %define alp2 m3
 
 cglobal blit8_threshold_hsub2, 6, 8, 4, dst_, bg_, src_, alpha_, hsize_, threshold_
@@ -543,41 +508,6 @@ cglobal blit8_threshold_hsub2, 6, 8, 4, dst_, bg_, src_, alpha_, hsize_, thresho
     vmovdqu8 blend{k2}{z}, [bg_q]
     vmovdqu8 blend{k1}, [src_q]
     vmovdqu8 [dst_q]{k2}, blend
-    .ret:
-RET
-
-%define threshold m0
-%define blend m1
-%define alp m2
-
-cglobal blit10_threshold_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
-    vpbroadcastw threshold, threshold_d
-    mov r6q, hsize_q
-    and r6q, -(mmsize/2)
-    lea dst_q, [dst_q + 2*r6q]
-    lea bg_q, [bg_q + 2*r6q]
-    lea src_q, [src_q + 2*r6q]
-    lea alpha_q, [alpha_q + 2*r6q]
-    neg r6q
-    jz .tail
-    ALIGN 16
-    .loop_simd:
-        vpcmpuw k1, threshold, [alpha_q + 2*r6q], 1
-        movu blend, [bg_q + 2*r6q]
-        vmovdqu16 blend{k1}, [src_q + 2*r6q]
-        movu [dst_q + 2*r6q], blend
-        add r6q, mmsize/2
-    jl .loop_simd
-    .tail:
-    and hsize_q, mmsize/2-1
-    jz .ret
-    TAIL_MASK d
-    vmovdqu16 alp{k2}{z}, [alpha_q]
-    vpcmpuw k1, threshold, alp, 1
-    kandd k1, k1, k2
-    vmovdqu16 blend{k2}{z}, [bg_q]
-    vmovdqu16 blend{k1}, [src_q]
-    vmovdqu16 [dst_q]{k2}, blend
     .ret:
 RET
 
@@ -766,53 +696,45 @@ cglobal blit10_threshold_inplace_hsub2, 5, 8, 4, dst_, src_, alpha_, hsize_, thr
 RET
 
 
-; Candidates for the fused hsub1 kernels, which lose to avx2 once the planes
-; overflow the cache: _blendm selects with a register blend after plain loads,
-; no masked load in the loop; _ymm is the current kernel at 256 bits.
-
-; %1 8 or 10, %2 blendm or ymm, %3 mask width, %4 b or w, %5 bytes per sample,
-; %6 bits of the vmovdqu element
-%macro THRESHOLD_HSUB1_FUSED 6
-cglobal blit%1_threshold_%2_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
-    vpbroadcast%4 m0, threshold_d
+; The fused hsub1 kernels at 256 bits: once the planes overflow the cache, zmm
+; loses about 8% to avx2 on Zen 4 (masked load or register blend alike) while
+; ymm stays level with it, and is still faster from L1.
+;
+; %1 8 or 10, %2 mask width, %3 b or w, %4 bytes per sample, %5 bits of the
+; vmovdqu element
+%macro THRESHOLD_HSUB1_FUSED 5
+cglobal blit%1_threshold_hsub1, 6, 8, 3, dst_, bg_, src_, alpha_, hsize_, threshold_
+    vpbroadcast%3 m0, threshold_d
     mov r6q, hsize_q
-    and r6q, -(mmsize/%5)
-    lea dst_q, [dst_q + %5*r6q]
-    lea bg_q, [bg_q + %5*r6q]
-    lea src_q, [src_q + %5*r6q]
-    lea alpha_q, [alpha_q + %5*r6q]
+    and r6q, -(mmsize/%4)
+    lea dst_q, [dst_q + %4*r6q]
+    lea bg_q, [bg_q + %4*r6q]
+    lea src_q, [src_q + %4*r6q]
+    lea alpha_q, [alpha_q + %4*r6q]
     neg r6q
     jz .tail
     ALIGN 16
     .loop_simd:
-        vpcmpu%4 k1, m0, [alpha_q + %5*r6q], 1
-        movu m1, [bg_q + %5*r6q]
-%ifidn %2, blendm
-        movu m2, [src_q + %5*r6q]
-        vpblendm%4 m1{k1}, m1, m2
-%else
-        vmovdqu%6 m1{k1}, [src_q + %5*r6q]
-%endif
-        movu [dst_q + %5*r6q], m1
-        add r6q, mmsize/%5
+        vpcmpu%3 k1, m0, [alpha_q + %4*r6q], 1
+        movu m1, [bg_q + %4*r6q]
+        vmovdqu%5 m1{k1}, [src_q + %4*r6q]
+        movu [dst_q + %4*r6q], m1
+        add r6q, mmsize/%4
     jl .loop_simd
     .tail:
-    and hsize_q, mmsize/%5-1
+    and hsize_q, mmsize/%4-1
     jz .ret
-    TAIL_MASK %3
-    vmovdqu%6 m2{k2}{z}, [alpha_q]
-    vpcmpu%4 k1, m0, m2, 1
-    kand%3 k1, k1, k2
-    vmovdqu%6 m1{k2}{z}, [bg_q]
-    vmovdqu%6 m1{k1}, [src_q]
-    vmovdqu%6 [dst_q]{k2}, m1
+    TAIL_MASK %2
+    vmovdqu%5 m2{k2}{z}, [alpha_q]
+    vpcmpu%3 k1, m0, m2, 1
+    kand%2 k1, k1, k2 ; a zero threshold would otherwise select samples past the row
+    vmovdqu%5 m1{k2}{z}, [bg_q]
+    vmovdqu%5 m1{k1}, [src_q]
+    vmovdqu%5 [dst_q]{k2}, m1
     .ret:
 RET
 %endmacro
 
-THRESHOLD_HSUB1_FUSED 8, blendm, q, b, 1, 8
-THRESHOLD_HSUB1_FUSED 10, blendm, d, w, 2, 16
-
 INIT_YMM avx512
-THRESHOLD_HSUB1_FUSED 8, ymm, d, b, 1, 8
-THRESHOLD_HSUB1_FUSED 10, ymm, w, w, 2, 16
+THRESHOLD_HSUB1_FUSED 8, d, b, 1, 8
+THRESHOLD_HSUB1_FUSED 10, w, w, 2, 16
