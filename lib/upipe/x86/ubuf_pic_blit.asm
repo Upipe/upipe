@@ -287,7 +287,8 @@ RET
 
 ; In place, bg == dst: a vector with no sample over the threshold is neither
 ; loaded nor stored, which leaves the cache lines of transparent areas clean.
-; The scalar tails read the background from the destination.
+; The scalar tails read the background from the destination.  Only hsub1: at
+; hsub2 the skip lost to the plain kernel on Raptor Cove.
 
 cglobal blit8_threshold_inplace_hsub1, 5, 9, 5, dst_, src_, alpha_, hsize_, threshold_
     %define bg_q dst_q
@@ -320,44 +321,6 @@ cglobal blit8_threshold_inplace_hsub1, 5, 9, 5, dst_, src_, alpha_, hsize_, thre
     .ret:
 RET
 
-cglobal blit8_threshold_inplace_hsub2, 5, 9, 7, dst_, src_, alpha_, hsize_, threshold_
-    %define bg_q dst_q
-    mov r6d, 0x01010101 * 0x80
-    movd xm1, threshold_d
-    VBROADCASTI128 m5, [blit8_alpha_shuffle]
-    movd xm0, r6d
-    vpbroadcastb m1, xm1
-    vpbroadcastd m0, xm0
-    mov r6d, mmsize
-    pxor m1, m0
-    ALIGN 16
-    .loop_simd:
-        movu m4, [alpha_q + 2*r6q - 2*mmsize]
-        movu m6, [alpha_q + 2*r6q - 1*mmsize]
-        mov r7q, r6q
-        pshufb m4, m5
-        pshufb m6, m5
-        punpcklqdq m4, m4, m6
-        vpermq m4, m4, q3120
-        pxor m4, m0
-        pcmpgtb m4, m1
-        ptest m4, m4
-        jz .next
-        pand m3, m4, [src_q + r6q - mmsize]
-        pandn m2, m4, [dst_q + r6q - mmsize]
-        por m2, m3
-        movu [dst_q + r6q - mmsize], m2
-    .next:
-        lea r6q, [r6q + mmsize]
-        cmp hsize_q, r6q
-    jae .loop_simd
-    cmp r7q, hsize_q
-    jae .ret
-    ALIGN 16
-    SCALAR_TAIL_B r7, r6, r8, 2
-    .ret:
-RET
-
 cglobal blit10_threshold_inplace_hsub1, 5, 9, 4, dst_, src_, alpha_, hsize_, threshold_
     %define bg_q dst_q
     movd xm0, threshold_d
@@ -382,39 +345,6 @@ cglobal blit10_threshold_inplace_hsub1, 5, 9, 4, dst_, src_, alpha_, hsize_, thr
     jae .ret
     ALIGN 16
     SCALAR_TAIL_W r7, r6, r8
-    .ret:
-RET
-
-cglobal blit10_threshold_inplace_hsub2, 5, 9, 6, dst_, src_, alpha_, hsize_, threshold_
-    %define bg_q dst_q
-    movd xm0, threshold_d
-    VBROADCASTI128 m5, [blit10_alpha_shuffle]
-    mov r6d, mmsize/2
-    vpbroadcastw m0, xm0
-    ALIGN 16
-    .loop_simd:
-        movu m3, [alpha_q + 4*r6q - 2*mmsize]
-        movu m4, [alpha_q + 4*r6q - 1*mmsize]
-        mov r7q, r6q
-        pshufb m3, m5
-        pshufb m4, m5
-        punpcklqdq m3, m3, m4
-        vpermq m3, m3, q3120
-        pcmpgtw m3, m0
-        ptest m3, m3
-        jz .next
-        pand m2, m3, [src_q + 2*r6q - mmsize]
-        pandn m1, m3, [dst_q + 2*r6q - mmsize]
-        por m1, m2
-        movu [dst_q + 2*r6q - mmsize], m1
-    .next:
-        lea r6q, [r6q + mmsize/2]
-        cmp hsize_q, r6q
-    jae .loop_simd
-    cmp r7q, hsize_q
-    jae .ret
-    ALIGN 16
-    SCALAR_TAIL_W r7, r6, r8, 2
     .ret:
 RET
 
@@ -513,7 +443,8 @@ RET
 
 ; In place, bg == dst: a vector whose alpha is all 0 keeps the background and is
 ; neither loaded nor stored, and one whose alpha is all 0xff takes the source
-; without the blend, which gives the same samples.
+; without the blend, which gives the same samples.  Only hsub1, as the threshold
+; ones.
 
 %macro BLEND8_INPLACE 0 ; alpha in m3
     ptest m3, m3
@@ -547,31 +478,6 @@ cglobal blit8_blend_inplace_hsub1, 4, 10, 11, dst_, src_, alpha_, hsize_
     jae .ret
     ALIGN 16
     SCALAR_TAIL_BLEND_B r7, r8, r9, r6
-    .ret:
-RET
-
-cglobal blit8_blend_inplace_hsub2, 4, 10, 12, dst_, src_, alpha_, hsize_
-    %define bg_q dst_q
-    BLEND8_CONSTANTS
-    VBROADCASTI128 shuffle, [blit8_alpha_shuffle]
-    mov r6d, mmsize
-    ALIGN 16
-    .loop_simd:
-        movu m5, [alpha_q + 2*r6q - 2*mmsize]
-        movu m6, [alpha_q + 2*r6q - 1*mmsize]
-        pshufb m5, shuffle
-        pshufb m6, shuffle
-        punpcklqdq m3, m5, m6
-        vpermq m3, m3, q3120
-        mov r7q, r6q
-        BLEND8_INPLACE
-        lea r6q, [r6q + mmsize]
-        cmp hsize_q, r6q
-    jae .loop_simd
-    cmp r7q, hsize_q
-    jae .ret
-    ALIGN 16
-    SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
     .ret:
 RET
 
@@ -632,7 +538,7 @@ cglobal blit10_blend_hsub2, 5, 11, 9, dst_, bg_, src_, alpha_, hsize_
     .ret:
 RET
 
-; In place, as the 8 bit ones: all 0 alpha skipped, all 0x3ff alpha copied.
+; In place, as the 8 bit one: all 0 alpha skipped, all 0x3ff alpha copied.
 
 %macro BLEND10_INPLACE 0 ; alpha in m4
     ptest m4, m4
@@ -668,31 +574,6 @@ cglobal blit10_blend_inplace_hsub1, 4, 11, 8, dst_, src_, alpha_, hsize_
     jae .ret
     ALIGN 16
     SCALAR_TAIL_BLEND_W r7, r8, r9, r10
-    .ret:
-RET
-
-cglobal blit10_blend_inplace_hsub2, 4, 11, 9, dst_, src_, alpha_, hsize_
-    %define bg_q dst_q
-    BLEND10_CONSTANTS
-    VBROADCASTI128 m8, [blit10_alpha_shuffle]
-    mov r6d, mmsize/2
-    ALIGN 16
-    .loop_simd:
-        movu m4, [alpha_q + 4*r6q - 2*mmsize]
-        movu m5, [alpha_q + 4*r6q - 1*mmsize]
-        mov r7q, r6q
-        pshufb m4, m8
-        pshufb m5, m8
-        punpcklqdq m4, m4, m5
-        vpermq m4, m4, q3120
-        BLEND10_INPLACE
-        lea r6q, [r6q + mmsize/2]
-        cmp hsize_q, r6q
-    jae .loop_simd
-    cmp r7q, hsize_q
-    jae .ret
-    ALIGN 16
-    SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
     .ret:
 RET
 

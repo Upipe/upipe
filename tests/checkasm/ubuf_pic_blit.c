@@ -653,13 +653,9 @@ void checkasm_check_ubuf_pic_blit(void)
         threshold10_hsub1 = upipe_blit10_threshold_hsub1_avx2;
         threshold10_hsub2 = upipe_blit10_threshold_hsub2_avx2;
         inplace8[0] = upipe_blit8_threshold_inplace_hsub1_avx2;
-        inplace8[1] = upipe_blit8_threshold_inplace_hsub2_avx2;
         inplace10[0] = upipe_blit10_threshold_inplace_hsub1_avx2;
-        inplace10[1] = upipe_blit10_threshold_inplace_hsub2_avx2;
         blend_inplace8[0] = upipe_blit8_blend_inplace_hsub1_avx2;
-        blend_inplace8[1] = upipe_blit8_blend_inplace_hsub2_avx2;
         blend_inplace10[0] = upipe_blit10_blend_inplace_hsub1_avx2;
-        blend_inplace10[1] = upipe_blit10_blend_inplace_hsub2_avx2;
     }
 #ifdef AV_CPU_FLAG_AVX512
     if (cpu_flags & AV_CPU_FLAG_AVX512) {
