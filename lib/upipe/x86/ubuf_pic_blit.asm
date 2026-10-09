@@ -1007,7 +1007,8 @@ THRESHOLD_HSUB1_FUSED 8, d, b, 1, 8
 THRESHOLD_HSUB1_FUSED 10, w, w, 2, 16
 
 ; The blend in place at 512 bits: the same arithmetic, with the all 0 and all
-; maximum alpha tests on mask registers.  The tail is scalar.
+; maximum alpha tests on mask registers.  The tail is scalar, and a row shorter
+; than one vector, which the avx2 minimum allows, is all tail.
 
 INIT_ZMM avx512
 
@@ -1043,6 +1044,9 @@ cglobal blit8_blend_inplace_hsub1, 4, 10, 11, dst_, src_, alpha_, hsize_
     %define bg_q dst_q
     BLEND8_CONSTANTS_ZMM
     mov r6d, mmsize
+    xor r7d, r7d
+    cmp hsize_q, r6q
+    jb .tail
     ALIGN 16
     .loop_simd:
         movu m3, [alpha_q + r6q - mmsize]
@@ -1054,6 +1058,7 @@ cglobal blit8_blend_inplace_hsub1, 4, 10, 11, dst_, src_, alpha_, hsize_
     cmp r7q, hsize_q
     jae .ret
     ALIGN 16
+    .tail:
     SCALAR_TAIL_BLEND_B r7, r8, r9, r6
     .ret:
 RET
@@ -1062,6 +1067,9 @@ cglobal blit8_blend_inplace_hsub2, 4, 10, 11, dst_, src_, alpha_, hsize_
     %define bg_q dst_q
     BLEND8_CONSTANTS_ZMM
     mov r6d, mmsize
+    xor r7d, r7d
+    cmp hsize_q, r6q
+    jb .tail
     ALIGN 16
     .loop_simd:
         movu m5, [alpha_q + 2*r6q - 2*mmsize]
@@ -1077,6 +1085,7 @@ cglobal blit8_blend_inplace_hsub2, 4, 10, 11, dst_, src_, alpha_, hsize_
     cmp r7q, hsize_q
     jae .ret
     ALIGN 16
+    .tail:
     SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
     .ret:
 RET
@@ -1115,6 +1124,9 @@ cglobal blit10_blend_inplace_hsub1, 4, 11, 8, dst_, src_, alpha_, hsize_
     %define bg_q dst_q
     BLEND10_CONSTANTS_ZMM
     mov r6d, mmsize/2
+    xor r7d, r7d
+    cmp hsize_q, r6q
+    jb .tail
     ALIGN 16
     .loop_simd:
         movu m4, [alpha_q + 2*r6q - mmsize]
@@ -1126,6 +1138,7 @@ cglobal blit10_blend_inplace_hsub1, 4, 11, 8, dst_, src_, alpha_, hsize_
     cmp r7q, hsize_q
     jae .ret
     ALIGN 16
+    .tail:
     SCALAR_TAIL_BLEND_W r7, r8, r9, r10
     .ret:
 RET
@@ -1135,6 +1148,9 @@ cglobal blit10_blend_inplace_hsub2, 4, 11, 9, dst_, src_, alpha_, hsize_
     BLEND10_CONSTANTS_ZMM
     movu m8, [blit10_alpha_permute]
     mov r6d, mmsize/2
+    xor r7d, r7d
+    cmp hsize_q, r6q
+    jb .tail
     ALIGN 16
     .loop_simd:
         movu m4, [alpha_q + 4*r6q - 2*mmsize]
@@ -1147,6 +1163,7 @@ cglobal blit10_blend_inplace_hsub2, 4, 11, 9, dst_, src_, alpha_, hsize_
     cmp r7q, hsize_q
     jae .ret
     ALIGN 16
+    .tail:
     SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
     .ret:
 RET
