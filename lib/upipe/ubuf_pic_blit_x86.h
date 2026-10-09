@@ -47,7 +47,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
                 return true;
             }
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit8_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
+                if (dst == bg)
+                    upipe_blit8_threshold_inplace_hsub1_avx2(dst, src, alpha, hsize, threshold);
+                else
+                    upipe_blit8_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
             return false;
@@ -62,7 +65,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
                 return true;
             }
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit8_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
+                if (dst == bg)
+                    upipe_blit8_threshold_inplace_hsub2_avx2(dst, src, alpha, hsize, threshold);
+                else
+                    upipe_blit8_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
             return false;
@@ -73,7 +79,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
     else if (threshold == 0xff && alpha_multiplier == 0xff) {
         if (hsub == 1) {
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit8_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
+                if (dst == bg)
+                    upipe_blit8_blend_inplace_hsub1_avx2(dst, src, alpha, hsize);
+                else
+                    upipe_blit8_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
                 return true;
             }
             return false;
@@ -81,7 +90,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
 
         if (hsub == 2) {
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit8_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
+                if (dst == bg)
+                    upipe_blit8_blend_inplace_hsub2_avx2(dst, src, alpha, hsize);
+                else
+                    upipe_blit8_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
                 return true;
             }
             return false;
@@ -134,7 +146,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
                 return true;
             }
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit10_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
+                if (dst == bg)
+                    upipe_blit10_threshold_inplace_hsub1_avx2(dst, src, alpha, hsize, threshold);
+                else
+                    upipe_blit10_threshold_hsub1_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
             return false;
@@ -149,7 +164,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
                 return true;
             }
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit10_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
+                if (dst == bg)
+                    upipe_blit10_threshold_inplace_hsub2_avx2(dst, src, alpha, hsize, threshold);
+                else
+                    upipe_blit10_threshold_hsub2_avx2(dst, bg, src, alpha, hsize, threshold);
                 return true;
             }
             return false;
@@ -160,7 +178,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
     else if (threshold == 0x3ff && alpha_multiplier == 0x3ff) {
         if (hsub == 1) {
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit10_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
+                if (dst == bg)
+                    upipe_blit10_blend_inplace_hsub1_avx2(dst, src, alpha, hsize);
+                else
+                    upipe_blit10_blend_hsub1_avx2(dst, bg, src, alpha, hsize);
                 return true;
             }
             return false;
@@ -168,7 +189,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
 
         if (hsub == 2) {
             if (__builtin_cpu_supports("avx2")) {
-                upipe_blit10_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
+                if (dst == bg)
+                    upipe_blit10_blend_inplace_hsub2_avx2(dst, src, alpha, hsize);
+                else
+                    upipe_blit10_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
                 return true;
             }
             return false;

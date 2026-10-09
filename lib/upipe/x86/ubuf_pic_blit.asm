@@ -285,6 +285,141 @@ cglobal blit10_threshold_hsub2, 6, 9, 6, dst_, bg_, src_, alpha_, hsize_, thresh
     .ret:
 RET
 
+; In place, bg == dst: a vector with no sample over the threshold is neither
+; loaded nor stored, which leaves the cache lines of transparent areas clean.
+; The scalar tails read the background from the destination.
+
+cglobal blit8_threshold_inplace_hsub1, 5, 9, 5, dst_, src_, alpha_, hsize_, threshold_
+    %define bg_q dst_q
+    mov r6d, 0x01010101 * 0x80
+    movd xm1, threshold_d
+    movd xm0, r6d
+    vpbroadcastb m1, xm1
+    vpbroadcastd m0, xm0
+    mov r6d, mmsize
+    pxor m1, m0              ; signed compare, as above
+    ALIGN 16
+    .loop_simd:
+        pxor m4, m0, [alpha_q + r6q - mmsize]
+        mov r7q, r6q
+        pcmpgtb m4, m1
+        ptest m4, m4
+        jz .next
+        pand m3, m4, [src_q + r6q - mmsize]
+        pandn m2, m4, [dst_q + r6q - mmsize]
+        por m2, m3
+        movu [dst_q + r6q - mmsize], m2
+    .next:
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_B r7, r6, r8
+    .ret:
+RET
+
+cglobal blit8_threshold_inplace_hsub2, 5, 9, 7, dst_, src_, alpha_, hsize_, threshold_
+    %define bg_q dst_q
+    mov r6d, 0x01010101 * 0x80
+    movd xm1, threshold_d
+    VBROADCASTI128 m5, [blit8_alpha_shuffle]
+    movd xm0, r6d
+    vpbroadcastb m1, xm1
+    vpbroadcastd m0, xm0
+    mov r6d, mmsize
+    pxor m1, m0
+    ALIGN 16
+    .loop_simd:
+        movu m4, [alpha_q + 2*r6q - 2*mmsize]
+        movu m6, [alpha_q + 2*r6q - 1*mmsize]
+        mov r7q, r6q
+        pshufb m4, m5
+        pshufb m6, m5
+        punpcklqdq m4, m4, m6
+        vpermq m4, m4, q3120
+        pxor m4, m0
+        pcmpgtb m4, m1
+        ptest m4, m4
+        jz .next
+        pand m3, m4, [src_q + r6q - mmsize]
+        pandn m2, m4, [dst_q + r6q - mmsize]
+        por m2, m3
+        movu [dst_q + r6q - mmsize], m2
+    .next:
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_B r7, r6, r8, 2
+    .ret:
+RET
+
+cglobal blit10_threshold_inplace_hsub1, 5, 9, 4, dst_, src_, alpha_, hsize_, threshold_
+    %define bg_q dst_q
+    movd xm0, threshold_d
+    mov r6d, mmsize/2
+    vpbroadcastw m0, xm0
+    ALIGN 16
+    .loop_simd:
+        movu m3, [alpha_q + 2*r6q - mmsize]
+        mov r7q, r6q
+        pcmpgtw m3, m0
+        ptest m3, m3
+        jz .next
+        pand m2, m3, [src_q + 2*r6q - mmsize]
+        pandn m1, m3, [dst_q + 2*r6q - mmsize]
+        por m1, m2
+        movu [dst_q + 2*r6q - mmsize], m1
+    .next:
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_W r7, r6, r8
+    .ret:
+RET
+
+cglobal blit10_threshold_inplace_hsub2, 5, 9, 6, dst_, src_, alpha_, hsize_, threshold_
+    %define bg_q dst_q
+    movd xm0, threshold_d
+    VBROADCASTI128 m5, [blit10_alpha_shuffle]
+    mov r6d, mmsize/2
+    vpbroadcastw m0, xm0
+    ALIGN 16
+    .loop_simd:
+        movu m3, [alpha_q + 4*r6q - 2*mmsize]
+        movu m4, [alpha_q + 4*r6q - 1*mmsize]
+        mov r7q, r6q
+        pshufb m3, m5
+        pshufb m4, m5
+        punpcklqdq m3, m3, m4
+        vpermq m3, m3, q3120
+        pcmpgtw m3, m0
+        ptest m3, m3
+        jz .next
+        pand m2, m3, [src_q + 2*r6q - mmsize]
+        pandn m1, m3, [dst_q + 2*r6q - mmsize]
+        por m1, m2
+        movu [dst_q + 2*r6q - mmsize], m1
+    .next:
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_W r7, r6, r8, 2
+    .ret:
+RET
+
+%undef bg_q
+
 ; The 8 bit blend kernels compute dst = (bg * (0xff - a) + src * a) / 0xff,
 ; matching the C bit for bit, with one multiply-add per pair of samples.
 ;
@@ -308,14 +443,14 @@ RET
     pcmpeqb pb_ff, pb_ff
 %endmacro
 
-; Takes alpha in m3, loads src and bg at r6q, leaves the finished samples in
-; m3 and clobbers m4 to m8.
-%macro BLEND8 0
+; Takes alpha in m3, loads src and the background (at %1, bg_q by default) at
+; r6q, leaves the finished samples in m3 and clobbers m4 to m8.
+%macro BLEND8 0-1 bg_q
     pxor      m4, m3, pb_ff     ; 0xff - a
     punpckhbw m5, m3, m4        ; (a, 0xff - a) pairs, high half
     punpcklbw m3, m4            ; and low half
     movu      m6, [src_q + r6q - mmsize]
-    movu      m7, [bg_q + r6q - mmsize]
+    movu      m7, [%1 + r6q - mmsize]
     pxor      m6, pb_80         ; src - 0x80
     pxor      m7, pb_80         ; bg - 0x80
     punpckhbw m8, m6, m7        ; the matching (src, bg) pairs
@@ -376,6 +511,72 @@ cglobal blit8_blend_hsub2, 5, 10, 12, dst_, bg_, src_, alpha_, hsize_
     .ret:
 RET
 
+; In place, bg == dst: a vector whose alpha is all 0 keeps the background and is
+; neither loaded nor stored, and one whose alpha is all 0xff takes the source
+; without the blend, which gives the same samples.
+
+%macro BLEND8_INPLACE 0 ; alpha in m3
+    ptest m3, m3
+    jz .next
+    pcmpeqb m4, m3, pb_ff
+    pmovmskb r8d, m4
+    cmp r8d, -1
+    je .opaque
+    BLEND8 dst_q
+    movu [dst_q + r6q - mmsize], m3
+    jmp .next
+.opaque:
+    movu m4, [src_q + r6q - mmsize]
+    movu [dst_q + r6q - mmsize], m4
+.next:
+%endmacro
+
+cglobal blit8_blend_inplace_hsub1, 4, 10, 11, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND8_CONSTANTS
+    mov r6d, mmsize
+    ALIGN 16
+    .loop_simd:
+        movu m3, [alpha_q + r6q - mmsize]
+        mov r7q, r6q
+        BLEND8_INPLACE
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6
+    .ret:
+RET
+
+cglobal blit8_blend_inplace_hsub2, 4, 10, 12, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND8_CONSTANTS
+    VBROADCASTI128 shuffle, [blit8_alpha_shuffle]
+    mov r6d, mmsize
+    ALIGN 16
+    .loop_simd:
+        movu m5, [alpha_q + 2*r6q - 2*mmsize]
+        movu m6, [alpha_q + 2*r6q - 1*mmsize]
+        pshufb m5, shuffle
+        pshufb m6, shuffle
+        punpcklqdq m3, m5, m6
+        vpermq m3, m3, q3120
+        mov r7q, r6q
+        BLEND8_INPLACE
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
+    .ret:
+RET
+
+%undef bg_q
+
 %undef pb_80
 %undef pw_bias
 %undef pw_101
@@ -430,6 +631,72 @@ cglobal blit10_blend_hsub2, 5, 11, 9, dst_, bg_, src_, alpha_, hsize_
     SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
     .ret:
 RET
+
+; In place, as the 8 bit ones: all 0 alpha skipped, all 0x3ff alpha copied.
+
+%macro BLEND10_INPLACE 0 ; alpha in m4
+    ptest m4, m4
+    jz .next
+    pcmpeqw m5, m4, m0
+    pmovmskb r8d, m5
+    cmp r8d, -1
+    je .opaque
+    movu m2, [dst_q + 2*r6q - mmsize]
+    movu m3, [src_q + 2*r6q - mmsize]
+    BLEND10
+    movu [dst_q + 2*r6q - mmsize], m6
+    jmp .next
+.opaque:
+    movu m3, [src_q + 2*r6q - mmsize]
+    movu [dst_q + 2*r6q - mmsize], m3
+.next:
+%endmacro
+
+cglobal blit10_blend_inplace_hsub1, 4, 11, 8, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND10_CONSTANTS
+    mov r6d, mmsize/2
+    ALIGN 16
+    .loop_simd:
+        movu m4, [alpha_q + 2*r6q - mmsize]
+        mov r7q, r6q
+        BLEND10_INPLACE
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_W r7, r8, r9, r10
+    .ret:
+RET
+
+cglobal blit10_blend_inplace_hsub2, 4, 11, 9, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND10_CONSTANTS
+    VBROADCASTI128 m8, [blit10_alpha_shuffle]
+    mov r6d, mmsize/2
+    ALIGN 16
+    .loop_simd:
+        movu m4, [alpha_q + 4*r6q - 2*mmsize]
+        movu m5, [alpha_q + 4*r6q - 1*mmsize]
+        mov r7q, r6q
+        pshufb m4, m8
+        pshufb m5, m8
+        punpcklqdq m4, m4, m5
+        vpermq m4, m4, q3120
+        BLEND10_INPLACE
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
+    .ret:
+RET
+
+%undef bg_q
 
 ; The avx512 kernels replace the +0x80 bias and the pand/pandn/por select with an
 ; unsigned compare into a mask register and a merge-masked load, and predicate the
@@ -738,3 +1005,150 @@ RET
 INIT_YMM avx512
 THRESHOLD_HSUB1_FUSED 8, d, b, 1, 8
 THRESHOLD_HSUB1_FUSED 10, w, w, 2, 16
+
+; The blend in place at 512 bits: the same arithmetic, with the all 0 and all
+; maximum alpha tests on mask registers.  The tail is scalar.
+
+INIT_ZMM avx512
+
+%define pb_80   m0
+%define pw_bias m1
+%define pw_101  m2
+%define pb_ff   m10
+
+%macro BLEND8_INPLACE_ZMM 0 ; alpha in m3
+    vptestmb k1, m3, m3
+    kortestq k1, k1
+    jz .next
+    vpcmpeqb k1, m3, pb_ff
+    kortestq k1, k1
+    jc .opaque
+    BLEND8 dst_q
+    movu [dst_q + r6q - mmsize], m3
+    jmp .next
+.opaque:
+    movu m4, [src_q + r6q - mmsize]
+    movu [dst_q + r6q - mmsize], m4
+.next:
+%endmacro
+
+%macro BLEND8_CONSTANTS_ZMM 0
+    vpbroadcastb pb_80, [blit8_blend_80]
+    vpbroadcastw pw_bias, [blit8_blend_bias]
+    vpbroadcastw pw_101, [blit8_blend_101]
+    vpternlogd pb_ff, pb_ff, pb_ff, 0xff
+%endmacro
+
+cglobal blit8_blend_inplace_hsub1, 4, 10, 11, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND8_CONSTANTS_ZMM
+    mov r6d, mmsize
+    ALIGN 16
+    .loop_simd:
+        movu m3, [alpha_q + r6q - mmsize]
+        mov r7q, r6q
+        BLEND8_INPLACE_ZMM
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6
+    .ret:
+RET
+
+cglobal blit8_blend_inplace_hsub2, 4, 10, 11, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND8_CONSTANTS_ZMM
+    mov r6d, mmsize
+    ALIGN 16
+    .loop_simd:
+        movu m5, [alpha_q + 2*r6q - 2*mmsize]
+        movu m6, [alpha_q + 2*r6q - 1*mmsize]
+        vpmovwb ym3, m5      ; the low byte of every word
+        vpmovwb ym6, m6
+        vinserti64x4 m3, m3, ym6, 1
+        mov r7q, r6q
+        BLEND8_INPLACE_ZMM
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
+    .ret:
+RET
+
+%undef pb_80
+%undef pw_bias
+%undef pw_101
+%undef pb_ff
+
+%macro BLEND10_CONSTANTS_ZMM 0
+    vpternlogd m0, m0, m0, 0xff
+    psrlw m0, 6             ; 0x3ff in every word
+    vpternlogd m1, m1, m1, 0xff
+    psrld m1, 31            ; 1 in every dword
+%endmacro
+
+%macro BLEND10_INPLACE_ZMM 0 ; alpha in m4
+    vptestmw k1, m4, m4
+    kortestd k1, k1
+    jz .next
+    vpcmpeqw k1, m4, m0
+    kortestd k1, k1
+    jc .opaque
+    movu m2, [dst_q + 2*r6q - mmsize]
+    movu m3, [src_q + 2*r6q - mmsize]
+    BLEND10
+    movu [dst_q + 2*r6q - mmsize], m6
+    jmp .next
+.opaque:
+    movu m3, [src_q + 2*r6q - mmsize]
+    movu [dst_q + 2*r6q - mmsize], m3
+.next:
+%endmacro
+
+cglobal blit10_blend_inplace_hsub1, 4, 11, 8, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND10_CONSTANTS_ZMM
+    mov r6d, mmsize/2
+    ALIGN 16
+    .loop_simd:
+        movu m4, [alpha_q + 2*r6q - mmsize]
+        mov r7q, r6q
+        BLEND10_INPLACE_ZMM
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_W r7, r8, r9, r10
+    .ret:
+RET
+
+cglobal blit10_blend_inplace_hsub2, 4, 11, 9, dst_, src_, alpha_, hsize_
+    %define bg_q dst_q
+    BLEND10_CONSTANTS_ZMM
+    movu m8, [blit10_alpha_permute]
+    mov r6d, mmsize/2
+    ALIGN 16
+    .loop_simd:
+        movu m4, [alpha_q + 4*r6q - 2*mmsize]
+        vpermt2w m4, m8, [alpha_q + 4*r6q - mmsize]
+        mov r7q, r6q
+        BLEND10_INPLACE_ZMM
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
+    .ret:
+RET
+
+%undef bg_q

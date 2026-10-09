@@ -58,3 +58,35 @@ void upipe_blit10_threshold_inplace_hsub1_avx512(uint16_t *dst_plane,
 void upipe_blit10_threshold_inplace_hsub2_avx512(uint16_t *dst_plane,
         const uint16_t *src_plane, const uint16_t *alpha_plane, size_t hsize,
         int threshold);
+
+/* In place, bg == dst, avx2: a vector with nothing to change is neither loaded
+ * nor stored. */
+void upipe_blit8_threshold_inplace_hsub1_avx2(uint8_t *dst_plane,
+        const uint8_t *src_plane, const uint8_t *alpha_plane, size_t hsize,
+        int threshold);
+void upipe_blit8_threshold_inplace_hsub2_avx2(uint8_t *dst_plane,
+        const uint8_t *src_plane, const uint8_t *alpha_plane, size_t hsize,
+        int threshold);
+void upipe_blit10_threshold_inplace_hsub1_avx2(uint16_t *dst_plane,
+        const uint16_t *src_plane, const uint16_t *alpha_plane, size_t hsize,
+        int threshold);
+void upipe_blit10_threshold_inplace_hsub2_avx2(uint16_t *dst_plane,
+        const uint16_t *src_plane, const uint16_t *alpha_plane, size_t hsize,
+        int threshold);
+
+/* Blend in place, bg == dst: all transparent vectors skipped, all opaque ones
+ * copied. */
+#define UPIPE_BLIT_BLEND_INPLACE(cpu)                                          \
+void upipe_blit8_blend_inplace_hsub1_##cpu(uint8_t *dst_plane,                 \
+        const uint8_t *src_plane, const uint8_t *alpha_plane, size_t hsize);  \
+void upipe_blit8_blend_inplace_hsub2_##cpu(uint8_t *dst_plane,                 \
+        const uint8_t *src_plane, const uint8_t *alpha_plane, size_t hsize);  \
+void upipe_blit10_blend_inplace_hsub1_##cpu(uint16_t *dst_plane,               \
+        const uint16_t *src_plane, const uint16_t *alpha_plane,               \
+        size_t hsize);                                                         \
+void upipe_blit10_blend_inplace_hsub2_##cpu(uint16_t *dst_plane,               \
+        const uint16_t *src_plane, const uint16_t *alpha_plane,               \
+        size_t hsize);
+
+UPIPE_BLIT_BLEND_INPLACE(avx2)
+UPIPE_BLIT_BLEND_INPLACE(avx512)

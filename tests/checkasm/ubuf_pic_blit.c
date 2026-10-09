@@ -411,6 +411,199 @@ static void check_frame_inplace##bits(void (*func)(type *, const type *,    \
 CHECK_FRAME(8, uint8_t, 0xff)
 CHECK_FRAME(10, uint16_t, 0x3ff)
 
+/* Blend in place, the background being the destination. */
+#define BLEND_INPLACE_REF(name, type, max, hsub)                            \
+static void name(type *dst, const type *src, const type *alpha,             \
+                 size_t hsize)                                              \
+{                                                                           \
+    for (size_t j = 0; j < hsize; j++) {                                    \
+        const unsigned a = alpha[j * (hsub)];                               \
+        dst[j] = (dst[j] * ((max) - a) + src[j] * a) / (max);               \
+    }                                                                       \
+}
+
+BLEND_INPLACE_REF(blit8_blend_inplace_hsub1_ref, uint8_t, 0xff, 1)
+BLEND_INPLACE_REF(blit8_blend_inplace_hsub2_ref, uint8_t, 0xff, 2)
+BLEND_INPLACE_REF(blit10_blend_inplace_hsub1_ref, uint16_t, 0x3ff, 1)
+BLEND_INPLACE_REF(blit10_blend_inplace_hsub2_ref, uint16_t, 0x3ff, 2)
+
+/* Alpha as a rendered subtitle gives it, per 64 sample block: transparent,
+ * opaque (a box or a glyph's body), or glyph edges, runs of transparent,
+ * opaque and partial samples. */
+#define SUB_ALPHA(bits, type, max)                                          \
+static void sub_alpha##bits(type *alpha, size_t n)                          \
+{                                                                           \
+    for (size_t b = 0; b < n; b += 64) {                                    \
+        size_t end = b + 64 < n ? b + 64 : n;                               \
+        unsigned kind = rnd() % 10;                                         \
+        for (size_t i = b; i < end; ) {                                     \
+            if (kind < 4) {                                                 \
+                alpha[i++] = 0;                                             \
+                continue;                                                   \
+            }                                                               \
+            if (kind < 7) {                                                 \
+                alpha[i++] = (max);                                         \
+                continue;                                                   \
+            }                                                               \
+            size_t run = 2 + rnd() % 11;                                    \
+            unsigned what = rnd() % 3;                                      \
+            type a = what == 0 ? 0 : what == 1 ? (max) :                    \
+                     1 + rnd() % ((max) - 1);                               \
+            for (; run && i < end; run--, i++)                              \
+                alpha[i] = a;                                               \
+        }                                                                   \
+    }                                                                       \
+}
+
+SUB_ALPHA(8, uint8_t, 0xff)
+SUB_ALPHA(10, uint16_t, 0x3ff)
+
+#define CHECK_BLEND_INPLACE(bits, type, max, min_hsize)                     \
+static void check_blend_inplace##bits(void (*func)(type *, const type *,    \
+                                                   const type *, size_t),   \
+                                      const char *name)                     \
+{                                                                           \
+    static const size_t widths[] = { 512, NUM_SAMPLES, THRESHOLD_MAX,       \
+                                     min_hsize };                           \
+                                                                            \
+    if (!check_func(func, "%s", name))                                      \
+        return;                                                             \
+                                                                            \
+    type bg[THRESHOLD_MAX + GUARD];                                         \
+    type src[THRESHOLD_MAX];                                                \
+    type alpha[THRESHOLD_MAX * 2];                                          \
+    type dst0[THRESHOLD_MAX + GUARD];                                       \
+    type dst1[THRESHOLD_MAX + GUARD];                                       \
+                                                                            \
+    declare_func(void, type *dst, const type *src, const type *alpha,       \
+                 size_t hsize);                                             \
+                                                                            \
+    memset(bg, 0xa5, sizeof bg);                                            \
+    for (size_t i = 0; i < THRESHOLD_MAX; i++) {                            \
+        bg[i]  = rnd() & (max);                                             \
+        src[i] = rnd() & (max);                                             \
+    }                                                                       \
+                                                                            \
+    /* random alpha, then subtitle alpha, which is left for the bench */    \
+    for (int pattern = 0; pattern < 2; pattern++) {                         \
+        if (pattern)                                                        \
+            sub_alpha##bits(alpha, THRESHOLD_MAX * 2);                      \
+        else                                                                \
+            for (size_t i = 0; i < THRESHOLD_MAX * 2; i++)                  \
+                alpha[i] = rnd() & (max);                                   \
+        for (size_t w = 0; w < sizeof(widths) / sizeof(widths[0]); w++) {   \
+            memcpy(dst0, bg, sizeof dst0);                                  \
+            memcpy(dst1, bg, sizeof dst1);                                  \
+            call_ref(dst0, src, alpha, widths[w]);                          \
+            call_new(dst1, src, alpha, widths[w]);                          \
+            if (memcmp(dst0, dst1, sizeof dst0))                            \
+                fail();                                                     \
+        }                                                                   \
+    }                                                                       \
+                                                                            \
+    bench_new(dst1, src, alpha, NUM_SAMPLES);                               \
+}
+
+CHECK_BLEND_INPLACE(8, uint8_t, 0xff, 32)
+CHECK_BLEND_INPLACE(10, uint16_t, 0x3ff, 16)
+
+/* The blend at frame size with subtitle alpha, fused and in place. */
+#define CHECK_FRAME_BLEND(bits, type, max)                                  \
+static void check_frame_blend##bits(void (*func)(type *, const type *,      \
+                                                 const type *, const type *,\
+                                                 size_t),                   \
+                                    void (*ref)(type *, const type *,       \
+                                                const type *, const type *, \
+                                                size_t),                    \
+                                    const char *name, uint8_t hsub)         \
+{                                                                           \
+    if (!check_func(func, "%s_frame", name))                                \
+        return;                                                             \
+                                                                            \
+    const size_t n = FRAME_SAMPLES;                                         \
+    type *bg = aligned_alloc(64, n * sizeof(type));                         \
+    type *src = aligned_alloc(64, n * sizeof(type));                        \
+    type *alpha = aligned_alloc(64, 2 * n * sizeof(type));                  \
+    type *dst0 = aligned_alloc(64, n * sizeof(type));                       \
+    type *dst1 = aligned_alloc(64, n * sizeof(type));                       \
+                                                                            \
+    declare_func(void, type *dst, const type *bg, const type *src,          \
+                 const type *alpha, size_t hsize);                          \
+                                                                            \
+    if (!bg || !src || !alpha || !dst0 || !dst1) {                          \
+        fail();                                                             \
+    } else {                                                                \
+        for (size_t i = 0; i < n; i++) {                                    \
+            bg[i]  = rnd() & (max);                                         \
+            src[i] = rnd() & (max);                                         \
+        }                                                                   \
+        sub_alpha##bits(alpha, n * hsub);                                   \
+                                                                            \
+        call_ref(dst0, bg, src, alpha, n);                                  \
+        call_new(dst1, bg, src, alpha, n);                                  \
+        if (memcmp(dst0, dst1, n * sizeof(type)))                           \
+            fail();                                                         \
+                                                                            \
+        if (func != ref)                                                    \
+            bench_new(dst1, bg, src, alpha, n);                             \
+    }                                                                       \
+                                                                            \
+    free(bg);                                                               \
+    free(src);                                                              \
+    free(alpha);                                                            \
+    free(dst0);                                                             \
+    free(dst1);                                                             \
+}                                                                           \
+                                                                            \
+static void check_frame_blend_inplace##bits(void (*func)(type *,            \
+                                                         const type *,      \
+                                                         const type *,      \
+                                                         size_t),           \
+                                            void (*ref)(type *,             \
+                                                        const type *,       \
+                                                        const type *,       \
+                                                        size_t),            \
+                                            const char *name, uint8_t hsub) \
+{                                                                           \
+    if (!check_func(func, "%s_frame", name))                                \
+        return;                                                             \
+                                                                            \
+    const size_t n = FRAME_SAMPLES;                                         \
+    type *src = aligned_alloc(64, n * sizeof(type));                        \
+    type *alpha = aligned_alloc(64, 2 * n * sizeof(type));                  \
+    type *dst0 = aligned_alloc(64, n * sizeof(type));                       \
+    type *dst1 = aligned_alloc(64, n * sizeof(type));                       \
+                                                                            \
+    declare_func(void, type *dst, const type *src, const type *alpha,       \
+                 size_t hsize);                                             \
+                                                                            \
+    if (!src || !alpha || !dst0 || !dst1) {                                 \
+        fail();                                                             \
+    } else {                                                                \
+        for (size_t i = 0; i < n; i++) {                                    \
+            dst0[i] = dst1[i] = rnd() & (max);                              \
+            src[i] = rnd() & (max);                                         \
+        }                                                                   \
+        sub_alpha##bits(alpha, n * hsub);                                   \
+                                                                            \
+        call_ref(dst0, src, alpha, n);                                      \
+        call_new(dst1, src, alpha, n);                                      \
+        if (memcmp(dst0, dst1, n * sizeof(type)))                           \
+            fail();                                                         \
+                                                                            \
+        if (func != ref)                                                    \
+            bench_new(dst1, src, alpha, n);                                 \
+    }                                                                       \
+                                                                            \
+    free(src);                                                              \
+    free(alpha);                                                            \
+    free(dst0);                                                             \
+    free(dst1);                                                             \
+}
+
+CHECK_FRAME_BLEND(8, uint8_t, 0xff)
+CHECK_FRAME_BLEND(10, uint16_t, 0x3ff)
+
 void checkasm_check_ubuf_pic_blit(void)
 {
     void (*threshold8_hsub1)(uint8_t *, const uint8_t *, const uint8_t *,
@@ -440,6 +633,12 @@ void checkasm_check_ubuf_pic_blit(void)
     void (*inplace10[2])(uint16_t *, const uint16_t *, const uint16_t *,
                          size_t, int) = {
         blit10_inplace_hsub1_ref, blit10_inplace_hsub2_ref };
+    void (*blend_inplace8[2])(uint8_t *, const uint8_t *, const uint8_t *,
+                              size_t) = {
+        blit8_blend_inplace_hsub1_ref, blit8_blend_inplace_hsub2_ref };
+    void (*blend_inplace10[2])(uint16_t *, const uint16_t *, const uint16_t *,
+                               size_t) = {
+        blit10_blend_inplace_hsub1_ref, blit10_blend_inplace_hsub2_ref };
 
 #ifdef HAVE_X86ASM
     int cpu_flags = av_get_cpu_flags();
@@ -453,6 +652,14 @@ void checkasm_check_ubuf_pic_blit(void)
         threshold8_hsub2 = upipe_blit8_threshold_hsub2_avx2;
         threshold10_hsub1 = upipe_blit10_threshold_hsub1_avx2;
         threshold10_hsub2 = upipe_blit10_threshold_hsub2_avx2;
+        inplace8[0] = upipe_blit8_threshold_inplace_hsub1_avx2;
+        inplace8[1] = upipe_blit8_threshold_inplace_hsub2_avx2;
+        inplace10[0] = upipe_blit10_threshold_inplace_hsub1_avx2;
+        inplace10[1] = upipe_blit10_threshold_inplace_hsub2_avx2;
+        blend_inplace8[0] = upipe_blit8_blend_inplace_hsub1_avx2;
+        blend_inplace8[1] = upipe_blit8_blend_inplace_hsub2_avx2;
+        blend_inplace10[0] = upipe_blit10_blend_inplace_hsub1_avx2;
+        blend_inplace10[1] = upipe_blit10_blend_inplace_hsub2_avx2;
     }
 #ifdef AV_CPU_FLAG_AVX512
     if (cpu_flags & AV_CPU_FLAG_AVX512) {
@@ -464,6 +671,10 @@ void checkasm_check_ubuf_pic_blit(void)
         inplace8[1] = upipe_blit8_threshold_inplace_hsub2_avx512;
         inplace10[0] = upipe_blit10_threshold_inplace_hsub1_avx512;
         inplace10[1] = upipe_blit10_threshold_inplace_hsub2_avx512;
+        blend_inplace8[0] = upipe_blit8_blend_inplace_hsub1_avx512;
+        blend_inplace8[1] = upipe_blit8_blend_inplace_hsub2_avx512;
+        blend_inplace10[0] = upipe_blit10_blend_inplace_hsub1_avx512;
+        blend_inplace10[1] = upipe_blit10_blend_inplace_hsub2_avx512;
     }
 #endif
 #endif
@@ -501,9 +712,15 @@ void checkasm_check_ubuf_pic_blit(void)
         snprintf(name, sizeof name, "blit10_threshold_inplace_hsub%d", h + 1);
         check_inplace10(inplace10[h], name);
         report("%s", name);
+        snprintf(name, sizeof name, "blit8_blend_inplace_hsub%d", h + 1);
+        check_blend_inplace8(blend_inplace8[h], name);
+        report("%s", name);
+        snprintf(name, sizeof name, "blit10_blend_inplace_hsub%d", h + 1);
+        check_blend_inplace10(blend_inplace10[h], name);
+        report("%s", name);
     }
 
-    /* frame sized, text alpha */
+    /* frame sized, text alpha for the threshold, subtitle alpha for the blend */
     void (*const ref8[2])(uint8_t *, const uint8_t *, const uint8_t *,
                           const uint8_t *, size_t, int) = {
         blit8_threshold_hsub1_ref, blit8_threshold_hsub2_ref };
@@ -535,6 +752,44 @@ void checkasm_check_ubuf_pic_blit(void)
         report("%s_frame", name);
         snprintf(name, sizeof name, "blit10_threshold_inplace_hsub%d", h + 1);
         check_frame_inplace10(inplace10[h], ref_inplace10[h], name, h + 1);
+        report("%s_frame", name);
+    }
+
+    void (*const blend_ref8[2])(uint8_t *, const uint8_t *, const uint8_t *,
+                                const uint8_t *, size_t) = {
+        blit8_blend_hsub1_ref, blit8_blend_hsub2_ref };
+    void (*const blend_ref10[2])(uint16_t *, const uint16_t *,
+                                 const uint16_t *, const uint16_t *,
+                                 size_t) = {
+        blit10_blend_hsub1_ref, blit10_blend_hsub2_ref };
+    void (*const blend_inplace_ref8[2])(uint8_t *, const uint8_t *,
+                                        const uint8_t *, size_t) = {
+        blit8_blend_inplace_hsub1_ref, blit8_blend_inplace_hsub2_ref };
+    void (*const blend_inplace_ref10[2])(uint16_t *, const uint16_t *,
+                                         const uint16_t *, size_t) = {
+        blit10_blend_inplace_hsub1_ref, blit10_blend_inplace_hsub2_ref };
+    void (*const blend_fused8[2])(uint8_t *, const uint8_t *, const uint8_t *,
+                                  const uint8_t *, size_t) = {
+        blend8_hsub1, blend8_hsub2 };
+    void (*const blend_fused10[2])(uint16_t *, const uint16_t *,
+                                   const uint16_t *, const uint16_t *,
+                                   size_t) = {
+        blend_hsub1, blend_hsub2 };
+
+    for (int h = 0; h < 2; h++) {
+        snprintf(name, sizeof name, "blit8_blend_hsub%d", h + 1);
+        check_frame_blend8(blend_fused8[h], blend_ref8[h], name, h + 1);
+        report("%s_frame", name);
+        snprintf(name, sizeof name, "blit10_blend_hsub%d", h + 1);
+        check_frame_blend10(blend_fused10[h], blend_ref10[h], name, h + 1);
+        report("%s_frame", name);
+        snprintf(name, sizeof name, "blit8_blend_inplace_hsub%d", h + 1);
+        check_frame_blend_inplace8(blend_inplace8[h], blend_inplace_ref8[h],
+                                   name, h + 1);
+        report("%s_frame", name);
+        snprintf(name, sizeof name, "blit10_blend_inplace_hsub%d", h + 1);
+        check_frame_blend_inplace10(blend_inplace10[h], blend_inplace_ref10[h],
+                                    name, h + 1);
         report("%s_frame", name);
     }
 }
