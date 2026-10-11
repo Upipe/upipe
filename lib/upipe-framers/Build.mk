@@ -19,6 +19,7 @@ libupipe_framers-includes = \
     upipe_s337_decaps.h \
     upipe_s337_framer.h \
     upipe_telx_framer.h \
+    upipe_ttml_framer.h \
     upipe_video_trim.h \
     uref_dvbsub_flow.h \
     uref_h264.h \
@@ -47,6 +48,7 @@ libupipe_framers-src = \
     upipe_s337_decaps.c \
     upipe_s337_framer.c \
     upipe_telx_framer.c \
+    upipe_ttml_framer.c \
     upipe_video_trim.c
 
 libupipe_framers-libs = \
