@@ -658,6 +658,10 @@ tests += uref_std_test
 uref_std_test-src = uref_std_test.c
 uref_std_test-libs = libupipe
 
+tests += uref_sub_test
+uref_sub_test-src = uref_sub_test.c
+uref_sub_test-libs = libupipe
+
 tests += uref_uri_test.sh
 uref_uri_test.sh-deps = uref_uri_test
 
