@@ -414,7 +414,7 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
 
         if (src_vsize) {
             tpad = tpad * dest_vsize / src_vsize;
-            bpad = tpad * dest_vsize / src_vsize;
+            bpad = bpad * dest_vsize / src_vsize;
             vsize -= tpad + bpad;
             vsize -= vsize % vround;
             vposition += (dest_vsize - vsize - tpad - bpad) / 2 + tpad;
