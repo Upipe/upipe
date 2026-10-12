@@ -177,7 +177,9 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
         uint8_t *vanc_buf;
         if (unlikely(!ubase_check(uref_pic_plane_write(pic, "x10",
                             0, 0, -1, -1, &vanc_buf)))) {
+            upipe_err(upipe, "could not write picture plane");
             uref_free(pic);
+            goto ret;
         }
         uint16_t *data = (uint16_t*)vanc_buf;
 
