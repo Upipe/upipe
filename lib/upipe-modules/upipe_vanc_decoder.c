@@ -17,6 +17,7 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe.h"
 #include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_pic.h"
 
@@ -176,7 +177,9 @@ static void upipe_vanc_decoder_input(struct upipe *upipe,
         uint8_t *vanc_buf;
         if (unlikely(!ubase_check(uref_pic_plane_write(pic, "x10",
                             0, 0, -1, -1, &vanc_buf)))) {
+            upipe_err(upipe, "could not write picture plane");
             uref_free(pic);
+            goto ret;
         }
         uint16_t *data = (uint16_t*)vanc_buf;
 
@@ -236,15 +239,23 @@ static int upipe_vanc_decoder_set_flow_def(struct upipe *upipe,
     if (!ubase_check(uref_flow_match_def(flow_def, "block.vanc.pic.")) && !vancd->rfc8331)
         return UBASE_ERR_UNHANDLED;
 
-    flow_def = uref_sibling_alloc(flow_def);
+    flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
 
-    uref_flow_set_def(flow_def, "pic.");
-    UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
-    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "x10"))
+    uref_block_flow_clear_format(flow_def);
+    int err = uref_flow_set_def(flow_def, "pic.");
+    if (ubase_check(err))
+        err = uref_pic_flow_set_macropixel(flow_def, 1);
+    if (ubase_check(err))
+        err = uref_pic_flow_add_plane(flow_def, 1, 1, 2, "x10");
+    if (unlikely(!ubase_check(err))) {
+        uref_free(flow_def);
+        return err;
+    }
+
     upipe_vanc_decoder_store_flow_def(upipe, uref_dup(flow_def));
     upipe_vanc_decoder_require_ubuf_mgr(upipe, flow_def);
 
