@@ -17,6 +17,7 @@
 #include "upipe/upipe_helper_upipe.h"
 #include "upipe/upipe.h"
 #include "upipe/uref_block.h"
+#include "upipe/uref_block_flow.h"
 #include "upipe/uref_pic_flow.h"
 #include "upipe/uref_pic.h"
 
@@ -236,12 +237,13 @@ static int upipe_vanc_decoder_set_flow_def(struct upipe *upipe,
     if (!ubase_check(uref_flow_match_def(flow_def, "block.vanc.pic.")) && !vancd->rfc8331)
         return UBASE_ERR_UNHANDLED;
 
-    flow_def = uref_sibling_alloc(flow_def);
+    flow_def = uref_dup(flow_def);
     if (unlikely(flow_def == NULL)) {
         upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
         return UBASE_ERR_ALLOC;
     }
 
+    uref_block_flow_clear_format(flow_def);
     uref_flow_set_def(flow_def, "pic.");
     UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
     UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "x10"))
