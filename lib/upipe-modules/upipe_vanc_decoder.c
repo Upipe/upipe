@@ -244,9 +244,16 @@ static int upipe_vanc_decoder_set_flow_def(struct upipe *upipe,
     }
 
     uref_block_flow_clear_format(flow_def);
-    uref_flow_set_def(flow_def, "pic.");
-    UBASE_RETURN(uref_pic_flow_set_macropixel(flow_def, 1))
-    UBASE_RETURN(uref_pic_flow_add_plane(flow_def, 1, 1, 2, "x10"))
+    int err = uref_flow_set_def(flow_def, "pic.");
+    if (ubase_check(err))
+        err = uref_pic_flow_set_macropixel(flow_def, 1);
+    if (ubase_check(err))
+        err = uref_pic_flow_add_plane(flow_def, 1, 1, 2, "x10");
+    if (unlikely(!ubase_check(err))) {
+        uref_free(flow_def);
+        return err;
+    }
+
     upipe_vanc_decoder_store_flow_def(upipe, uref_dup(flow_def));
     upipe_vanc_decoder_require_ubuf_mgr(upipe, flow_def);
 
