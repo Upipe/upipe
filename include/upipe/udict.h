@@ -133,7 +133,10 @@ enum udict_type {
     /** p.cea_708 */
     UDICT_TYPE_PIC_CEA_708,
     /** p.bar_data */
-    UDICT_TYPE_PIC_BAR_DATA
+    UDICT_TYPE_PIC_BAR_DATA,
+
+    /** end of the shorthand types, not a type itself */
+    UDICT_TYPE_SHORTHAND_END
 };
 
 /** @This defines standard commands which udict modules may implement. */
