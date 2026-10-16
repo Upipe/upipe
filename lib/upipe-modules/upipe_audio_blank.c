@@ -93,7 +93,8 @@ static void upipe_ablk_free(struct upipe *upipe)
 static int upipe_ablk_check_flow_def(struct upipe *upipe,
                                      struct uref *flow_def)
 {
-    uint8_t planes, sample_size, channels;
+    uint8_t planes, channels;
+    uint16_t sample_size;
     uint64_t rate, samples;
 
     UBASE_RETURN(uref_flow_match_def(flow_def, UREF_SOUND_FLOW_DEF));
@@ -186,7 +187,7 @@ static void upipe_ablk_input(struct upipe *upipe,
         upipe_verbose(upipe, "allocate blank sound");
 
         uint64_t samples = 0;
-        uint8_t sample_size = 0;
+        uint16_t sample_size = 0;
         uref_sound_flow_get_samples(flow_def, &samples);
         uref_sound_flow_get_sample_size(flow_def, &sample_size);
 

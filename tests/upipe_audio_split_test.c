@@ -43,7 +43,7 @@ static int counter = 0;
 static void fill_in(struct ubuf *ubuf)
 {
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     ubase_assert(ubuf_sound_size(ubuf, &size, &sample_size));
     int octets = size * sample_size;
 

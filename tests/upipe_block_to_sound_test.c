@@ -132,7 +132,7 @@ int main(int argc, char **argv)
     struct uref *uref;
     int block_size = 256;
 
-    uint8_t sample_size = 8;
+    uint16_t sample_size = 8;
     uint8_t channels = 2;
 
 

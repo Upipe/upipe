@@ -281,7 +281,7 @@ static void upipe_audio_merge_copy_to_output(struct upipe *upipe, uint8_t **out_
             upipe_err(upipe, "error reading subpipe audio, skipping");
         else {
             size_t samples = 0;
-            uint8_t sample_size = 0;
+            uint16_t sample_size = 0;
             UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &samples, &sample_size));
 
             int index;
@@ -315,9 +315,9 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe,
 
     uint8_t output_channels = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_channels(upipe_audio_merge->flow_def, &output_channels));
-    uint8_t output_sample_size = 0;
+    uint16_t output_sample_size = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_sample_size(upipe_audio_merge->flow_def, &output_sample_size));
-    uint8_t real_sample_size = output_sample_size / output_channels;
+    uint16_t real_sample_size = output_sample_size / output_channels;
 
     uint8_t cur_channel = 0;
     ulist_foreach (&upipe_audio_merge->inputs, uchain) {
@@ -331,7 +331,7 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe,
             upipe_err(upipe, "error reading subpipe audio, skipping");
         } else {
             size_t samples = 0;
-            uint8_t sample_size = 0;
+            uint16_t sample_size = 0;
             UBASE_ERROR(upipe, uref_sound_size(upipe_audio_merge_sub->uref, &samples, &sample_size));
 
             int index;
@@ -403,7 +403,7 @@ static void upipe_audio_merge_produce_output(struct upipe *upipe, struct upump *
         return;
     }
 
-    uint8_t output_sample_size = 0;
+    uint16_t output_sample_size = 0;
     UBASE_ERROR(upipe, uref_sound_flow_get_sample_size(upipe_audio_merge->flow_def, &output_sample_size));
 
     uint8_t output_planes = 0;

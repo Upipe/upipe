@@ -417,7 +417,7 @@ static int upipe_audiocont_sub_extract(struct upipe *upipe, struct ubuf *ubuf,
                             upipe_audiocont_from_sub_mgr(upipe->mgr);
 
     size_t ref_size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     UBASE_RETURN(ubuf_sound_size(ubuf, &ref_size, &sample_size))
 
     /* We assume the ubuf is allocated by us and therefore can be writtent and
@@ -671,7 +671,7 @@ static void upipe_audiocont_input(struct upipe *upipe, struct uref *uref,
     }
 
     size_t ref_size = 0;
-    uint8_t sample_size = 0;
+    uint16_t sample_size = 0;
     if (unlikely(!ubase_check(uref_sound_size(uref, &ref_size, NULL)))) {
         upipe_warn_va(upipe, "invalid ref packet");
         uref_free(uref);

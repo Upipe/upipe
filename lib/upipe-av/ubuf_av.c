@@ -628,11 +628,11 @@ static int ubuf_pic_av_plane_unmap(struct ubuf *ubuf,
  * @return an error code
  */
 static int ubuf_sound_av_sample_size(struct ubuf *ubuf,
-                                     uint8_t *sample_size_p)
+                                     uint16_t *sample_size_p)
 {
     struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
     struct ubuf_sound_av *ubuf_sound_av = ubuf_av_to_ubuf_sound_av(ubuf_av);
-    uint8_t sample_size = ubuf_sound_av->flow_format->sample_size;
+    uint16_t sample_size = ubuf_sound_av->flow_format->sample_size;
 
     if (!ubuf_sound_av->flow_format->planar)
         sample_size *= ubuf_av->frame->ch_layout.nb_channels;
@@ -650,7 +650,7 @@ static int ubuf_sound_av_sample_size(struct ubuf *ubuf,
  */
 static int ubuf_sound_av_size(struct ubuf *ubuf,
                               size_t *size_p,
-                              uint8_t *sample_size_p)
+                              uint16_t *sample_size_p)
 {
     struct ubuf_av *ubuf_av = ubuf_av_from_ubuf(ubuf);
     struct ubuf_sound_av *ubuf_sound_av = ubuf_av_to_ubuf_sound_av(ubuf_av);
@@ -709,7 +709,7 @@ static int ubuf_sound_av_resize(struct ubuf *ubuf, int offset, int new_size)
     AVFrame *frame = ubuf_av->frame;
 
     size_t size;
-    uint8_t sample_size;
+    uint16_t sample_size;
     UBASE_RETURN(ubuf_sound_av_size(ubuf, &size, &sample_size));
 
     if (offset < 0) {
@@ -796,7 +796,7 @@ static int ubuf_sound_av_plane_map(struct ubuf *ubuf, const char *channel,
     UBASE_RETURN(ubuf_sound_av_get_channel_id(ubuf, channel, &channel_id));
 
     size_t samples;
-    uint8_t sample_size;
+    uint16_t sample_size;
     UBASE_RETURN(ubuf_sound_av_size(ubuf, &samples, &sample_size));
 
     if (offset < 0)
@@ -923,7 +923,7 @@ static int ubuf_av_control(struct ubuf *ubuf, int command, va_list args)
 
         case UBUF_SIZE_SOUND: {
             size_t *size_p = va_arg(args, size_t *);
-            uint8_t *sample_size_p = va_arg(args, uint8_t *);
+            uint16_t *sample_size_p = va_arg(args, uint16_t *);
             return ubuf_sound_av_size(ubuf, size_p, sample_size_p);
         }
         case UBUF_ITERATE_SOUND_PLANE: {
