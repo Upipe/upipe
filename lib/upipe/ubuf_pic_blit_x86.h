@@ -2,7 +2,37 @@
 #include <tmmintrin.h>
 #include <immintrin.h>
 
+#include <stdbool.h>
+
 #include "x86/ubuf_pic_blit.h"
+
+/* gcc < 8 has no avx512 names for __builtin_cpu_supports: the avx512
+ * kernels are not used there */
+#if defined(__clang__) || __GNUC__ >= 8
+#define BLIT_CPU_AVX512_NAMES 1
+#endif
+
+static inline bool has_avx512_support(void)
+{
+#ifdef BLIT_CPU_AVX512_NAMES
+    return __builtin_cpu_supports("avx512f")
+        && __builtin_cpu_supports("avx512cd")
+        && __builtin_cpu_supports("avx512bw")
+        && __builtin_cpu_supports("avx512dq")
+        && __builtin_cpu_supports("avx512vl");
+#else
+    return false;
+#endif
+}
+
+/* __builtin_cpu_supports is too slow to run per row */
+static bool blit_avx512;
+
+__attribute__((constructor)) static void blit_avx512_init(void)
+{
+    __builtin_cpu_init();
+    blit_avx512 = has_avx512_support();
+}
 
 /*
  * @This handle particular blit cases.  Exists to avoid more nested ifs.
@@ -39,7 +69,7 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
 
     else if (threshold != 0xff && alpha_multiplier == 0xff) {
         if (hsub == 1) {
-            if (__builtin_cpu_supports("avx512bw")) {
+            if (blit_avx512) {
                 if (dst == bg)
                     upipe_blit8_threshold_inplace_hsub1_avx512(dst, src, alpha, hsize, threshold);
                 else
@@ -57,7 +87,7 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
         }
 
         if (hsub == 2) {
-            if (__builtin_cpu_supports("avx512bw")) {
+            if (blit_avx512) {
                 if (dst == bg)
                     upipe_blit8_threshold_inplace_hsub2_avx512(dst, src, alpha, hsize, threshold);
                 else
@@ -75,7 +105,7 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
 
     else if (threshold == 0xff && alpha_multiplier == 0xff) {
         if (hsub == 1) {
-            if (dst == bg && __builtin_cpu_supports("avx512bw")) {
+            if (dst == bg && blit_avx512) {
                 upipe_blit8_blend_inplace_hsub1_avx512(dst, src, alpha, hsize);
                 return true;
             }
@@ -90,7 +120,7 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
         }
 
         if (hsub == 2) {
-            if (dst == bg && __builtin_cpu_supports("avx512bw")) {
+            if (dst == bg && blit_avx512) {
                 upipe_blit8_blend_inplace_hsub2_avx512(dst, src, alpha, hsize);
                 return true;
             }
@@ -140,7 +170,7 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
 
     else if (threshold != 0x3ff && alpha_multiplier == 0x3ff) {
         if (hsub == 1) {
-            if (__builtin_cpu_supports("avx512bw")) {
+            if (blit_avx512) {
                 if (dst == bg)
                     upipe_blit10_threshold_inplace_hsub1_avx512(dst, src, alpha, hsize, threshold);
                 else
@@ -158,7 +188,7 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
         }
 
         if (hsub == 2) {
-            if (__builtin_cpu_supports("avx512bw")) {
+            if (blit_avx512) {
                 if (dst == bg)
                     upipe_blit10_threshold_inplace_hsub2_avx512(dst, src, alpha, hsize, threshold);
                 else
@@ -176,7 +206,7 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
 
     else if (threshold == 0x3ff && alpha_multiplier == 0x3ff) {
         if (hsub == 1) {
-            if (dst == bg && __builtin_cpu_supports("avx512bw")) {
+            if (dst == bg && blit_avx512) {
                 upipe_blit10_blend_inplace_hsub1_avx512(dst, src, alpha, hsize);
                 return true;
             }
@@ -191,7 +221,7 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
         }
 
         if (hsub == 2) {
-            if (dst == bg && __builtin_cpu_supports("avx512bw")) {
+            if (dst == bg && blit_avx512) {
                 upipe_blit10_blend_inplace_hsub2_avx512(dst, src, alpha, hsize);
                 return true;
             }
