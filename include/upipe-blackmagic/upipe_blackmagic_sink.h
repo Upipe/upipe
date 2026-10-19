@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014 Open Broadcast Systems Ltd.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Kieran Kunhya
  *
@@ -52,6 +53,8 @@ enum upipe_bmd_sink_command {
     UPIPE_BMD_SINK_SET_TIMING_ADJUSTMENT,
     /** adjust timing (int64_t) */
     UPIPE_BMD_SINK_ADJUST_TIMING,
+    /** sets SMPTE level A output (int) */
+    UPIPE_BMD_SINK_SET_LEVEL_A,
 };
 
 /** @This returns the management structure for all bmd sinks.
@@ -149,6 +152,18 @@ static inline int upipe_bmd_sink_adjust_timing(struct upipe *upipe, int64_t adj)
 {
     return upipe_control(upipe, UPIPE_BMD_SINK_ADJUST_TIMING,
                          UPIPE_BMD_SINK_SIGNATURE, adj);
+}
+
+/** @This sets the SMPTE level A output.
+ *
+ * @param upipe description structure of the pipe
+ * @param enable true to enable, false otherwise
+ * @return an error code
+ */
+static inline int upipe_bmd_sink_set_level_a(struct upipe *upipe, bool enable)
+{
+    return upipe_control(upipe, UPIPE_BMD_SINK_SET_LEVEL_A,
+                         UPIPE_BMD_SINK_SIGNATURE, enable ? 1 : 0);
 }
 
 /** @This allocates and initializes a bmd sink pipe.

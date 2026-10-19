@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2014-2016 Open Broadcast Systems Ltd.
+ * Copyright (C) 2026 EasyTools
  *
  * Authors: Kieran Kunhya
  *          Rafaël Carré
@@ -332,6 +333,9 @@ struct upipe_bmd_sink {
 
     /** is opened? */
     bool opened;
+
+    /** SMPTE level A output enabled? */
+    bool level_a;
 };
 
 static int upipe_bmd_sink_check(struct upipe *upipe, struct uref *flow_format);
@@ -1610,6 +1614,7 @@ static struct upipe *upipe_bmd_sink_alloc(struct upipe_mgr *mgr,
     upipe_bmd_sink->mode = bmdModeUnknown;
     upipe_bmd_sink->selectedMode = bmdModeUnknown;
     upipe_bmd_sink->timing_adjustment = INT64_MAX;
+    upipe_bmd_sink->level_a = false;
     uatomic_init(&upipe_bmd_sink->preroll, PREROLL_FRAMES);
     uatomic_init(&upipe_bmd_sink->cc, 0);
     uatomic_init(&upipe_bmd_sink->ttx, 0);
@@ -1762,6 +1767,53 @@ end:
     return err;
 }
 
+/** @internal @This updates the configuration.
+ *
+ * @param upipe description structure of the pipe
+ * @return an error code
+ */
+static int upipe_bmd_sink_write_conf(struct upipe *upipe)
+{
+    struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
+    if (unlikely(!upipe_bmd_sink->deckLink))
+        return UBASE_ERR_INVALID;
+
+    IDeckLinkConfiguration *deckLinkConfiguration = NULL;
+    HRESULT result = upipe_bmd_sink->deckLink->QueryInterface(
+        IID_IDeckLinkConfiguration, (void **)&deckLinkConfiguration);
+    if (result != S_OK) {
+        upipe_warn(upipe, "fail to write configuration");
+        return UBASE_ERR_EXTERNAL;
+    }
+    result = deckLinkConfiguration->SetFlag(bmdDeckLinkConfigSMPTELevelAOutput,
+                                            upipe_bmd_sink->level_a);
+    if (result != S_OK)
+        upipe_warn_va(upipe, "fail to %s SMPTE level A output",
+                      upipe_bmd_sink->level_a ? "enable" : "disable");
+    else
+        upipe_notice_va(upipe, "%s SMPTE level A output",
+                        upipe_bmd_sink->level_a ? "enable" : "disable");
+    deckLinkConfiguration->WriteConfigurationToPreferences();
+    deckLinkConfiguration->Release();
+    return result == S_OK ? UBASE_ERR_NONE : UBASE_ERR_EXTERNAL;
+}
+
+/** @internal @This sets SMPTE level A output.
+ *
+ * @param upipe description structure of the pipe
+ * @param enable true to enable SMPTE level A output, false otherwise
+ * @return an error code
+ */
+static int _upipe_bmd_sink_set_level_a(struct upipe *upipe, bool enable)
+{
+    struct upipe_bmd_sink *upipe_bmd_sink = upipe_bmd_sink_from_upipe(upipe);
+    upipe_bmd_sink->level_a = enable;
+    if (unlikely(!upipe_bmd_sink->deckLink))
+        return UBASE_ERR_NONE;
+
+    return upipe_bmd_sink_write_conf(upipe);
+}
+
 /** @internal @This asks to open the given device.
  *
  * @param upipe description structure of the pipe
@@ -1845,6 +1897,8 @@ static int upipe_bmd_sink_open_card(struct upipe *upipe)
         upipe_err(upipe, "Could not set callback");
 
     upipe_bmd_sink->deckLink = deckLink;
+
+    upipe_bmd_sink_write_conf(upipe);
 
 end:
 
@@ -2082,6 +2136,11 @@ static int upipe_bmd_sink_control(struct upipe *upipe, int command, va_list args
             UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
             int64_t adj = va_arg(args, int64_t);
             return _upipe_bmd_sink_adjust_timing(upipe, adj);
+        }
+        case UPIPE_BMD_SINK_SET_LEVEL_A: {
+            UBASE_SIGNATURE_CHECK(args, UPIPE_BMD_SINK_SIGNATURE)
+            bool enable = va_arg(args, int) ? true : false;
+            return _upipe_bmd_sink_set_level_a(upipe, enable);
         }
         case UPIPE_SET_OPTION: {
             const char *k = va_arg(args, const char *);
