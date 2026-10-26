@@ -71,6 +71,33 @@ struct test {
     struct upipe upipe;
 };
 
+static struct uref_mgr *uref_mgr;
+static struct uprobe *uprobe_stdio;
+static struct upipe *upipe_ts_psi_split;
+static struct upipe *upipe_ts_psi_split_output70 = NULL;
+
+/** adds a sub from inside the output of the last one */
+static void test_add_sub70(void)
+{
+    struct uref *flow_def = uref_block_flow_alloc_def(uref_mgr, "mpegtspsi.");
+    assert(flow_def != NULL);
+    uint8_t filter[PSI_HEADER_SIZE_SYNTAX1];
+    memset(filter, 0, PSI_HEADER_SIZE_SYNTAX1);
+    filter[1] = 0x80;
+    uint8_t mask[PSI_HEADER_SIZE_SYNTAX1];
+    memset(mask, 0, PSI_HEADER_SIZE_SYNTAX1);
+    mask[1] = 0x80;
+    psi_set_tableid(mask, 0xff);
+    psi_set_tableid(filter, 70);
+    ubase_assert(uref_ts_flow_set_psi_filter(flow_def, filter, mask,
+                                             PSI_HEADER_SIZE_SYNTAX1));
+    upipe_ts_psi_split_output70 = upipe_flow_alloc_sub(upipe_ts_psi_split,
+            uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
+                             "ts psi split output 70"), flow_def);
+    assert(upipe_ts_psi_split_output70 != NULL);
+    uref_free(flow_def);
+}
+
 /** helper phony pipe */
 static struct upipe *test_alloc(struct upipe_mgr *mgr, struct uprobe *uprobe,
                                 uint32_t signature, va_list args)
@@ -107,6 +134,8 @@ static void test_input(struct upipe *upipe, struct uref *uref,
     }
     uref_block_unmap(uref, 0);
     uref_free(uref);
+    if (test->table_id == 69 && upipe_ts_psi_split_output70 == NULL)
+        test_add_sub70();
 }
 
 /** helper phony pipe */
@@ -145,8 +174,7 @@ int main(int argc, char *argv[])
     struct udict_mgr *udict_mgr = udict_inline_mgr_alloc(UDICT_POOL_DEPTH,
                                                          umem_mgr, -1, -1);
     assert(udict_mgr != NULL);
-    struct uref_mgr *uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr,
-                                                   0);
+    uref_mgr = uref_std_mgr_alloc(UREF_POOL_DEPTH, udict_mgr, 0);
     assert(uref_mgr != NULL);
     struct ubuf_mgr *ubuf_mgr = ubuf_block_mem_mgr_alloc(UBUF_POOL_DEPTH,
                                                          UBUF_POOL_DEPTH,
@@ -154,8 +182,7 @@ int main(int argc, char *argv[])
     assert(ubuf_mgr != NULL);
     struct uprobe uprobe;
     uprobe_init(&uprobe, catch, NULL);
-    struct uprobe *uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout,
-                                                     UPROBE_LOG_LEVEL);
+    uprobe_stdio = uprobe_stdio_alloc(&uprobe, stdout, UPROBE_LOG_LEVEL);
     assert(uprobe_stdio != NULL);
 
     struct uref *uref;
@@ -164,7 +191,7 @@ int main(int argc, char *argv[])
 
     struct upipe_mgr *upipe_ts_psi_split_mgr = upipe_ts_psi_split_mgr_alloc();
     assert(upipe_ts_psi_split_mgr != NULL);
-    struct upipe *upipe_ts_psi_split = upipe_void_alloc(upipe_ts_psi_split_mgr,
+    upipe_ts_psi_split = upipe_void_alloc(upipe_ts_psi_split_mgr,
             uprobe_pfx_alloc(uprobe_use(uprobe_stdio), UPROBE_LOG_LEVEL,
                              "ts psi split"));
     assert(upipe_ts_psi_split != NULL);
@@ -248,6 +275,8 @@ int main(int argc, char *argv[])
 
     upipe_release(upipe_ts_psi_split_output68);
     upipe_release(upipe_ts_psi_split_output69);
+    assert(upipe_ts_psi_split_output70 != NULL);
+    upipe_release(upipe_ts_psi_split_output70);
     upipe_release(upipe_ts_psi_split);
     upipe_mgr_release(upipe_ts_psi_split_mgr); // nop
 

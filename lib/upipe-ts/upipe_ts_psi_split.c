@@ -223,7 +223,8 @@ static void upipe_ts_psi_split_input(struct upipe *upipe, struct uref *uref,
                 upipe_ts_psi_split_sub_output(
                         upipe_ts_psi_split_sub_to_upipe(output), uref,
                         upump_p);
-                uref = NULL;
+                /* the output may have added a sub after this one */
+                return;
             } else {
                 struct uref *new_uref = uref_dup(uref);
                 if (likely(new_uref != NULL))
