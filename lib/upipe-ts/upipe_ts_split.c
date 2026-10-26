@@ -336,7 +336,8 @@ static void upipe_ts_split_input(struct upipe *upipe, struct uref *uref,
     ulist_delete_foreach(&upipe_ts_split->pids[pid].subs, uchain, uchain_tmp) {
         struct upipe_ts_split_sub *output =
                 upipe_ts_split_sub_from_uchain_pid(uchain);
-        if (likely(uchain->next == NULL)) {
+        /* the list is circular: the last sub is followed by the head */
+        if (likely(uchain->next == &upipe_ts_split->pids[pid].subs)) {
             upipe_ts_split_sub_output(upipe_ts_split_sub_to_upipe(output),
                                       uref, upump_p);
             uref = NULL;

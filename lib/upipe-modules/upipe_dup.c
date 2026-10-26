@@ -216,9 +216,10 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
     ulist_delete_foreach (&upipe_dup->outputs, uchain, uchain_tmp) {
         struct upipe_dup_output *upipe_dup_output =
             upipe_dup_output_from_uchain(uchain);
-        struct upipe *output = upipe_dup_output_to_upipe(upipe_dup_output);
+        struct upipe *sub = upipe_dup_output_to_upipe(upipe_dup_output);
+        /* the last sub takes the original when no direct output wants it */
         if (ulist_is_last(&upipe_dup->outputs, uchain) && !output) {
-            upipe_dup_output_output(output, uref, upump_p);
+            upipe_dup_output_output(sub, uref, upump_p);
             uref = NULL;
         } else {
             struct uref *new_uref = uref_dup(uref);
@@ -227,7 +228,7 @@ static void upipe_dup_input(struct upipe *upipe, struct uref *uref,
                 upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
                 return;
             }
-            upipe_dup_output_output(output, new_uref, upump_p);
+            upipe_dup_output_output(sub, new_uref, upump_p);
         }
     }
 
