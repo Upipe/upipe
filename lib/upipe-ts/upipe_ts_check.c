@@ -143,6 +143,26 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
         return;
     }
 
+    /* One map of a contiguous datagram checks all its sync words, instead
+     * of a map and unmap per packet; anything else takes the packet by
+     * packet path below. */
+    bool checked = false;
+    const uint8_t *buffer;
+    int read_size = -1;
+    if (likely(ubase_check(uref_block_read(uref, 0, &read_size, &buffer)))) {
+        if (read_size == size) {
+            checked = true;
+            for (size_t offset = 0;
+                 offset + upipe_ts_check->output_size <= size;
+                 offset += upipe_ts_check->output_size)
+                if (buffer[offset] != TS_SYNC) {
+                    checked = false;
+                    break;
+                }
+        }
+        uref_block_unmap(uref, 0);
+    }
+
     while (size > upipe_ts_check->output_size) {
         struct uref *next = uref_block_split(uref, upipe_ts_check->output_size);
         if (unlikely(next == NULL)) {
@@ -150,7 +170,9 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
             upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
             return;
         }
-        if (!upipe_ts_check_check(upipe, uref, upump_p)) {
+        if (checked)
+            upipe_ts_check_output(upipe, uref, upump_p);
+        else if (!upipe_ts_check_check(upipe, uref, upump_p)) {
             uref_free(next);
             return;
         }
@@ -158,7 +180,12 @@ static void upipe_ts_check_input(struct upipe *upipe, struct uref *uref,
         size -= upipe_ts_check->output_size;
         uref = next;
     }
-    if (size == upipe_ts_check->output_size)
+    if (size != upipe_ts_check->output_size)
+        /* trailing partial packet */
+        uref_free(uref);
+    else if (checked)
+        upipe_ts_check_output(upipe, uref, upump_p);
+    else
         upipe_ts_check_check(upipe, uref, upump_p);
 }
 

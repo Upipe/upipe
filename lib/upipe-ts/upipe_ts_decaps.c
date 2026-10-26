@@ -49,8 +49,10 @@ struct upipe_ts_decaps {
 
     /** last continuity counter for this PID, or -1 */
     int8_t last_cc;
-    /** last TS packet */
-    struct uref *last_uref;
+    /** payload of the last TS packet, for the duplicate check */
+    uint8_t last_payload[TS_SIZE];
+    /** size of last_payload, or -1 */
+    int last_size;
 
     /** lost packets based on cc errors */
     uint64_t lost;
@@ -86,7 +88,7 @@ static struct upipe *upipe_ts_decaps_alloc(struct upipe_mgr *mgr,
     upipe_ts_decaps_init_output(upipe);
     upipe_ts_decaps->last_cc = -1;
     upipe_ts_decaps->lost = 0;
-    upipe_ts_decaps->last_uref = NULL;
+    upipe_ts_decaps->last_size = -1;
     upipe_throw_ready(upipe);
     return upipe;
 }
@@ -177,9 +179,16 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
             uref_free(uref);
             return;
         }
-        if (upipe_ts_decaps->last_uref != NULL &&
-            ubase_check(uref_block_compare(uref, 0,
-                                           upipe_ts_decaps->last_uref))) {
+        size_t size;
+        uint8_t payload[TS_SIZE];
+        if (upipe_ts_decaps->last_size >= 0 &&
+            ubase_check(uref_block_size(uref, &size)) &&
+            size >= (size_t)upipe_ts_decaps->last_size &&
+            ubase_check(uref_block_extract(uref, 0,
+                                           upipe_ts_decaps->last_size,
+                                           payload)) &&
+            !memcmp(payload, upipe_ts_decaps->last_payload,
+                    upipe_ts_decaps->last_size)) {
             upipe_verbose(upipe, "removing duplicate packet");
             uref_free(uref);
             return;
@@ -212,8 +221,15 @@ static void upipe_ts_decaps_input(struct upipe *upipe, struct uref *uref,
     if (unlikely(transporterror))
         uref_flow_set_error(uref);
 
-    uref_free(upipe_ts_decaps->last_uref);
-    upipe_ts_decaps->last_uref = uref_dup(uref);
+    /* A copy of the payload instead of a uref_dup: the dup and its free
+     * were four pool allocations and releases per packet. */
+    size_t size;
+    if (ubase_check(uref_block_size(uref, &size)) && size <= TS_SIZE &&
+        ubase_check(uref_block_extract(uref, 0, size,
+                                       upipe_ts_decaps->last_payload)))
+        upipe_ts_decaps->last_size = size;
+    else
+        upipe_ts_decaps->last_size = -1;
     upipe_ts_decaps_output(upipe, uref, upump_p);
 }
 
@@ -282,8 +298,6 @@ static void upipe_ts_decaps_free(struct upipe *upipe)
 {
     upipe_throw_dead(upipe);
 
-    struct upipe_ts_decaps *upipe_ts_decaps = upipe_ts_decaps_from_upipe(upipe);
-    uref_free(upipe_ts_decaps->last_uref);
     upipe_ts_decaps_clean_output(upipe);
     upipe_ts_decaps_clean_urefcount(upipe);
     upipe_ts_decaps_free_void(upipe);

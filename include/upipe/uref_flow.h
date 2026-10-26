@@ -31,7 +31,81 @@ UREF_ATTR_VOID_UREF(flow, random, UREF_FLAG_FLOW_RANDOM,
         random access flag that may be present in any uref carrying data)
 UREF_ATTR_VOID_SH(flow, error, UDICT_TYPE_FLOW_ERROR,
         error flag that may be present in any uref carrying data)
-UREF_ATTR_STRING_SH(flow, def, UDICT_TYPE_FLOW_DEF, flow definition)
+/* The flow definition attribute, written out instead of generated so the
+ * getter can answer without a dictionary lookup on a uref that carries a
+ * block: a flow definition never has one, and every input function asks
+ * every data uref whether it is a flow definition. */
+
+/** @This returns the flow definition attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param p pointer to the retrieved value (modified during execution)
+ * @return an error code
+ */
+static inline int uref_flow_get_def(struct uref *uref, const char **p)
+{
+    if (uref->ubuf != NULL)
+        return UBASE_ERR_INVALID;
+    return uref_attr_get_string(uref, p, UDICT_TYPE_FLOW_DEF, NULL);
+}
+/** @This sets the flow definition attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param v value to set
+ * @return an error code
+ */
+static inline int uref_flow_set_def(struct uref *uref, const char *v)
+{
+    return uref_attr_set_string(uref, v, UDICT_TYPE_FLOW_DEF, NULL);
+}
+/** @This deletes the flow definition attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @return an error code
+ */
+static inline int uref_flow_delete_def(struct uref *uref)
+{
+    return uref_attr_delete(uref, UDICT_TYPE_FLOW_DEF, NULL);
+}
+/** @This copies the flow definition attribute from an uref to another.
+ *
+ * @param uref pointer to the uref
+ * @param uref_src pointer to the source uref
+ * @return an error code
+ */
+static inline int uref_flow_copy_def(struct uref *uref, struct uref *uref_src)
+{
+    return uref_attr_copy_string(uref, uref_src, UDICT_TYPE_FLOW_DEF, NULL);
+}
+/** @This compares the flow definition attribute to a given prefix.
+ *
+ * @param uref pointer to the uref
+ * @param prefix prefix to match
+ * @return an error code
+ */
+static inline int uref_flow_match_def(struct uref *uref, const char *prefix)
+{
+    const char *v;
+    UBASE_RETURN(uref_flow_get_def(uref, &v));
+    return !ubase_ncmp(v, prefix) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;
+}
+/** @This compares the flow definition attribute in two urefs.
+ *
+ * @param uref1 pointer to the first uref
+ * @param uref2 pointer to the second uref
+ * @return 0 if both attributes are absent or identical
+ */
+static inline int uref_flow_cmp_def(struct uref *uref1, struct uref *uref2)
+{
+    const char *v1 = NULL, *v2 = NULL;
+    int err1 = uref_flow_get_def(uref1, &v1);
+    int err2 = uref_flow_get_def(uref2, &v2);
+    if (!ubase_check(err1) && !ubase_check(err2))
+        return 0;
+    if (!ubase_check(err1) || !ubase_check(err2))
+        return -1;
+    return strcmp(v1, v2);
+}
 UREF_ATTR_VOID(flow, complete, "f.comp",
         flow def flag telling an uref represents an access unit)
 UREF_ATTR_UNSIGNED_SH(flow, id, UDICT_TYPE_FLOW_ID,

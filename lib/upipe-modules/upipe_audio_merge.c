@@ -340,11 +340,20 @@ static void upipe_audio_merge_copy_to_output_interleaved(struct upipe *upipe,
             else
                 index = upipe_audio_merge_sub->channel_idx;
 
-            for (int x = 0; x < samples; x++) {
-                memcpy(out_data + x*output_sample_size + index*real_sample_size,
-                        in_data + x*sample_size,
-                        sample_size);
+            /* A block of the size known at compile time copies with a move
+             * or two per sample instead of a memcpy call. */
+            uint8_t *dst = out_data + index * real_sample_size;
+#define COPY_BLOCKS(size)                                                   \
+            for (size_t x = 0; x < samples; x++)                            \
+                memcpy(dst + x * output_sample_size,                        \
+                       in_data + x * sample_size, size);
+            switch (sample_size) {
+                case 4:  COPY_BLOCKS(4)  break;   /* mono 32 bit */
+                case 8:  COPY_BLOCKS(8)  break;   /* stereo 32 bit */
+                case 16: COPY_BLOCKS(16) break;   /* 4 x 32 bit */
+                default: COPY_BLOCKS(sample_size) break;
             }
+#undef COPY_BLOCKS
             uref_sound_unmap(upipe_audio_merge_sub->uref, 0, -1, 1);
         }
 

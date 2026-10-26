@@ -28,6 +28,8 @@
 #undef STATS
 /** default minimal size of the dictionary */
 #define UDICT_MIN_SIZE 128
+/** attributes space embedded in the udict structure */
+#define UDICT_INLINE_SMALL 128
 /** default extra space added on udict expansion */
 #define UDICT_EXTRA_SIZE 64
 
@@ -121,10 +123,14 @@ UBASE_FROM_TO(udict_inline_mgr, upool, udict_pool, udict_pool)
 
 /** super-set of the udict structure with additional local members */
 struct udict_inline {
-    /** umem structure pointing to buffer */
+    /** umem structure pointing to buffer; mgr is NULL when the buffer is
+     * the embedded one */
     struct umem umem;
     /** used size */
     size_t size;
+    /** attributes space for small dictionaries, so that the common case
+     * costs one pool allocation instead of two */
+    uint8_t small[UDICT_INLINE_SMALL];
 
     /** common structure */
     struct udict udict;
@@ -147,7 +153,12 @@ static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
 
     if (size < inline_mgr->min_size)
         size = inline_mgr->min_size;
-    if (unlikely(!umem_alloc(inline_mgr->umem_mgr, &inl->umem, size))) {
+    if (likely(size <= UDICT_INLINE_SMALL)) {
+        inl->umem.mgr = NULL;
+        inl->umem.buffer = inl->small;
+        inl->umem.size = inl->umem.real_size = UDICT_INLINE_SMALL;
+    } else if (unlikely(!umem_alloc(inline_mgr->umem_mgr, &inl->umem,
+                                    size))) {
         upool_free(&inline_mgr->udict_pool, inl);
         return NULL;
     }
@@ -426,8 +437,15 @@ static int udict_inline_set(struct udict *udict, const char *name,
     if (unlikely(total_size >= umem_size(&inl->umem))) {
         struct udict_inline_mgr *inline_mgr =
             udict_inline_mgr_from_udict_mgr(udict->mgr);
-        if (unlikely(!umem_realloc(&inl->umem, total_size +
-                                               inline_mgr->extra_size)))
+        size_t new_size = total_size + inline_mgr->extra_size;
+        if (inl->umem.mgr == NULL) {
+            /* outgrown the embedded buffer */
+            struct umem umem;
+            if (unlikely(!umem_alloc(inline_mgr->umem_mgr, &umem, new_size)))
+                return UBASE_ERR_ALLOC;
+            memcpy(umem_buffer(&umem), inl->small, inl->size);
+            inl->umem = umem;
+        } else if (unlikely(!umem_realloc(&inl->umem, new_size)))
             return UBASE_ERR_ALLOC;
 
         attr = umem_buffer(&inl->umem) + inl->size - 1;
@@ -542,7 +560,8 @@ static void udict_inline_free(struct udict *udict)
         udict_inline_mgr_from_udict_mgr(udict->mgr);
     struct udict_inline *inl = udict_inline_from_udict(udict);
 
-    umem_free(&inl->umem);
+    if (inl->umem.mgr != NULL)
+        umem_free(&inl->umem);
     upool_free(&inline_mgr->udict_pool, inl);
 }
 
