@@ -143,6 +143,24 @@ int main(int argc, char **argv)
         udict_free(udict2);
     }
 
+    {
+        /* every shorthand type has a name, and the end of the shorthand
+         * types is rejected rather than read past the table of shorthands */
+        struct udict *udict = udict_alloc(mgr, 0);
+        assert(udict != NULL);
+        const char *name;
+        enum udict_type base;
+        for (int type = UDICT_TYPE_SHORTHAND + 1;
+             type < UDICT_TYPE_SHORTHAND_END; type++) {
+            ubase_assert(udict_name(udict, (enum udict_type)type, &name,
+                                    &base));
+            assert(name != NULL && base < UDICT_TYPE_SHORTHAND);
+        }
+        ubase_nassert(udict_name(udict, UDICT_TYPE_SHORTHAND_END, &name,
+                                 &base));
+        udict_free(udict);
+    }
+
     udict_mgr_release(mgr);
 
     umem_mgr_release(umem_mgr);

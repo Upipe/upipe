@@ -190,8 +190,8 @@ static int udict_inline_dup(struct udict *udict, struct udict **new_udict_p)
 static const struct inline_shorthand *
     udict_inline_shorthand(enum udict_type type)
 {
-    if (unlikely(type > UDICT_TYPE_SHORTHAND + 1 + sizeof(inline_shorthands) /
-                                               sizeof(struct inline_shorthand)))
+    if (unlikely(type > UDICT_TYPE_SHORTHAND + sizeof(inline_shorthands) /
+                                           sizeof(struct inline_shorthand)))
         return NULL;
     return &inline_shorthands[type - UDICT_TYPE_SHORTHAND - 1];
 }
