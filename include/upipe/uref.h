@@ -110,6 +110,10 @@ struct uref {
     uint64_t cr_dts_delay;
     /** duration between RAP and CR */
     uint64_t rap_cr_delay;
+    /** duration of the data, UINT64_MAX if unset */
+    uint64_t duration;
+    /** playing rate, den 0 if unset */
+    struct urational rate;
     /** private for local pipe user */
     uint64_t priv;
 };
@@ -175,6 +179,9 @@ static inline void uref_init(struct uref *uref)
     uref->dts_pts_delay = UINT64_MAX;
     uref->cr_dts_delay = UINT64_MAX;
     uref->rap_cr_delay = UINT64_MAX;
+    uref->duration = UINT64_MAX;
+    uref->rate.num = 0;
+    uref->rate.den = 0;
     uref->priv = UINT64_MAX;
 }
 
@@ -266,6 +273,8 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
     new_uref->dts_pts_delay = uref->dts_pts_delay;
     new_uref->cr_dts_delay = uref->cr_dts_delay;
     new_uref->rap_cr_delay = uref->rap_cr_delay;
+    new_uref->duration = uref->duration;
+    new_uref->rate = uref->rate;
     new_uref->priv = uref->priv;
 
     return new_uref;

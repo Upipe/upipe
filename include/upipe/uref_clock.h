@@ -30,10 +30,139 @@ UREF_ATTR_UNSIGNED_UREF(clock, cr_dts_delay, cr_dts_delay,
         delay between CR and DTS)
 UREF_ATTR_UNSIGNED_UREF(clock, rap_cr_delay, rap_cr_delay,
         delay between RAP and CR)
-UREF_ATTR_UNSIGNED_SH(clock, duration, UDICT_TYPE_CLOCK_DURATION, duration)
+/* duration and rate live in struct uref, like the dates: every framer writes
+ * them and every sink reads them, and a dictionary lookup per frame was
+ * measurable.  The setters keep the error code of the dictionary versions. */
+
+/** @This returns the duration attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param p pointer to the retrieved value (modified during execution)
+ * @return an error code
+ */
+static inline int uref_clock_get_duration(struct uref *uref, uint64_t *p)
+{
+    if (uref->duration != UINT64_MAX) {
+        *p = uref->duration;
+        return UBASE_ERR_NONE;
+    }
+    return UBASE_ERR_INVALID;
+}
+/** @This sets the duration attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param v value to set
+ * @return an error code
+ */
+static inline int uref_clock_set_duration(struct uref *uref, uint64_t v)
+{
+    uref->duration = v;
+    return UBASE_ERR_NONE;
+}
+/** @This deletes the duration attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @return an error code
+ */
+static inline int uref_clock_delete_duration(struct uref *uref)
+{
+    uref->duration = UINT64_MAX;
+    return UBASE_ERR_NONE;
+}
+/** @This copies the duration attribute from an uref to another.
+ *
+ * @param uref pointer to the uref
+ * @param uref_src pointer to the source uref
+ * @return an error code
+ */
+static inline int uref_clock_copy_duration(struct uref *uref,
+                                           struct uref *uref_src)
+{
+    uref->duration = uref_src->duration;
+    return UBASE_ERR_NONE;
+}
+/** @This compares the duration attribute to given values.
+ *
+ * @param uref pointer to the uref
+ * @param min minimum value
+ * @param max maximum value
+ * @return an error code
+ */
+static inline int uref_clock_match_duration(struct uref *uref,
+                                            uint64_t min, uint64_t max)
+{
+    uint64_t v;
+    UBASE_RETURN(uref_clock_get_duration(uref, &v));
+    return (v >= min) && (v <= max) ? UBASE_ERR_NONE : UBASE_ERR_INVALID;
+}
+/** @This compares the duration attribute in two urefs.
+ *
+ * @param uref1 pointer to the first uref
+ * @param uref2 pointer to the second uref
+ * @return 0 if both attributes are absent or identical
+ */
+static inline int uref_clock_cmp_duration(struct uref *uref1,
+                                          struct uref *uref2)
+{
+    uint64_t v1 = 0, v2 = 0;
+    int err1 = uref_clock_get_duration(uref1, &v1);
+    int err2 = uref_clock_get_duration(uref2, &v2);
+    if (!ubase_check(err1) && !ubase_check(err2))
+        return 0;
+    if (!ubase_check(err1) || !ubase_check(err2))
+        return -1;
+    return v1 - v2;
+}
 UREF_ATTR_SMALL_UNSIGNED(clock, index_rap, "k.index_rap",
                     frame offset from last random access point)
-UREF_ATTR_RATIONAL_SH(clock, rate, UDICT_TYPE_CLOCK_RATE, playing rate)
+/** @This returns the playing rate attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param p pointer to the retrieved value (modified during execution)
+ * @return an error code
+ */
+static inline int uref_clock_get_rate(struct uref *uref, struct urational *p)
+{
+    if (uref->rate.den != 0) {
+        *p = uref->rate;
+        return UBASE_ERR_NONE;
+    }
+    return UBASE_ERR_INVALID;
+}
+/** @This sets the playing rate attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @param v value to set
+ * @return an error code
+ */
+static inline int uref_clock_set_rate(struct uref *uref, struct urational v)
+{
+    uref->rate = v;
+    return UBASE_ERR_NONE;
+}
+/** @This deletes the playing rate attribute of a uref.
+ *
+ * @param uref pointer to the uref
+ * @return an error code
+ */
+static inline int uref_clock_delete_rate(struct uref *uref)
+{
+    uref->rate.num = 0;
+    uref->rate.den = 0;
+    return UBASE_ERR_NONE;
+}
+/** @This copies the playing rate attribute from an uref to another.
+ *
+ * @param uref pointer to the uref
+ * @param uref_src pointer to the source uref
+ * @return an error code
+ */
+static inline int uref_clock_copy_rate(struct uref *uref,
+                                       struct uref *uref_src)
+{
+    uref->rate = uref_src->rate;
+    return UBASE_ERR_NONE;
+}
 UREF_ATTR_UNSIGNED_SH(clock, latency, UDICT_TYPE_CLOCK_LATENCY,
         latency in uclock units)
 UREF_ATTR_UNSIGNED_SH(clock, wrap, UDICT_TYPE_CLOCK_WRAP, wrap around value)
