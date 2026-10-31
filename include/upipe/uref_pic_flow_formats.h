@@ -432,6 +432,12 @@ UREF_PIC_FLOW_FORMAT(nv16, 1,
                      { 1, 1, 1, "y8", 8 },
                      { 2, 1, 2, "u8v8", 16 });
 
+/** @This is the description of the nv20le format: 10 bit samples in the low
+ * bits of little-endian 16 bit words, u and v interleaved. */
+UREF_PIC_FLOW_FORMAT(nv20le, 1,
+                     { 1, 1, 2, "y10l", 10 },
+                     { 2, 1, 4, "u10v10l", 20 });
+
 /** @This is the description of the nv24 format. */
 UREF_PIC_FLOW_FORMAT(nv24, 1,
                      { 1, 1, 1, "y8", 8 },
@@ -494,6 +500,7 @@ UREF_PIC_FLOW_FORMAT(p010le, 1,
     Do(rgba64be, ## __VA_ARGS__) \
     Do(nv12, ## __VA_ARGS__) \
     Do(nv16, ## __VA_ARGS__) \
+    Do(nv20le, ## __VA_ARGS__) \
     Do(nv24, ## __VA_ARGS__) \
     Do(gbrp, ## __VA_ARGS__) \
     Do(p010le, ## __VA_ARGS__) \
