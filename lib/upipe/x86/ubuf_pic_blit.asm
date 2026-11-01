@@ -17,6 +17,13 @@ blit8_blend_bias: dw 0x7f81
 blit8_blend_101: dw 0x101
 blit8_blend_80: db 0x80
 blit10_blend_1025: dd 1025
+; vpermt2b indices of the even bytes of two registers (ymm uses the first 32)
+blit8_even_bytes:
+%assign i 0
+%rep 64
+    db 2*i
+%assign i i+1
+%endrep
 
 SECTION .text
 
@@ -1131,3 +1138,36 @@ cglobal blit10_blend_hsub2, 5, 11, 10, dst_, bg_, src_, alpha_, hsize_
     SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
     .ret:
 RET
+
+; blit8_blend_hsub2 in ymm with the alpha gathered by one vpermt2b (AVX512-VBMI)
+; instead of pshufb x2, punpcklqdq and vpermq: 17 ops a vector instead of 20.
+%define pb_80   m0
+%define pw_bias m1
+%define pw_101  m2
+%define pb_ff   m10
+
+cglobal blit8_blend_hsub2, 5, 10, 12, dst_, bg_, src_, alpha_, hsize_
+    BLEND8_CONSTANTS_ZMM            ; vpternlogd: pcmpeq to a vector needs VEX
+    movu m11, [blit8_even_bytes]
+    mov r6d, mmsize
+    ALIGN 16
+    .loop_simd:
+        movu m3, [alpha_q + 2*r6q - 2*mmsize]
+        vpermt2b m3, m11, [alpha_q + 2*r6q - mmsize]
+        mov r7q, r6q
+        BLEND8
+        movu [dst_q + r6q - mmsize], m3
+        lea r6q, [r6q + mmsize]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_B r7, r8, r9, r6, 2
+    .ret:
+RET
+
+%undef pb_80
+%undef pw_bias
+%undef pw_101
+%undef pb_ff

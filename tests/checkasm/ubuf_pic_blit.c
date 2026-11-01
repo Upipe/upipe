@@ -677,6 +677,7 @@ void checkasm_check_ubuf_pic_blit(void)
     if (cpu_flags & AV_CPU_FLAG_AVX512ICL) {
         blend_hsub1 = upipe_blit10_blend_hsub1_avx512icl;
         blend_hsub2 = upipe_blit10_blend_hsub2_avx512icl;
+        blend8_hsub2 = upipe_blit8_blend_hsub2_avx512icl;
     }
 #endif
 #endif

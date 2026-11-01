@@ -35,6 +35,10 @@ void upipe_blit10_blend_hsub1_avx512icl(uint16_t *dst_plane, const uint16_t *bg_
 void upipe_blit10_blend_hsub2_avx512icl(uint16_t *dst_plane, const uint16_t *bg_plane,
         const uint16_t *src_plane,
         const uint16_t *alpha_plane, size_t hsize);
+/* blit8_blend_hsub2 with a one-op alpha gather (AVX512-VBMI), in 256 bits */
+void upipe_blit8_blend_hsub2_avx512icl(uint8_t *dst_plane, const uint8_t *bg_plane,
+        const uint8_t *src_plane,
+        const uint8_t *alpha_plane, size_t hsize);
 
 /* The avx512 kernels predicate their tail, so they accept any hsize.  The hsub1
  * ones work in 256 bits. */

@@ -142,6 +142,10 @@ static bool blit8_handle_cases(uint8_t *dst, const uint8_t *bg,
                 upipe_blit8_blend_inplace_hsub2_avx512(dst, src, alpha, hsize);
                 return true;
             }
+            if (blit_avx512icl) {
+                upipe_blit8_blend_hsub2_avx512icl(dst, bg, src, alpha, hsize);
+                return true;
+            }
             if (__builtin_cpu_supports("avx2")) {
                 upipe_blit8_blend_hsub2_avx2(dst, bg, src, alpha, hsize);
                 return true;
