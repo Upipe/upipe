@@ -16,6 +16,7 @@ blit10_alpha_permute:
 blit8_blend_bias: dw 0x7f81
 blit8_blend_101: dw 0x101
 blit8_blend_80: db 0x80
+blit10_blend_1025: dd 1025
 
 SECTION .text
 
@@ -1054,3 +1055,79 @@ cglobal blit10_blend_inplace_hsub2, 4, 11, 9, dst_, src_, alpha_, hsize_
 RET
 
 %undef bg_q
+
+; blit10_blend with AVX512-VNNI, in ymm (the same bytes per cycle as zmm on Zen 4,
+; where a zmm op takes two of the four 256 bit pipes).  Per half, vpdpwssd into
+; an accumulator of 1 gives M = N + 1, and (M * 1025) >> 20 equals the
+; (M + (M >> 10)) >> 10 of BLEND10 for every M from 1 to 0x3ff * 0x3ff + 1
+; (checked exhaustively), so N / 0x3ff takes 3 ops a half instead of 5: 12 a
+; vector instead of 16.  hsub2 gathers its alpha with one vpermt2w.
+INIT_YMM avx512icl
+
+; bg in m2, src in m3, alpha in m4 -> m6; m0 = 0x3ff words, m1 = 1 dwords,
+; m9 = 1025 dwords; clobbers m2, m3, m5 and m7
+%macro BLEND10_VNNI 0
+    psubw     m5, m0, m4        ; 0x3ff - a
+    punpcklwd m6, m2, m3        ; (bg, src) pairs, low half
+    punpckhwd m2, m2, m3        ; and high half
+    punpcklwd m7, m5, m4        ; the matching (0x3ff - a, a) pairs
+    punpckhwd m5, m5, m4
+    mova      m3, m1
+    vpdpwssd  m3, m6, m7        ; N + 1
+    mova      m6, m1
+    vpdpwssd  m6, m2, m5
+    pmulld    m3, m9
+    pmulld    m6, m9
+    psrld     m3, 20            ; / 0x3ff
+    psrld     m6, 20
+    packssdw  m6, m3, m6
+%endmacro
+
+%macro BLEND10_VNNI_CONSTANTS 0
+    BLEND10_CONSTANTS_ZMM           ; pcmpeq to a vector needs the VEX form
+    vpbroadcastd m9, [blit10_blend_1025]
+%endmacro
+
+cglobal blit10_blend_hsub1, 5, 11, 10, dst_, bg_, src_, alpha_, hsize_
+    BLEND10_VNNI_CONSTANTS
+    mov r6d, mmsize/2
+    ALIGN 16
+    .loop_simd:
+        movu m2, [bg_q + 2*r6q - mmsize]
+        movu m3, [src_q + 2*r6q - mmsize]
+        movu m4, [alpha_q + 2*r6q - mmsize]
+        mov r7q, r6q
+        BLEND10_VNNI
+        movu [dst_q + 2*r6q - mmsize], m6
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_W r7, r8, r9, r10
+    .ret:
+RET
+
+cglobal blit10_blend_hsub2, 5, 11, 10, dst_, bg_, src_, alpha_, hsize_
+    BLEND10_VNNI_CONSTANTS
+    movu m8, [blit10_alpha_permute] ; ymm: the even words of two registers
+    mov r6d, mmsize/2
+    ALIGN 16
+    .loop_simd:
+        movu m2, [bg_q + 2*r6q - mmsize]
+        movu m3, [src_q + 2*r6q - mmsize]
+        movu m4, [alpha_q + 4*r6q - 2*mmsize]
+        vpermt2w m4, m8, [alpha_q + 4*r6q - mmsize]
+        mov r7q, r6q
+        BLEND10_VNNI
+        movu [dst_q + 2*r6q - mmsize], m6
+        lea r6q, [r6q + mmsize/2]
+        cmp hsize_q, r6q
+    jae .loop_simd
+    cmp r7q, hsize_q
+    jae .ret
+    ALIGN 16
+    SCALAR_TAIL_BLEND_W r7, r8, r9, r10, 2
+    .ret:
+RET

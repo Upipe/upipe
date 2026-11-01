@@ -25,13 +25,31 @@ static inline bool has_avx512_support(void)
 #endif
 }
 
+static inline bool has_avx512icl_support(void)
+{
+#ifdef BLIT_CPU_AVX512_NAMES
+    return has_avx512_support()
+        && __builtin_cpu_supports("avx512vnni")
+        && __builtin_cpu_supports("avx512ifma")
+        && __builtin_cpu_supports("avx512vbmi")
+        && __builtin_cpu_supports("avx512vbmi2")
+        && __builtin_cpu_supports("avx512vpopcntdq")
+        && __builtin_cpu_supports("avx512bitalg")
+        && __builtin_cpu_supports("gfni");
+#else
+    return false;
+#endif
+}
+
 /* __builtin_cpu_supports is too slow to run per row */
 static bool blit_avx512;
+static bool blit_avx512icl;
 
 __attribute__((constructor)) static void blit_avx512_init(void)
 {
     __builtin_cpu_init();
     blit_avx512 = has_avx512_support();
+    blit_avx512icl = has_avx512icl_support();
 }
 
 /*
@@ -210,6 +228,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
                 upipe_blit10_blend_inplace_hsub1_avx512(dst, src, alpha, hsize);
                 return true;
             }
+            if (dst != bg && blit_avx512icl) {
+                upipe_blit10_blend_hsub1_avx512icl(dst, bg, src, alpha, hsize);
+                return true;
+            }
             if (__builtin_cpu_supports("avx2")) {
                 if (dst == bg)
                     upipe_blit10_blend_inplace_hsub1_avx2(dst, src, alpha, hsize);
@@ -223,6 +245,10 @@ static bool blit10_handle_cases(uint16_t *dst, const uint16_t *bg,
         if (hsub == 2) {
             if (dst == bg && blit_avx512) {
                 upipe_blit10_blend_inplace_hsub2_avx512(dst, src, alpha, hsize);
+                return true;
+            }
+            if (blit_avx512icl) {
+                upipe_blit10_blend_hsub2_avx512icl(dst, bg, src, alpha, hsize);
                 return true;
             }
             if (__builtin_cpu_supports("avx2")) {
