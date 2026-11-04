@@ -22,6 +22,7 @@ extern "C" {
 #include "upipe/urefcount.h"
 #include "upipe/ubuf.h"
 #include "upipe/udict.h"
+#include "upipe/ulist.h"
 
 #include <assert.h>
 #include <inttypes.h>
@@ -95,6 +96,10 @@ struct uref {
     struct ubuf *ubuf;
     /** pointer to udict */
     struct udict *udict;
+    /** list of additional ubufs, chained by their own uchain; the primary
+     * ubuf above is entry 0 and additional ubufs are entries 1 and above
+     * (see uref_sub.h) */
+    struct uchain sub_ubufs;
 
     /** void flags */
     uint64_t flags;
@@ -156,6 +161,11 @@ static inline void uref_free(struct uref *uref)
         return;
     ubuf_free(uref->ubuf);
     udict_free(uref->udict);
+    struct uchain *uchain, *uchain_tmp;
+    ulist_delete_foreach(&uref->sub_ubufs, uchain, uchain_tmp) {
+        ulist_delete(uchain);
+        ubuf_free(ubuf_from_uchain(uchain));
+    }
     uref->mgr->uref_free(uref);
 }
 
@@ -167,6 +177,7 @@ static inline void uref_init(struct uref *uref)
 {
     uref->ubuf = NULL;
     uref->udict = NULL;
+    ulist_init(&uref->sub_ubufs);
 
     uref->flags = 0;
     uref->date_sys = UINT64_MAX;
@@ -237,7 +248,8 @@ static inline struct uref *uref_sibling_alloc_control(struct uref *uref)
     return uref_alloc_control(uref->mgr);
 }
 
-/** @internal @This duplicates a uref without duplicating the ubuf.
+/** @internal @This duplicates a uref without duplicating the primary ubuf,
+ * nor the chain of additional ubufs.
  *
  * @param uref source structure to duplicate
  * @return duplicated uref or NULL in case of allocation failure
@@ -250,6 +262,7 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
         return NULL;
 
     new_uref->ubuf = NULL;
+    ulist_init(&new_uref->sub_ubufs);
     if (uref->udict != NULL) {
         new_uref->udict = udict_dup(uref->udict);
         if (unlikely(new_uref->udict == NULL)) {
@@ -271,7 +284,27 @@ static inline struct uref *uref_dup_inner(struct uref *uref)
     return new_uref;
 }
 
-/** @This duplicates a uref.
+/** @internal @This duplicates the chain of additional ubufs of a uref into
+ * another uref. The duplicated ubufs are appended to the destination chain,
+ * preserving order.
+ *
+ * @param new_uref destination uref
+ * @param uref source uref
+ * @return an error code
+ */
+static inline int uref_sub_ubufs_dup(struct uref *new_uref, struct uref *uref)
+{
+    struct uchain *uchain;
+    ulist_foreach(&uref->sub_ubufs, uchain) {
+        struct ubuf *ubuf = ubuf_dup(ubuf_from_uchain(uchain));
+        if (unlikely(ubuf == NULL))
+            return UBASE_ERR_ALLOC;
+        ulist_add(&new_uref->sub_ubufs, ubuf_to_uchain(ubuf));
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @This duplicates a uref, including its chain of additional ubufs.
  *
  * @param uref source structure to duplicate
  * @return duplicated uref or NULL in case of allocation failure
@@ -289,11 +322,16 @@ static inline struct uref *uref_dup(struct uref *uref)
             return NULL;
         }
     }
+    if (unlikely(!ubase_check(uref_sub_ubufs_dup(new_uref, uref)))) {
+        uref_free(new_uref);
+        return NULL;
+    }
     return new_uref;
 }
 
-/** @This attaches a ubuf to a given uref. The ubuf pointer may no longer be
- * used by the module afterwards.
+/** @This attaches a ubuf to a given uref, as the primary ubuf (entry 0).
+ * The chain of additional ubufs is left untouched. The ubuf pointer may no
+ * longer be used by the module afterwards.
  *
  * @param uref pointer to uref structure
  * @param ubuf pointer to ubuf structure to attach to uref
@@ -306,7 +344,8 @@ static inline void uref_attach_ubuf(struct uref *uref, struct ubuf *ubuf)
     uref->ubuf = ubuf;
 }
 
-/** @This detaches a ubuf from a uref. The returned ubuf must be freed
+/** @This detaches the primary ubuf (entry 0) from a uref. The chain of
+ * additional ubufs is left untouched. The returned ubuf must be freed
  * or re-attached at some point, otherwise it will leak.
  *
  * @param uref pointer to uref structure
@@ -319,7 +358,9 @@ static inline struct ubuf *uref_detach_ubuf(struct uref *uref)
     return ubuf;
 }
 
-/** @This duplicates a uref and attaches a new ubuf to the copy.
+/** @This duplicates a uref and attaches a new primary ubuf to the copy. The
+ * chain of additional ubufs is also duplicated. In case of error the ubuf
+ * is not attached and remains owned by the caller.
  *
  * @param uref source structure to duplicate
  * @return duplicated uref or NULL in case of allocation failure
@@ -330,6 +371,10 @@ static inline struct uref *uref_fork(struct uref *uref, struct ubuf *ubuf)
     if (unlikely(new_uref == NULL))
         return NULL;
 
+    if (unlikely(!ubase_check(uref_sub_ubufs_dup(new_uref, uref)))) {
+        uref_free(new_uref);
+        return NULL;
+    }
     uref_attach_ubuf(new_uref, ubuf);
     return new_uref;
 }
