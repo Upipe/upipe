@@ -80,6 +80,7 @@ static const struct {
     { "sdi_input", checkasm_check_sdi_input },
     { "uyvy_input", checkasm_check_uyvy_input },
     { "v210_input", checkasm_check_v210_input },
+    { "ubuf_pic_blit", checkasm_check_ubuf_pic_blit },
     { NULL, NULL }
 };
 

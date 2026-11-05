@@ -129,6 +129,7 @@ libupipe-src = \
     ubuf_mem.c \
     ubuf_mem_common.c \
     ubuf_pic.c \
+    ubuf_pic_blit_x86.h \
     ubuf_pic_common.c \
     ubuf_pic_mem.c \
     ubuf_sound_common.c \
@@ -162,6 +163,10 @@ libupipe-src = \
     ustring.c \
     utrace.c \
     uuri.c
+
+libupipe-src += \
+    $(if $(and $(have_x86asm),$(have_x86_64)),x86/ubuf_pic_blit.asm) \
+    $(if $(and $(have_x86asm),$(have_x86_64)),x86/ubuf_pic_blit.h)
 
 libupipe-ldlibs = -lm
 
