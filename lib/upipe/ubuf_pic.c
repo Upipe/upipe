@@ -12,12 +12,17 @@
  * This file defines the picture-specific API to access buffers.
  */
 
+#include "config.h"
 #include "upipe/ubuf_pic.h"
 
 #include <stdint.h>
 #include <string.h>
 
 #if defined(__GNUC__) && defined(__x86_64__)
+#include <emmintrin.h>
+#endif
+
+#if defined(__GNUC__) && defined(__x86_64__) && defined(HAVE_X86ASM)
 #include "ubuf_pic_blit_x86.h"
 #endif
 
@@ -179,7 +184,7 @@ int ubuf_pic_blit_alpha_bg(struct ubuf *dest, struct ubuf *bg,
 
         for (int i = 0; i < plane_vsize; i++) {
 
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) && defined(HAVE_X86ASM)
             if (in_planes == 1 && blit8_handle_cases(dest_buffer, bg_buffer,
                         in[0],
                         alpha_plane ? alpha_plane + alpha_stride * (i * src_vsub)
@@ -387,7 +392,7 @@ int ubuf_pic_blit_alpha10_bg(struct ubuf *dest, struct ubuf *bg,
             const uint16_t *real_src = (const uint16_t *)src_buffer;
             const uint16_t *real_alpha = (const uint16_t *)(alpha_plane + alpha_stride * i * src_vsub);
 
-#if defined(__GNUC__) && defined(__x86_64__)
+#if defined(__GNUC__) && defined(__x86_64__) && defined(HAVE_X86ASM)
             if (blit10_handle_cases(real_dst, real_bg, real_src, real_alpha,
                         alpha, threshold, plane_hsize, src_hsub))
                 /* Nothing to do */;

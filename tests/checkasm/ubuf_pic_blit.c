@@ -24,7 +24,7 @@
 
 #include "checkasm.h"
 
-#ifdef HAVE_X86ASM
+#if defined(HAVE_X86ASM) && defined(__x86_64__)
 #include "lib/upipe/x86/ubuf_pic_blit.h"
 #endif
 
@@ -640,7 +640,7 @@ void checkasm_check_ubuf_pic_blit(void)
                                size_t) = {
         blit10_blend_inplace_hsub1_ref, blit10_blend_inplace_hsub2_ref };
 
-#ifdef HAVE_X86ASM
+#if defined(HAVE_X86ASM) && defined(__x86_64__)
     int cpu_flags = av_get_cpu_flags();
 
     if (cpu_flags & AV_CPU_FLAG_AVX2) {

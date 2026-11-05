@@ -165,8 +165,8 @@ libupipe-src = \
     uuri.c
 
 libupipe-src += \
-    $(if $(have_x86asm),x86/ubuf_pic_blit.asm) \
-    $(if $(have_x86asm),x86/ubuf_pic_blit.h)
+    $(if $(and $(have_x86asm),$(have_x86_64)),x86/ubuf_pic_blit.asm) \
+    $(if $(and $(have_x86asm),$(have_x86_64)),x86/ubuf_pic_blit.h)
 
 libupipe-ldlibs = -lm
 

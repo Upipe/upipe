@@ -28,4 +28,4 @@ $(builddir)/checkasm: \
     $(top_builddir)/lib/upipe-hbrmt/sdidec.o \
     $(top_builddir)/lib/upipe-hbrmt/x86/sdienc.o \
     $(top_builddir)/lib/upipe-hbrmt/x86/sdidec.o \
-    $(top_builddir)/lib/upipe/x86/ubuf_pic_blit.o
+    $(if $(have_x86_64),$(top_builddir)/lib/upipe/x86/ubuf_pic_blit.o)
