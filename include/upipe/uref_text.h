@@ -63,6 +63,22 @@ enum uref_text_multi_row_align {
     UREF_TEXT_MULTI_ROW_ALIGN_END = 3,
 };
 
+/** @This enumerates the character edges of a run. */
+enum uref_text_edge {
+    /** no edge */
+    UREF_TEXT_EDGE_NONE = 0,
+    /** lit from the top left */
+    UREF_TEXT_EDGE_RAISED = 1,
+    /** lit from the bottom right */
+    UREF_TEXT_EDGE_DEPRESSED = 2,
+    /** outline */
+    UREF_TEXT_EDGE_UNIFORM = 3,
+    /** shadow to the bottom left */
+    UREF_TEXT_EDGE_LEFT_DROP_SHADOW = 4,
+    /** shadow to the bottom right */
+    UREF_TEXT_EDGE_RIGHT_DROP_SHADOW = 5,
+};
+
 /** the run is emboldened */
 #define UREF_TEXT_RUN_BOLD          0x01
 /** the run is sheared */
@@ -120,6 +136,14 @@ UREF_ATTR_UNSIGNED_VA(text, run_background, "x.rrbg[%" PRIu8"]",
         background colour of the run as packed RGBA, uint8_t nb, nb)
 UREF_ATTR_SMALL_UNSIGNED_VA(text, run_flags, "x.rfl[%" PRIu8"]",
         style flags of the run, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(text, run_edge, "x.redge[%" PRIu8"]",
+        character edge of the run according to @ref uref_text_edge,
+        uint8_t nb, nb)
+UREF_ATTR_UNSIGNED_VA(text, run_edge_color, "x.redgc[%" PRIu8"]",
+        edge colour of the run as packed RGBA, uint8_t nb, nb)
+UREF_ATTR_SMALL_UNSIGNED_VA(text, run_font, "x.rfont[%" PRIu8"]",
+        index of the font of the run in the font table of the renderer,
+        uint8_t nb, nb)
 
 #ifdef __cplusplus
 }
