@@ -134,6 +134,8 @@ upipe_av_pixfmt_to_format(enum AVPixelFormat pix_fmt)
             return &uref_pic_flow_format_nv12;
         case AV_PIX_FMT_NV16:
             return &uref_pic_flow_format_nv16;
+        case AV_PIX_FMT_NV20LE:
+            return &uref_pic_flow_format_nv20le;
 #if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 27, 100)
         case AV_PIX_FMT_NV24:
             return &uref_pic_flow_format_nv24;
@@ -228,6 +230,7 @@ static inline enum AVPixelFormat
         AV_PIX_FMT_RGBA64BE,
         AV_PIX_FMT_NV12,
         AV_PIX_FMT_NV16,
+        AV_PIX_FMT_NV20LE,
 #if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(56, 27, 100)
         AV_PIX_FMT_NV24,
 #endif

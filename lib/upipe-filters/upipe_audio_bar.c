@@ -207,11 +207,11 @@ static void copy_color10(uint8_t **dst, const size_t *strides,
 
     if (dst[4] != NULL) { // u10v10l
         uint16_t *d = (uint16_t*)&dst[4][(row / vsubs[4]) * strides[4] +
-            2 * col / hsubs[4]];
+            4 * col / hsubs[4]];
 
         for (int i = 0; i < w / hsubs[4]; i++) {
-            d[i * 2] = color[1];
-            d[i * 2 + 1] = color[2];
+            d[i * 2] = color[1] << 2;
+            d[i * 2 + 1] = color[2] << 2;
         }
     }
 }
