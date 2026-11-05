@@ -907,88 +907,258 @@ static void upipe_freetype_fill(struct upipe_freetype_canvas *canvas,
     }
 }
 
-/** @internal @This composites a colour onto a pixel.
+/** @internal @This is 2^24 / d rounded up: (v * recip[d]) >> 24 is v / d for
+ * any v up to 255 * d, which is all a blend comes to. */
+static const uint32_t upipe_freetype_recip[256] = {
+    0, 16777216, 8388608, 5592406, 4194304, 3355444,
+    2796203, 2396746, 2097152, 1864136, 1677722, 1525202,
+    1398102, 1290556, 1198373, 1118482, 1048576, 986896,
+    932068, 883012, 838861, 798916, 762601, 729445,
+    699051, 671089, 645278, 621379, 599187, 578525,
+    559241, 541201, 524288, 508401, 493448, 479350,
+    466034, 453439, 441506, 430186, 419431, 409201,
+    399458, 390168, 381301, 372828, 364723, 356963,
+    349526, 342393, 335545, 328966, 322639, 316552,
+    310690, 305041, 299594, 294338, 289263, 284360,
+    279621, 275037, 270601, 266306, 262144, 258112,
+    254201, 250407, 246724, 243149, 239675, 236299,
+    233017, 229825, 226720, 223697, 220753, 217886,
+    215093, 212370, 209716, 207127, 204601, 202136,
+    199729, 197380, 195084, 192842, 190651, 188509,
+    186414, 184366, 182362, 180401, 178482, 176603,
+    174763, 172961, 171197, 169467, 167773, 166112,
+    164483, 162886, 161320, 159784, 158276, 156797,
+    155345, 153920, 152521, 151147, 149797, 148471,
+    147169, 145889, 144632, 143396, 142180, 140986,
+    139811, 138655, 137519, 136401, 135301, 134218,
+    133153, 132105, 131072, 130056, 129056, 128071,
+    127101, 126145, 125204, 124276, 123362, 122462,
+    121575, 120700, 119838, 118988, 118150, 117324,
+    116509, 115705, 114913, 114131, 113360, 112599,
+    111849, 111108, 110377, 109656, 108943, 108241,
+    107547, 106862, 106185, 105518, 104858, 104207,
+    103564, 102928, 102301, 101681, 101068, 100463,
+    99865, 99274, 98690, 98113, 97542, 96979,
+    96421, 95870, 95326, 94787, 94255, 93728,
+    93207, 92692, 92183, 91679, 91181, 90688,
+    90201, 89718, 89241, 88769, 88302, 87839,
+    87382, 86929, 86481, 86038, 85599, 85164,
+    84734, 84308, 83887, 83469, 83056, 82647,
+    82242, 81841, 81443, 81050, 80660, 80274,
+    79892, 79513, 79138, 78767, 78399, 78034,
+    77673, 77315, 76960, 76609, 76261, 75916,
+    75574, 75235, 74899, 74566, 74236, 73909,
+    73585, 73263, 72945, 72629, 72316, 72006,
+    71698, 71393, 71090, 70790, 70493, 70198,
+    69906, 69616, 69328, 69043, 68760, 68479,
+    68201, 67924, 67651, 67379, 67109, 66842,
+    66577, 66314, 66053, 65794
+};
+
+/** @internal @This divides a blend by the alpha it comes to.
+ *
+ * @param v weighted sum, at most 255 * ao
+ * @param ao resulting alpha, not 0
+ * @return the value divided by ao
+ */
+static inline unsigned upipe_freetype_unweight(unsigned v, unsigned ao)
+{
+    if (ao == 0xff)
+        return upipe_freetype_div255(v);
+    return ((uint64_t)v * upipe_freetype_recip[ao]) >> 24;
+}
+
+/** @internal @This is a line of a plane, or NULL if the picture has no such
+ * plane. */
+#define UPIPE_FREETYPE_LINE(Plane, Y)                                       \
+    ((Plane).p ? (Plane).p + UPIPE_FREETYPE_OFFSET(Plane, 0, Y) : NULL)
+
+/** @internal @This is a pixel of a line of a plane. */
+#define UPIPE_FREETYPE_PIXEL(Line, Plane, X)                                \
+    ((Line) + ((size_t)(X) >> (Plane).hshift) * (Plane).macropixel_size)
+
+/** @internal @This sets the samples of a line of a plane under a run of
+ * pixels.
+ *
+ * @param line line of the plane
+ * @param plane plane description
+ * @param x0 first pixel
+ * @param x1 pixel after the last one
+ * @param val value to set
+ */
+static inline void upipe_freetype_set_samples(uint8_t *line,
+        const struct upipe_freetype_plane *plane, int x0, int x1, uint8_t val)
+{
+    size_t s0 = (size_t)x0 >> plane->hshift;
+    size_t s1 = (size_t)(x1 - 1) >> plane->hshift;
+    if (plane->macropixel_size == 1) {
+        memset(line + s0, val, s1 - s0 + 1);
+        return;
+    }
+    for (size_t s = s0; s <= s1; s++)
+        line[s * plane->macropixel_size] = val;
+}
+
+/** @internal @This composites a colour onto a run of pixels of a line.
  *
  * @param canvas mapped planes
- * @param x horizontal position
- * @param y vertical position
+ * @param x0 first pixel, inside the picture
+ * @param x1 pixel after the last one, inside the picture
+ * @param y line, inside the picture
  * @param colour colour in YUVA
- * @param coverage coverage of the pixel by the source
+ * @param coverage coverage of each pixel by the source, or NULL for full
+ * coverage
  */
-static void upipe_freetype_blend(struct upipe_freetype_canvas *canvas,
-                                 int x, int y, const uint8_t colour[4],
-                                 uint8_t coverage)
+static void upipe_freetype_blend_span(struct upipe_freetype_canvas *canvas,
+                                      int x0, int x1, int y,
+                                      const uint8_t colour[4],
+                                      const uint8_t *coverage)
 {
-    if (x < 0 || y < 0 || (size_t)x >= canvas->width ||
-        (size_t)y >= canvas->height)
-        return;
+    uint8_t *yl = UPIPE_FREETYPE_LINE(canvas->y, y);
+    uint8_t *ul = UPIPE_FREETYPE_LINE(canvas->u, y);
+    uint8_t *vl = UPIPE_FREETYPE_LINE(canvas->v, y);
+    uint8_t *al = UPIPE_FREETYPE_LINE(canvas->a, y);
+    uint8_t *uvl = UPIPE_FREETYPE_LINE(canvas->uv, y);
 
-    unsigned as = coverage == 0xff ? colour[3] :
-        upipe_freetype_div255(colour[3] * coverage);
-    if (!as)
-        return;
-
-    uint8_t *alpha = NULL;
-    unsigned ad = 0xff;
-    if (canvas->a.p) {
-        alpha = canvas->a.p + UPIPE_FREETYPE_OFFSET(canvas->a, x, y);
-        ad = *alpha;
-    }
-
-    /* The colour is straight, not premultiplied, so the destination has to be
-     * weighted by its own alpha and the result scaled back by the alpha it
-     * comes to: mixing it in directly would drag the edge of a glyph towards
-     * the colour behind a fully transparent canvas.  Both ends of that are
-     * the common cases and neither divides.  Nothing underneath leaves the
-     * source colour as it stands, and an opaque result is a plain mix. */
-    if (ad == 0) {
-        if (alpha)
-            *alpha = as;
-
-#define SET_PLANE(Plane, Val)                                               \
-        if (Plane.p)                                                        \
-            Plane.p[UPIPE_FREETYPE_OFFSET(Plane, x, y)] = (Val);
-
-        SET_PLANE(canvas->y, colour[0])
-        SET_PLANE(canvas->u, colour[1])
-        SET_PLANE(canvas->v, colour[2])
-#undef SET_PLANE
-
-        if (canvas->uv.p) {
-            size_t off = UPIPE_FREETYPE_OFFSET(canvas->uv, x, y);
-            canvas->uv.p[off] = colour[1];
-            canvas->uv.p[off + 1] = colour[2];
+    /* An opaque colour covering every pixel replaces whatever is there. */
+    if (coverage == NULL && colour[3] == 0xff) {
+        if (yl)
+            upipe_freetype_set_samples(yl, &canvas->y, x0, x1, colour[0]);
+        if (ul)
+            upipe_freetype_set_samples(ul, &canvas->u, x0, x1, colour[1]);
+        if (vl)
+            upipe_freetype_set_samples(vl, &canvas->v, x0, x1, colour[2]);
+        if (al)
+            upipe_freetype_set_samples(al, &canvas->a, x0, x1, 0xff);
+        if (uvl) {
+            upipe_freetype_set_samples(uvl, &canvas->uv, x0, x1, colour[1]);
+            upipe_freetype_set_samples(uvl + 1, &canvas->uv, x0, x1,
+                                       colour[2]);
         }
         return;
     }
 
-    unsigned wd = upipe_freetype_div255(ad * (0xff - as));
-    unsigned ao = as + wd;
-    if (alpha)
-        *alpha = ao;
-    if (unlikely(!ao))
+    /* The layout pages are rendered in, 4:2:2 planar with alpha, without the
+     * per plane checks and strides of the general case below. */
+    if (yl && ul && vl && al && !uvl &&
+        !canvas->y.hshift && !canvas->a.hshift &&
+        canvas->u.hshift == 1 && canvas->v.hshift == 1 &&
+        canvas->y.macropixel_size == 1 && canvas->a.macropixel_size == 1 &&
+        canvas->u.macropixel_size == 1 && canvas->v.macropixel_size == 1) {
+        for (int x = x0; x < x1; x++) {
+            unsigned as = colour[3];
+            if (coverage != NULL && coverage[x - x0] != 0xff)
+                as = upipe_freetype_div255(as * coverage[x - x0]);
+            if (!as)
+                continue;
+
+            unsigned ad = al[x];
+            if (ad == 0) {
+                al[x] = as;
+                yl[x] = colour[0];
+                ul[x >> 1] = colour[1];
+                vl[x >> 1] = colour[2];
+                continue;
+            }
+
+            /* as is not 0, so neither is ao */
+            unsigned wd = upipe_freetype_div255(ad * (0xff - as));
+            unsigned ao = as + wd;
+            al[x] = ao;
+            unsigned y = yl[x] * wd + colour[0] * as;
+            unsigned u = ul[x >> 1] * wd + colour[1] * as;
+            unsigned v = vl[x >> 1] * wd + colour[2] * as;
+            if (ao == 0xff) {
+                yl[x] = upipe_freetype_div255(y);
+                ul[x >> 1] = upipe_freetype_div255(u);
+                vl[x >> 1] = upipe_freetype_div255(v);
+            } else {
+                uint64_t r = upipe_freetype_recip[ao];
+                yl[x] = (y * r) >> 24;
+                ul[x >> 1] = (u * r) >> 24;
+                vl[x >> 1] = (v * r) >> 24;
+            }
+        }
         return;
-
-#define BLEND_PLANE(Plane, Val)                                             \
-    if (Plane.p) {                                                          \
-        size_t off = UPIPE_FREETYPE_OFFSET(Plane, x, y);                    \
-        unsigned v = Plane.p[off] * wd + (Val) * as;                        \
-        Plane.p[off] = ao == 0xff ? upipe_freetype_div255(v) : v / ao;      \
     }
 
-    BLEND_PLANE(canvas->y, colour[0])
-    BLEND_PLANE(canvas->u, colour[1])
-    BLEND_PLANE(canvas->v, colour[2])
-#undef BLEND_PLANE
+    for (int x = x0; x < x1; x++) {
+        unsigned as = colour[3];
+        if (coverage != NULL && coverage[x - x0] != 0xff)
+            as = upipe_freetype_div255(as * coverage[x - x0]);
+        if (!as)
+            continue;
 
-    if (canvas->uv.p) {
-        size_t off = UPIPE_FREETYPE_OFFSET(canvas->uv, x, y);
-        unsigned u = canvas->uv.p[off] * wd + colour[1] * as;
-        unsigned v = canvas->uv.p[off + 1] * wd + colour[2] * as;
-        canvas->uv.p[off] = ao == 0xff ? upipe_freetype_div255(u) : u / ao;
-        canvas->uv.p[off + 1] =
-            ao == 0xff ? upipe_freetype_div255(v) : v / ao;
+        uint8_t *alpha = NULL;
+        unsigned ad = 0xff;
+        if (al) {
+            alpha = UPIPE_FREETYPE_PIXEL(al, canvas->a, x);
+            ad = *alpha;
+        }
+
+        /* The colour is straight, not premultiplied, so the destination has
+         * to be weighted by its own alpha and the result scaled back by the
+         * alpha it comes to: mixing it in directly would drag the edge of a
+         * glyph towards the colour behind a fully transparent canvas.
+         * Nothing underneath leaves the source colour as it stands. */
+        if (ad == 0) {
+            if (alpha)
+                *alpha = as;
+            if (yl)
+                *UPIPE_FREETYPE_PIXEL(yl, canvas->y, x) = colour[0];
+            if (ul)
+                *UPIPE_FREETYPE_PIXEL(ul, canvas->u, x) = colour[1];
+            if (vl)
+                *UPIPE_FREETYPE_PIXEL(vl, canvas->v, x) = colour[2];
+            if (uvl) {
+                uint8_t *p = UPIPE_FREETYPE_PIXEL(uvl, canvas->uv, x);
+                p[0] = colour[1];
+                p[1] = colour[2];
+            }
+            continue;
+        }
+
+        unsigned wd = upipe_freetype_div255(ad * (0xff - as));
+        unsigned ao = as + wd;
+        if (alpha)
+            *alpha = ao;
+        if (unlikely(!ao))
+            continue;
+
+#define BLEND_SAMPLE(P, Val)                                                \
+        *(P) = upipe_freetype_unweight(*(P) * wd + (Val) * as, ao);
+
+        if (yl)
+            BLEND_SAMPLE(UPIPE_FREETYPE_PIXEL(yl, canvas->y, x), colour[0])
+        if (ul)
+            BLEND_SAMPLE(UPIPE_FREETYPE_PIXEL(ul, canvas->u, x), colour[1])
+        if (vl)
+            BLEND_SAMPLE(UPIPE_FREETYPE_PIXEL(vl, canvas->v, x), colour[2])
+        if (uvl) {
+            uint8_t *p = UPIPE_FREETYPE_PIXEL(uvl, canvas->uv, x);
+            BLEND_SAMPLE(p, colour[1])
+            BLEND_SAMPLE(p + 1, colour[2])
+        }
+#undef BLEND_SAMPLE
     }
+}
+
+/** @internal @This clips a run to a range.
+ *
+ * @param begin first position, updated
+ * @param end position after the last one, updated
+ * @param min first position allowed
+ * @param max position after the last one allowed
+ * @return false if nothing is left
+ */
+static inline bool upipe_freetype_clip(int64_t *begin, int64_t *end,
+                                       int64_t min, int64_t max)
+{
+    if (*begin < min)
+        *begin = min;
+    if (*end > max)
+        *end = max;
+    return *begin < *end;
 }
 
 /** @internal @This draws a rectangle, or adds it to the measured box.
@@ -1012,10 +1182,15 @@ static void upipe_freetype_target_rect(struct upipe_freetype_target *target,
         return;
     }
 
-    for (int j = 0; j < h; j++)
-        for (int i = 0; i < w; i++)
-            upipe_freetype_blend(target->canvas, x + i - target->origin_x,
-                                 y + j - target->origin_y, colour, 0xff);
+    struct upipe_freetype_canvas *canvas = target->canvas;
+    int64_t x0 = (int64_t)x - target->origin_x, x1 = x0 + w;
+    int64_t y0 = (int64_t)y - target->origin_y, y1 = y0 + h;
+    if (!upipe_freetype_clip(&x0, &x1, 0, canvas->width) ||
+        !upipe_freetype_clip(&y0, &y1, 0, canvas->height))
+        return;
+
+    for (int64_t j = y0; j < y1; j++)
+        upipe_freetype_blend_span(canvas, x0, x1, j, colour, NULL);
 }
 
 /** @internal @This draws a glyph bitmap, or adds it to the measured box.
@@ -1045,11 +1220,17 @@ static void upipe_freetype_target_glyph(struct upipe_freetype_target *target,
         return;
     }
 
-    for (int j = 0; j < height; j++)
-        for (int i = 0; i < width; i++)
-            upipe_freetype_blend(target->canvas, x0 + i - target->origin_x,
-                                 y0 + j - target->origin_y, colour,
-                                 buffer[j * pitch + i]);
+    struct upipe_freetype_canvas *canvas = target->canvas;
+    int64_t cx = (int64_t)x0 - target->origin_x;
+    int64_t cy = (int64_t)y0 - target->origin_y;
+    int64_t i0 = 0, i1 = width, j0 = 0, j1 = height;
+    if (!upipe_freetype_clip(&i0, &i1, -cx, (int64_t)canvas->width - cx) ||
+        !upipe_freetype_clip(&j0, &j1, -cy, (int64_t)canvas->height - cy))
+        return;
+
+    for (int64_t j = j0; j < j1; j++)
+        upipe_freetype_blend_span(canvas, cx + i0, cx + i1, cy + j, colour,
+                                  buffer + j * pitch + i0);
 }
 
 /** @internal @This looks up the font at a given size.
