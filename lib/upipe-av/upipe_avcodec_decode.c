@@ -1011,6 +1011,13 @@ static void upipe_avcdec_output_sub(struct upipe *upipe, AVSubtitle *sub,
         /* Decode palettized to bgra */
         for (int i = 0; i < sub->num_rects; i++) {
             AVSubtitleRect *r = sub->rects[i];
+
+            if (unlikely(r->type != SUBTITLE_BITMAP ||
+                         r->data[0] == NULL || r->data[1] == NULL)) {
+                upipe_warn_va(upipe, "skipping non-bitmap subtitle rect %i", i);
+                continue;
+            }
+
             int x = r->x, y = r->y, w = r->w, h = r->h;
 
             if (x >= width) {
