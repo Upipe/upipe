@@ -402,9 +402,12 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
             vsize = dest_vsize;
         }
 
+        /* Scale the paddings by the same factor as the DAR-fitted source
+         * (hsize/vsize still hold the fitted full size here), so the picture
+         * keeps its size and place within it. */
         if (src_hsize) {
-            lpad = lpad * dest_hsize / src_hsize;
-            rpad = rpad * dest_hsize / src_hsize;
+            lpad = lpad * hsize / src_hsize;
+            rpad = rpad * hsize / src_hsize;
             hsize -= lpad + rpad;
             hsize -= hsize % hround;
             hposition += (dest_hsize - hsize - lpad - rpad) / 2 + lpad;
@@ -413,12 +416,12 @@ static int upipe_blit_sub_provide_flow_format(struct upipe *upipe)
         }
 
         if (src_vsize) {
-            tpad = tpad * dest_vsize / src_vsize;
-            bpad = tpad * dest_vsize / src_vsize;
+            tpad = tpad * vsize / src_vsize;
+            bpad = bpad * vsize / src_vsize;
             vsize -= tpad + bpad;
             vsize -= vsize % vround;
             vposition += (dest_vsize - vsize - tpad - bpad) / 2 + tpad;
-            vposition -= vposition % hround;
+            vposition -= vposition % vround;
             uref_pic_set_vposition(uref, vposition);
         }
 
