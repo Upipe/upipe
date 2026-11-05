@@ -1,3 +1,12 @@
+/*
+ * Copyright (C) 2026 Open Broadcast Systems Ltd
+ *
+ * Authors: James Darnley
+ *          Kieran Kunhya
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /* dst = alpha > threshold ? src : bg.  Pass bg == dst to blend in place. */
 void upipe_blit8_threshold_hsub1_avx2(uint8_t *dst_plane, const uint8_t *bg_plane,
         const uint8_t *src_plane,

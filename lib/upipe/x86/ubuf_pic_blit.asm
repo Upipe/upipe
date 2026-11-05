@@ -1,3 +1,12 @@
+;******************************************************************************
+;* Copyright (C) 2026 Open Broadcast Systems Ltd
+;*
+;* Authors: James Darnley
+;*          Kieran Kunhya
+;*
+;* SPDX-License-Identifier: MIT
+;******************************************************************************
+
 %use smartalign
 ALIGNMODE p6
 
