@@ -16,6 +16,8 @@
 #include "upipe/ubuf_pic.h"
 #include "upipe/uref.h"
 #include "upipe/uref_pic_flow.h"
+#include "upipe/uref_pic.h"
+#include "upipe/uref_text.h"
 #include "upipe/uref_dump.h"
 #include "upipe/uref_void.h"
 #include "upipe/upipe.h"
@@ -34,6 +36,239 @@
 #include FT_GLYPH_H
 #include FT_CACHE_H
 #include FT_ADVANCES_H
+#include FT_OUTLINE_H
+
+/** synthetic bold strength, in 26.6 pixels per font pixel */
+#define EMBOLDEN_STRENGTH 3
+/** synthetic italic shear, in 16.16 */
+#define ITALIC_SHEAR 0x3400
+/** upper bound on the glyphs laid out for one page */
+#define MAX_GLYPHS 1024
+/** upper bound on the lines laid out for one region */
+#define MAX_LINES 64
+/** smallest picture the renderer emits, which is what a page with nothing to
+ * draw comes to: a couple of pixels is not a legal size once the chroma is
+ * subsampled and the scaler has to work on it, so use the same floor as the
+ * DVB subtitle decoder does for an empty subtitle */
+#define MIN_PICTURE_SIZE 16
+/** upper bound on the regions of one page, well above the four a DVB TTML
+ * subtitle stream may have active at once */
+#define MAX_PAGE_REGIONS 16
+/** upper bound on the runs of one page, which is what the attribute index of
+ * uref_text holds */
+#define MAX_RUNS 255
+/** size of the font table selected by the run font index */
+#define MAX_FONTS 8
+
+/** @internal @This describes a mapped plane of a picture. */
+struct upipe_freetype_plane {
+    /** line stride */
+    size_t stride;
+    /** horizontal subsampling, as a shift: every format upipe describes
+     * subsamples by a power of two, and a shift per pixel is not a divide */
+    uint8_t hshift;
+    /** vertical subsampling, as a shift */
+    uint8_t vshift;
+    /** size of a macropixel */
+    uint8_t macropixel_size;
+    /** number of octets in a line */
+    size_t memset_width;
+    /** number of lines */
+    size_t lines;
+    /** mapped plane, or NULL if the picture has no such plane */
+    uint8_t *p;
+};
+
+/** @internal @This is the offset of a pixel in a plane. */
+#define UPIPE_FREETYPE_OFFSET(Plane, X, Y)                                  \
+    (((size_t)(Y) >> (Plane).vshift) * (Plane).stride +                     \
+     ((size_t)(X) >> (Plane).hshift) * (Plane).macropixel_size)
+
+/** @internal @This divides by 255 with the rounding a division would give,
+ * exact for anything a blend of two octets comes to.
+ *
+ * @param v value to divide
+ * @return the value divided by 255
+ */
+static inline unsigned upipe_freetype_div255(unsigned v)
+{
+    v += 0x80;
+    return (v + (v >> 8)) >> 8;
+}
+
+/** @internal @This describes the picture the text is drawn into. */
+struct upipe_freetype_canvas {
+    /** picture width */
+    size_t width;
+    /** picture height */
+    size_t height;
+    /** number of pixels in a macropixel */
+    uint8_t macropixel;
+    /** luma plane */
+    struct upipe_freetype_plane y;
+    /** blue chroma plane */
+    struct upipe_freetype_plane u;
+    /** red chroma plane */
+    struct upipe_freetype_plane v;
+    /** alpha plane */
+    struct upipe_freetype_plane a;
+    /** interleaved chroma plane */
+    struct upipe_freetype_plane uv;
+};
+
+/** @internal @This is a rectangle, empty when x0 >= x1. */
+struct upipe_freetype_box {
+    int x0, y0, x1, y1;
+};
+
+/** @internal @This is a glyph bitmap, either from the small bitmap cache or
+ * rendered from a transformed copy of a cached outline. */
+struct upipe_freetype_bitmap {
+    /** left bearing */
+    int left;
+    /** top bearing */
+    int top;
+    /** bitmap width */
+    int width;
+    /** bitmap height */
+    int height;
+    /** octets between two lines of the bitmap */
+    int pitch;
+    /** coverage values */
+    const unsigned char *buffer;
+    /** horizontal advance in 16.16 */
+    int32_t advance;
+    /** owned glyph to release, or NULL when the bitmap belongs to a cache */
+    FT_Glyph glyph;
+};
+
+/** @internal @This is a styled run of text. */
+struct upipe_freetype_run {
+    /** UTF-8 text */
+    const char *text;
+    /** font face id */
+    FTC_FaceID face;
+    /** font size in pixels */
+    unsigned pixel_size;
+    /** style flags */
+    uint8_t flags;
+    /** whether the run has a background */
+    bool has_bg;
+    /** foreground colour in YUVA */
+    uint8_t fg[4];
+    /** background colour in YUVA */
+    uint8_t bg[4];
+    /** character edge */
+    uint8_t edge;
+    /** edge colour in YUVA */
+    uint8_t edge_color[4];
+    /** lit side of raised and depressed edges in YUVA */
+    uint8_t edge_light[4];
+    /** ascender in 26.6 */
+    int ascender;
+    /** descender in 26.6, counted downwards */
+    int descender;
+    /** default line height in 26.6 */
+    int height;
+};
+
+/** @internal @This is a region of the canvas. */
+struct upipe_freetype_region {
+    /** left of the region */
+    int x;
+    /** top of the region */
+    int y;
+    /** width of the region */
+    int hsize;
+    /** height of the region */
+    int vsize;
+    /** block alignment */
+    uint8_t display_align;
+    /** line alignment */
+    uint8_t text_align;
+    /** row alignment */
+    uint8_t multi_row_align;
+    /** line height in pixels, or 0 for the font default */
+    int line_height;
+    /** horizontal padding of the line backgrounds */
+    int line_padding;
+    /** whether the region has a background */
+    bool has_bg;
+    /** background colour in YUVA */
+    uint8_t bg[4];
+    /** whether the lines are wrapped */
+    bool wrap;
+    /** whether the line backgrounds cover the whole line height */
+    bool fill_line_gap;
+    /** first run of the region */
+    unsigned first_run;
+    /** number of runs in the region */
+    unsigned nb_runs;
+    /** first glyph of the region */
+    unsigned first_glyph;
+    /** number of glyphs in the region */
+    unsigned nb_glyphs;
+    /** first line of the region */
+    unsigned first_line;
+    /** number of lines in the region */
+    unsigned nb_lines;
+};
+
+/** @internal @This is a shaped glyph. */
+struct upipe_freetype_glyph {
+    /** glyph index in the font */
+    FT_UInt index;
+    /** unicode character */
+    uint32_t character;
+    /** horizontal advance in 16.16 */
+    int32_t advance;
+    /** kerning with the previous glyph in 16.16 */
+    int32_t kerning;
+    /** pen position from the start of the line in 16.16 */
+    int64_t x;
+    /** left bearing */
+    int16_t left;
+    /** top bearing */
+    int16_t top;
+    /** bitmap width */
+    int16_t width;
+    /** bitmap height */
+    int16_t height;
+    /** run the glyph belongs to */
+    unsigned run;
+    /** whether the glyph starts a new line */
+    bool break_before;
+};
+
+/** @internal @This is a laid out line. */
+struct upipe_freetype_line {
+    /** first glyph of the line */
+    unsigned first;
+    /** number of glyphs in the line */
+    unsigned nb;
+    /** width in 16.16 */
+    int64_t width;
+    /** ascender in 26.6 */
+    int ascender;
+    /** descender in 26.6 */
+    int descender;
+    /** height in 26.6 */
+    int height;
+};
+
+/** @internal @This is where a page is drawn, or the box it would occupy when
+ * canvas is NULL: measuring and drawing walk the same code so the picture can
+ * not end up smaller than what is drawn into it. */
+struct upipe_freetype_target {
+    /** picture to draw into, or NULL to measure */
+    struct upipe_freetype_canvas *canvas;
+    /** left of the picture on the canvas */
+    int origin_x;
+    /** top of the picture on the canvas */
+    int origin_y;
+    /** box covered so far */
+    struct upipe_freetype_box box;
+};
 
 /** upipe_freetype structure */
 struct upipe_freetype {
@@ -78,6 +313,8 @@ struct upipe_freetype {
 
     /** font */
     char *font;
+    /** fonts selected by the run font index, NULL for font */
+    char *fonts[MAX_FONTS];
     /** current pixel size */
     unsigned pixel_size;
     /** freetype handle */
@@ -103,6 +340,18 @@ struct upipe_freetype {
 
     /** full range */
     bool fullrange;
+
+    /* Scratch for laying a page out, allocated once with the pipe: a page is
+     * bounded by the limits below, so none of it grows with the input. */
+
+    /** regions of the page being laid out */
+    struct upipe_freetype_region *regions;
+    /** runs of the page being laid out */
+    struct upipe_freetype_run *runs;
+    /** glyphs of the page being laid out */
+    struct upipe_freetype_glyph *glyphs;
+    /** lines of the page being laid out */
+    struct upipe_freetype_line *lines;
 
     /** background color YUVA */
     uint8_t background[4];
@@ -186,6 +435,7 @@ static int upipe_freetype_load_face(struct upipe *upipe)
         return UBASE_ERR_INVALID;
 
     FTC_ScalerRec scaler;
+    memset(&scaler, 0, sizeof (scaler));
     scaler.face_id = upipe_freetype->font;
     scaler.width = upipe_freetype->pixel_size;
     scaler.height = upipe_freetype->pixel_size;
@@ -220,7 +470,12 @@ static int upipe_freetype_check_ubuf_mgr(struct upipe *upipe,
         uref_pic_flow_get_hsize(flow_format, &upipe_freetype->hsize);
         uref_pic_flow_get_vsize(flow_format, &upipe_freetype->vsize);
         upipe_freetype_flush_cache(upipe);
-        upipe_freetype_store_flow_def(upipe, flow_format);
+        /* Not advertised as the output flow definition yet.  A page is only
+         * ever a crop out of this format, and a first negotiation at the full
+         * size settles on a chain that does not scale, which no later crop
+         * gets a chance to undo.  Whichever path renders first advertises the
+         * geometry it actually produces. */
+        uref_free(flow_format);
     }
 
     if (upipe_freetype_check_input(upipe))
@@ -287,6 +542,12 @@ static void upipe_freetype_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
 
     upipe_freetype_flush_cache(upipe);
+    for (unsigned i = 0; i < MAX_FONTS; i++)
+        free(upipe_freetype->fonts[i]);
+    free(upipe_freetype->regions);
+    free(upipe_freetype->runs);
+    free(upipe_freetype->glyphs);
+    free(upipe_freetype->lines);
     FTC_Manager_Done(upipe_freetype->cache_manager);
     FT_Done_FreeType(upipe_freetype->library);
     free(upipe_freetype->font);
@@ -313,6 +574,7 @@ static FT_Error upipe_freetype_face_requester(FTC_FaceID face_id,
                                               FT_Pointer data,
                                               FT_Face *face)
 {
+    /* the face id is the path of the font file */
     return FT_New_Face(library, face_id, 0, face);
 }
 
@@ -351,9 +613,28 @@ static struct upipe *upipe_freetype_alloc(struct upipe_mgr *mgr,
     upipe_freetype->xoff = 0;
     upipe_freetype->yoff = 0;
     upipe_freetype->font = NULL;
+    for (unsigned i = 0; i < MAX_FONTS; i++)
+        upipe_freetype->fonts[i] = NULL;
     upipe_freetype->pixel_size = 0;
     upipe_freetype->fullrange =
         ubase_check(uref_pic_flow_get_full_range(flow_def));
+
+    /* Laying a page out allocates nothing: the scratch is bounded and comes
+     * with the pipe. */
+    upipe_freetype->regions =
+        malloc(MAX_PAGE_REGIONS * sizeof (*upipe_freetype->regions));
+    upipe_freetype->runs = malloc(MAX_RUNS * sizeof (*upipe_freetype->runs));
+    upipe_freetype->glyphs =
+        malloc(MAX_GLYPHS * sizeof (*upipe_freetype->glyphs));
+    upipe_freetype->lines =
+        malloc(MAX_PAGE_REGIONS * MAX_LINES * sizeof (*upipe_freetype->lines));
+    if (unlikely(upipe_freetype->regions == NULL ||
+                 upipe_freetype->runs == NULL ||
+                 upipe_freetype->glyphs == NULL ||
+                 upipe_freetype->lines == NULL)) {
+        upipe_release(upipe);
+        return NULL;
+    }
     /* black */
     upipe_freetype->background[0] = upipe_freetype->fullrange ? 0 : 16;
     upipe_freetype->background[1] = 0x80;
@@ -467,6 +748,1411 @@ static int upipe_freetype_throw_new_text(struct upipe *upipe, const char *text)
                        UPIPE_FREETYPE_SIGNATURE, text);
 }
 
+/** @internal @This grows a range around what it already covers until it spans
+ * at least a minimum, without leaving the canvas.
+ *
+ * @param begin beginning of the range
+ * @param end end of the range
+ * @param min minimum span
+ * @param bound size of the canvas along that axis
+ */
+static void upipe_freetype_grow(int *begin, int *end, int min, int bound)
+{
+    if (min > bound)
+        min = bound;
+    while (*end - *begin < min) {
+        if (*begin > 0)
+            (*begin)--;
+        else if (*end < bound)
+            (*end)++;
+        else
+            break;
+        if (*end - *begin < min && *end < bound)
+            (*end)++;
+    }
+}
+
+/** @internal @This extends a box.
+ *
+ * @param box box to extend
+ * @param x0 left of the added rectangle
+ * @param y0 top of the added rectangle
+ * @param x1 right of the added rectangle
+ * @param y1 bottom of the added rectangle
+ */
+static void upipe_freetype_box_add(struct upipe_freetype_box *box,
+                                   int x0, int y0, int x1, int y1)
+{
+    if (x0 >= x1 || y0 >= y1)
+        return;
+    if (box->x0 >= box->x1 || box->y0 >= box->y1) {
+        box->x0 = x0;
+        box->y0 = y0;
+        box->x1 = x1;
+        box->y1 = y1;
+        return;
+    }
+    if (x0 < box->x0)
+        box->x0 = x0;
+    if (y0 < box->y0)
+        box->y0 = y0;
+    if (x1 > box->x1)
+        box->x1 = x1;
+    if (y1 > box->y1)
+        box->y1 = y1;
+}
+
+/** @internal @This maps the planes of a picture.
+ *
+ * @param upipe description structure of the pipe
+ * @param ubuf picture to map
+ * @param canvas filled in with the mapped planes
+ * @return an error code
+ */
+static int upipe_freetype_map(struct upipe *upipe, struct ubuf *ubuf,
+                              struct upipe_freetype_canvas *canvas)
+{
+    memset(canvas, 0, sizeof (*canvas));
+
+    UBASE_RETURN(ubuf_pic_size(ubuf, &canvas->width, &canvas->height,
+                               &canvas->macropixel))
+
+    const char *chroma;
+    ubuf_pic_foreach_plane(ubuf, chroma) {
+        struct upipe_freetype_plane *plane = NULL;
+
+        if (!strcmp(chroma, "y8"))
+            plane = &canvas->y;
+        else if (!strcmp(chroma, "u8"))
+            plane = &canvas->u;
+        else if (!strcmp(chroma, "v8"))
+            plane = &canvas->v;
+        else if (!strcmp(chroma, "a8"))
+            plane = &canvas->a;
+        else if (!strcmp(chroma, "u8v8"))
+            plane = &canvas->uv;
+        else {
+            upipe_warn_va(upipe, "unsupported plane %s", chroma);
+            continue;
+        }
+
+        uint8_t hsub, vsub;
+        if (unlikely(!ubase_check(ubuf_pic_plane_size(ubuf, chroma,
+                            &plane->stride, &hsub, &vsub,
+                            &plane->macropixel_size)))) {
+            upipe_warn_va(upipe, "fail to get plane %s size", chroma);
+            continue;
+        }
+
+        plane->hshift = plane->vshift = 0;
+        while ((1U << plane->hshift) < hsub)
+            plane->hshift++;
+        while ((1U << plane->vshift) < vsub)
+            plane->vshift++;
+        if (unlikely((1U << plane->hshift) != hsub ||
+                     (1U << plane->vshift) != vsub)) {
+            upipe_warn_va(upipe, "plane %s subsamples by %"PRIu8"x%"PRIu8,
+                          chroma, hsub, vsub);
+            continue;
+        }
+
+        plane->memset_width = canvas->width * plane->macropixel_size /
+            hsub / canvas->macropixel;
+        plane->lines = canvas->height >> plane->vshift;
+
+        if (unlikely(!ubase_check(ubuf_pic_plane_write(ubuf, chroma, 0, 0,
+                                                       -1, -1, &plane->p)))) {
+            upipe_warn_va(upipe, "fail to map %s plane", chroma);
+            plane->p = NULL;
+        }
+    }
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This unmaps the planes of a picture.
+ *
+ * @param ubuf mapped picture
+ * @param canvas mapped planes
+ */
+static void upipe_freetype_unmap(struct ubuf *ubuf,
+                                 struct upipe_freetype_canvas *canvas)
+{
+    if (canvas->y.p)
+        ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
+    if (canvas->u.p)
+        ubuf_pic_plane_unmap(ubuf, "u8", 0, 0, -1, -1);
+    if (canvas->v.p)
+        ubuf_pic_plane_unmap(ubuf, "v8", 0, 0, -1, -1);
+    if (canvas->a.p)
+        ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
+    if (canvas->uv.p)
+        ubuf_pic_plane_unmap(ubuf, "u8v8", 0, 0, -1, -1);
+}
+
+/** @internal @This fills a picture with a single colour.
+ *
+ * @param canvas mapped planes
+ * @param colour colour in YUVA
+ */
+static void upipe_freetype_fill(struct upipe_freetype_canvas *canvas,
+                                const uint8_t colour[4])
+{
+#define FILL_PLANE(Plane, Val)                                              \
+    if (Plane.p) {                                                          \
+        uint8_t *buf = Plane.p;                                             \
+        for (size_t i = 0; i < Plane.lines; i++) {                          \
+            memset(buf, Val, Plane.memset_width);                           \
+            buf += Plane.stride;                                            \
+        }                                                                   \
+    }
+
+    FILL_PLANE(canvas->y, colour[0])
+    FILL_PLANE(canvas->u, colour[1])
+    FILL_PLANE(canvas->v, colour[2])
+    FILL_PLANE(canvas->a, colour[3])
+#undef FILL_PLANE
+
+    if (canvas->uv.p) {
+        uint8_t *buf = canvas->uv.p;
+        for (size_t i = 0; i < canvas->uv.lines; i++) {
+            for (size_t j = 0; j + 1 < canvas->uv.memset_width; j += 2) {
+                buf[j] = colour[1];
+                buf[j + 1] = colour[2];
+            }
+            buf += canvas->uv.stride;
+        }
+    }
+}
+
+/** @internal @This is 2^24 / d rounded up: (v * recip[d]) >> 24 is v / d for
+ * any v up to 255 * d, which is all a blend comes to. */
+static const uint32_t upipe_freetype_recip[256] = {
+    0, 16777216, 8388608, 5592406, 4194304, 3355444,
+    2796203, 2396746, 2097152, 1864136, 1677722, 1525202,
+    1398102, 1290556, 1198373, 1118482, 1048576, 986896,
+    932068, 883012, 838861, 798916, 762601, 729445,
+    699051, 671089, 645278, 621379, 599187, 578525,
+    559241, 541201, 524288, 508401, 493448, 479350,
+    466034, 453439, 441506, 430186, 419431, 409201,
+    399458, 390168, 381301, 372828, 364723, 356963,
+    349526, 342393, 335545, 328966, 322639, 316552,
+    310690, 305041, 299594, 294338, 289263, 284360,
+    279621, 275037, 270601, 266306, 262144, 258112,
+    254201, 250407, 246724, 243149, 239675, 236299,
+    233017, 229825, 226720, 223697, 220753, 217886,
+    215093, 212370, 209716, 207127, 204601, 202136,
+    199729, 197380, 195084, 192842, 190651, 188509,
+    186414, 184366, 182362, 180401, 178482, 176603,
+    174763, 172961, 171197, 169467, 167773, 166112,
+    164483, 162886, 161320, 159784, 158276, 156797,
+    155345, 153920, 152521, 151147, 149797, 148471,
+    147169, 145889, 144632, 143396, 142180, 140986,
+    139811, 138655, 137519, 136401, 135301, 134218,
+    133153, 132105, 131072, 130056, 129056, 128071,
+    127101, 126145, 125204, 124276, 123362, 122462,
+    121575, 120700, 119838, 118988, 118150, 117324,
+    116509, 115705, 114913, 114131, 113360, 112599,
+    111849, 111108, 110377, 109656, 108943, 108241,
+    107547, 106862, 106185, 105518, 104858, 104207,
+    103564, 102928, 102301, 101681, 101068, 100463,
+    99865, 99274, 98690, 98113, 97542, 96979,
+    96421, 95870, 95326, 94787, 94255, 93728,
+    93207, 92692, 92183, 91679, 91181, 90688,
+    90201, 89718, 89241, 88769, 88302, 87839,
+    87382, 86929, 86481, 86038, 85599, 85164,
+    84734, 84308, 83887, 83469, 83056, 82647,
+    82242, 81841, 81443, 81050, 80660, 80274,
+    79892, 79513, 79138, 78767, 78399, 78034,
+    77673, 77315, 76960, 76609, 76261, 75916,
+    75574, 75235, 74899, 74566, 74236, 73909,
+    73585, 73263, 72945, 72629, 72316, 72006,
+    71698, 71393, 71090, 70790, 70493, 70198,
+    69906, 69616, 69328, 69043, 68760, 68479,
+    68201, 67924, 67651, 67379, 67109, 66842,
+    66577, 66314, 66053, 65794
+};
+
+/** @internal @This divides a blend by the alpha it comes to.
+ *
+ * @param v weighted sum, at most 255 * ao
+ * @param ao resulting alpha, not 0
+ * @return the value divided by ao
+ */
+static inline unsigned upipe_freetype_unweight(unsigned v, unsigned ao)
+{
+    if (ao == 0xff)
+        return upipe_freetype_div255(v);
+    return ((uint64_t)v * upipe_freetype_recip[ao]) >> 24;
+}
+
+/** @internal @This is a line of a plane, or NULL if the picture has no such
+ * plane. */
+#define UPIPE_FREETYPE_LINE(Plane, Y)                                       \
+    ((Plane).p ? (Plane).p + UPIPE_FREETYPE_OFFSET(Plane, 0, Y) : NULL)
+
+/** @internal @This is a pixel of a line of a plane. */
+#define UPIPE_FREETYPE_PIXEL(Line, Plane, X)                                \
+    ((Line) + ((size_t)(X) >> (Plane).hshift) * (Plane).macropixel_size)
+
+/** @internal @This sets the samples of a line of a plane under a run of
+ * pixels.
+ *
+ * @param line line of the plane
+ * @param plane plane description
+ * @param x0 first pixel
+ * @param x1 pixel after the last one
+ * @param val value to set
+ */
+static inline void upipe_freetype_set_samples(uint8_t *line,
+        const struct upipe_freetype_plane *plane, int x0, int x1, uint8_t val)
+{
+    size_t s0 = (size_t)x0 >> plane->hshift;
+    size_t s1 = (size_t)(x1 - 1) >> plane->hshift;
+    if (plane->macropixel_size == 1) {
+        memset(line + s0, val, s1 - s0 + 1);
+        return;
+    }
+    for (size_t s = s0; s <= s1; s++)
+        line[s * plane->macropixel_size] = val;
+}
+
+/** @internal @This composites a colour onto a run of pixels of a line.
+ *
+ * @param canvas mapped planes
+ * @param x0 first pixel, inside the picture
+ * @param x1 pixel after the last one, inside the picture
+ * @param y line, inside the picture
+ * @param colour colour in YUVA
+ * @param coverage coverage of each pixel by the source, or NULL for full
+ * coverage
+ */
+static void upipe_freetype_blend_span(struct upipe_freetype_canvas *canvas,
+                                      int x0, int x1, int y,
+                                      const uint8_t colour[4],
+                                      const uint8_t *coverage)
+{
+    uint8_t *yl = UPIPE_FREETYPE_LINE(canvas->y, y);
+    uint8_t *ul = UPIPE_FREETYPE_LINE(canvas->u, y);
+    uint8_t *vl = UPIPE_FREETYPE_LINE(canvas->v, y);
+    uint8_t *al = UPIPE_FREETYPE_LINE(canvas->a, y);
+    uint8_t *uvl = UPIPE_FREETYPE_LINE(canvas->uv, y);
+
+    /* An opaque colour covering every pixel replaces whatever is there. */
+    if (coverage == NULL && colour[3] == 0xff) {
+        if (yl)
+            upipe_freetype_set_samples(yl, &canvas->y, x0, x1, colour[0]);
+        if (ul)
+            upipe_freetype_set_samples(ul, &canvas->u, x0, x1, colour[1]);
+        if (vl)
+            upipe_freetype_set_samples(vl, &canvas->v, x0, x1, colour[2]);
+        if (al)
+            upipe_freetype_set_samples(al, &canvas->a, x0, x1, 0xff);
+        if (uvl) {
+            upipe_freetype_set_samples(uvl, &canvas->uv, x0, x1, colour[1]);
+            upipe_freetype_set_samples(uvl + 1, &canvas->uv, x0, x1,
+                                       colour[2]);
+        }
+        return;
+    }
+
+    /* The layout pages are rendered in, 4:2:2 planar with alpha, without the
+     * per plane checks and strides of the general case below. */
+    if (yl && ul && vl && al && !uvl &&
+        !canvas->y.hshift && !canvas->a.hshift &&
+        canvas->u.hshift == 1 && canvas->v.hshift == 1 &&
+        canvas->y.macropixel_size == 1 && canvas->a.macropixel_size == 1 &&
+        canvas->u.macropixel_size == 1 && canvas->v.macropixel_size == 1) {
+        for (int x = x0; x < x1; x++) {
+            unsigned as = colour[3];
+            if (coverage != NULL && coverage[x - x0] != 0xff)
+                as = upipe_freetype_div255(as * coverage[x - x0]);
+            if (!as)
+                continue;
+
+            unsigned ad = al[x];
+            if (ad == 0) {
+                al[x] = as;
+                yl[x] = colour[0];
+                ul[x >> 1] = colour[1];
+                vl[x >> 1] = colour[2];
+                continue;
+            }
+
+            /* as is not 0, so neither is ao */
+            unsigned wd = upipe_freetype_div255(ad * (0xff - as));
+            unsigned ao = as + wd;
+            al[x] = ao;
+            unsigned y = yl[x] * wd + colour[0] * as;
+            unsigned u = ul[x >> 1] * wd + colour[1] * as;
+            unsigned v = vl[x >> 1] * wd + colour[2] * as;
+            if (ao == 0xff) {
+                yl[x] = upipe_freetype_div255(y);
+                ul[x >> 1] = upipe_freetype_div255(u);
+                vl[x >> 1] = upipe_freetype_div255(v);
+            } else {
+                uint64_t r = upipe_freetype_recip[ao];
+                yl[x] = (y * r) >> 24;
+                ul[x >> 1] = (u * r) >> 24;
+                vl[x >> 1] = (v * r) >> 24;
+            }
+        }
+        return;
+    }
+
+    for (int x = x0; x < x1; x++) {
+        unsigned as = colour[3];
+        if (coverage != NULL && coverage[x - x0] != 0xff)
+            as = upipe_freetype_div255(as * coverage[x - x0]);
+        if (!as)
+            continue;
+
+        uint8_t *alpha = NULL;
+        unsigned ad = 0xff;
+        if (al) {
+            alpha = UPIPE_FREETYPE_PIXEL(al, canvas->a, x);
+            ad = *alpha;
+        }
+
+        /* The colour is straight, not premultiplied, so the destination has
+         * to be weighted by its own alpha and the result scaled back by the
+         * alpha it comes to: mixing it in directly would drag the edge of a
+         * glyph towards the colour behind a fully transparent canvas.
+         * Nothing underneath leaves the source colour as it stands. */
+        if (ad == 0) {
+            if (alpha)
+                *alpha = as;
+            if (yl)
+                *UPIPE_FREETYPE_PIXEL(yl, canvas->y, x) = colour[0];
+            if (ul)
+                *UPIPE_FREETYPE_PIXEL(ul, canvas->u, x) = colour[1];
+            if (vl)
+                *UPIPE_FREETYPE_PIXEL(vl, canvas->v, x) = colour[2];
+            if (uvl) {
+                uint8_t *p = UPIPE_FREETYPE_PIXEL(uvl, canvas->uv, x);
+                p[0] = colour[1];
+                p[1] = colour[2];
+            }
+            continue;
+        }
+
+        unsigned wd = upipe_freetype_div255(ad * (0xff - as));
+        unsigned ao = as + wd;
+        if (alpha)
+            *alpha = ao;
+        if (unlikely(!ao))
+            continue;
+
+#define BLEND_SAMPLE(P, Val)                                                \
+        *(P) = upipe_freetype_unweight(*(P) * wd + (Val) * as, ao);
+
+        if (yl)
+            BLEND_SAMPLE(UPIPE_FREETYPE_PIXEL(yl, canvas->y, x), colour[0])
+        if (ul)
+            BLEND_SAMPLE(UPIPE_FREETYPE_PIXEL(ul, canvas->u, x), colour[1])
+        if (vl)
+            BLEND_SAMPLE(UPIPE_FREETYPE_PIXEL(vl, canvas->v, x), colour[2])
+        if (uvl) {
+            uint8_t *p = UPIPE_FREETYPE_PIXEL(uvl, canvas->uv, x);
+            BLEND_SAMPLE(p, colour[1])
+            BLEND_SAMPLE(p + 1, colour[2])
+        }
+#undef BLEND_SAMPLE
+    }
+}
+
+/** @internal @This clips a run to a range.
+ *
+ * @param begin first position, updated
+ * @param end position after the last one, updated
+ * @param min first position allowed
+ * @param max position after the last one allowed
+ * @return false if nothing is left
+ */
+static inline bool upipe_freetype_clip(int64_t *begin, int64_t *end,
+                                       int64_t min, int64_t max)
+{
+    if (*begin < min)
+        *begin = min;
+    if (*end > max)
+        *end = max;
+    return *begin < *end;
+}
+
+/** @internal @This draws a rectangle, or adds it to the measured box.
+ *
+ * @param target picture to draw into or box to extend
+ * @param x left of the rectangle on the canvas
+ * @param y top of the rectangle on the canvas
+ * @param w width of the rectangle
+ * @param h height of the rectangle
+ * @param colour colour in YUVA
+ */
+static void upipe_freetype_target_rect(struct upipe_freetype_target *target,
+                                       int x, int y, int w, int h,
+                                       const uint8_t colour[4])
+{
+    if (w <= 0 || h <= 0 || !colour[3])
+        return;
+
+    if (target->canvas == NULL) {
+        upipe_freetype_box_add(&target->box, x, y, x + w, y + h);
+        return;
+    }
+
+    struct upipe_freetype_canvas *canvas = target->canvas;
+    int64_t x0 = (int64_t)x - target->origin_x, x1 = x0 + w;
+    int64_t y0 = (int64_t)y - target->origin_y, y1 = y0 + h;
+    if (!upipe_freetype_clip(&x0, &x1, 0, canvas->width) ||
+        !upipe_freetype_clip(&y0, &y1, 0, canvas->height))
+        return;
+
+    for (int64_t j = y0; j < y1; j++)
+        upipe_freetype_blend_span(canvas, x0, x1, j, colour, NULL);
+}
+
+/** @internal @This draws a glyph bitmap, or adds it to the measured box.
+ *
+ * @param target picture to draw into or box to extend
+ * @param x horizontal pen position on the canvas
+ * @param y baseline position on the canvas
+ * @param left left bearing of the glyph
+ * @param top top bearing of the glyph
+ * @param width width of the glyph bitmap
+ * @param height height of the glyph bitmap
+ * @param pitch octets between two lines of the glyph bitmap
+ * @param buffer coverage values, or NULL when measuring
+ * @param colour colour in YUVA
+ */
+static void upipe_freetype_target_glyph(struct upipe_freetype_target *target,
+                                        int x, int y, int left, int top,
+                                        int width, int height, int pitch,
+                                        const unsigned char *buffer,
+                                        const uint8_t colour[4])
+{
+    int x0 = x + left;
+    int y0 = y - top;
+
+    if (target->canvas == NULL || buffer == NULL) {
+        upipe_freetype_box_add(&target->box, x0, y0, x0 + width, y0 + height);
+        return;
+    }
+
+    struct upipe_freetype_canvas *canvas = target->canvas;
+    int64_t cx = (int64_t)x0 - target->origin_x;
+    int64_t cy = (int64_t)y0 - target->origin_y;
+    int64_t i0 = 0, i1 = width, j0 = 0, j1 = height;
+    if (!upipe_freetype_clip(&i0, &i1, -cx, (int64_t)canvas->width - cx) ||
+        !upipe_freetype_clip(&j0, &j1, -cy, (int64_t)canvas->height - cy))
+        return;
+
+    for (int64_t j = j0; j < j1; j++)
+        upipe_freetype_blend_span(canvas, cx + i0, cx + i1, cy + j, colour,
+                                  buffer + j * pitch + i0);
+}
+
+/** @internal @This looks up the font at a given size.
+ *
+ * @param upipe description structure of the pipe
+ * @param face font face id
+ * @param pixel_size size in pixels
+ * @param size_p filled in with the font size handle
+ * @return an error code
+ */
+static int upipe_freetype_lookup_size(struct upipe *upipe, FTC_FaceID face,
+                                      unsigned pixel_size, FT_Size *size_p)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    FTC_ScalerRec scaler;
+
+    memset(&scaler, 0, sizeof (scaler));
+    scaler.face_id = face;
+    scaler.width = pixel_size;
+    scaler.height = pixel_size;
+    scaler.pixel = 1;
+
+    if (FTC_Manager_LookupSize(upipe_freetype->cache_manager, &scaler, size_p))
+        return UBASE_ERR_INVALID;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This releases a glyph bitmap.
+ *
+ * @param bitmap glyph bitmap
+ */
+static void upipe_freetype_put_bitmap(struct upipe_freetype_bitmap *bitmap)
+{
+    if (bitmap->glyph != NULL) {
+        FT_Done_Glyph(bitmap->glyph);
+        bitmap->glyph = NULL;
+    }
+    bitmap->buffer = NULL;
+}
+
+/** @internal @This renders a glyph.
+ *
+ * Bold and italic are synthesized by emboldening and shearing a copy of the
+ * cached outline.  A run in the plain style is taken from the small bitmap
+ * cache instead, which is already rendered.
+ *
+ * @param upipe description structure of the pipe
+ * @param face font face id
+ * @param pixel_size size in pixels
+ * @param index glyph index in the font
+ * @param flags style flags of the run
+ * @param bitmap filled in with the glyph bitmap
+ * @return an error code
+ */
+static int upipe_freetype_get_bitmap(struct upipe *upipe, FTC_FaceID face,
+                                     unsigned pixel_size, FT_UInt index,
+                                     uint8_t flags,
+                                     struct upipe_freetype_bitmap *bitmap)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    FTC_ImageTypeRec type;
+
+    memset(bitmap, 0, sizeof (*bitmap));
+
+    type.face_id = face;
+    type.width = pixel_size;
+    type.height = pixel_size;
+    type.flags = FT_LOAD_DEFAULT;
+
+    if (!(flags & (UREF_TEXT_RUN_BOLD | UREF_TEXT_RUN_ITALIC))) {
+        FTC_SBit sbit;
+        /* a glyph the small bitmap cache would not hold comes back with no
+         * buffer, and is rendered from the outline below */
+        if (!FTC_SBitCache_Lookup(upipe_freetype->sbit_cache, &type, index,
+                                  &sbit, NULL) && sbit->buffer != NULL) {
+            bitmap->left = sbit->left;
+            bitmap->top = sbit->top;
+            bitmap->width = sbit->width;
+            bitmap->height = sbit->height;
+            bitmap->pitch = sbit->pitch;
+            bitmap->buffer = sbit->buffer;
+            bitmap->advance = sbit->xadvance << 16;
+            return UBASE_ERR_NONE;
+        }
+    }
+
+    FT_Glyph cached;
+    if (FTC_ImageCache_Lookup(upipe_freetype->img_cache, &type, index,
+                              &cached, NULL))
+        return UBASE_ERR_INVALID;
+
+    int32_t advance = cached->advance.x;
+
+    FT_Glyph glyph;
+    if (FT_Glyph_Copy(cached, &glyph))
+        return UBASE_ERR_INVALID;
+
+    if (glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+        FT_OutlineGlyph outline = (FT_OutlineGlyph)glyph;
+        if (flags & UREF_TEXT_RUN_BOLD) {
+            FT_Pos strength = pixel_size * EMBOLDEN_STRENGTH;
+            FT_Outline_Embolden(&outline->outline, strength);
+            /* 26.6 to 16.16 */
+            advance += strength << 10;
+        }
+        if (flags & UREF_TEXT_RUN_ITALIC) {
+            FT_Matrix matrix = { 0x10000, ITALIC_SHEAR, 0, 0x10000 };
+            FT_Outline_Transform(&outline->outline, &matrix);
+        }
+    }
+
+    if (FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, NULL, 1)) {
+        FT_Done_Glyph(glyph);
+        return UBASE_ERR_INVALID;
+    }
+
+    FT_BitmapGlyph slot = (FT_BitmapGlyph)glyph;
+    bitmap->left = slot->left;
+    bitmap->top = slot->top;
+    bitmap->width = slot->bitmap.width;
+    bitmap->height = slot->bitmap.rows;
+    bitmap->pitch = slot->bitmap.pitch;
+    bitmap->buffer = slot->bitmap.buffer;
+    bitmap->advance = advance;
+    bitmap->glyph = glyph;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This shapes the runs of a region into glyphs.
+ *
+ * @param upipe description structure of the pipe
+ * @param region region to shape
+ * @param runs run array
+ * @param glyphs glyph array to fill in
+ * @param max maximum number of glyphs to produce
+ * @return the number of glyphs produced
+ */
+static unsigned upipe_freetype_shape(struct upipe *upipe,
+                                     const struct upipe_freetype_region *region,
+                                     const struct upipe_freetype_run *runs,
+                                     struct upipe_freetype_glyph *glyphs,
+                                     unsigned max)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    unsigned nb = 0;
+    unsigned failed = 0;
+
+    for (unsigned r = 0; r < region->nb_runs; r++) {
+        const struct upipe_freetype_run *run = &runs[region->first_run + r];
+
+        FT_Size size;
+        if (unlikely(!ubase_check(upipe_freetype_lookup_size(upipe,
+                            run->face, run->pixel_size, &size)))) {
+            upipe_warn_va(upipe, "no font at %u pixels, dropping \"%s\"",
+                          run->pixel_size, run->text);
+            continue;
+        }
+        FT_Face face = size->face;
+        FT_Bool use_kerning = FT_HAS_KERNING(face);
+        FT_UInt previous = 0;
+        bool break_before = !!(run->flags & UREF_TEXT_RUN_BREAK);
+
+        for (size_t i = 0; run->text[i] != '\0' && nb < max;) {
+            size_t char_size = 0;
+            uint32_t c = unicode_character(&run->text[i], &char_size);
+            if (char_size == 0)
+                break;
+            i += char_size;
+
+            if (c == '\n' || c == '\r') {
+                break_before = true;
+                previous = 0;
+                continue;
+            }
+
+            FT_UInt index = FTC_CMapCache_Lookup(upipe_freetype->cmap_cache,
+                                                 run->face, -1, c);
+
+            struct upipe_freetype_bitmap bitmap;
+            if (unlikely(!ubase_check(upipe_freetype_get_bitmap(upipe,
+                                run->face, run->pixel_size, index,
+                                run->flags, &bitmap)))) {
+                failed++;
+                continue;
+            }
+
+            struct upipe_freetype_glyph *glyph = &glyphs[nb++];
+            glyph->index = index;
+            glyph->character = c;
+            glyph->advance = bitmap.advance;
+            glyph->kerning = 0;
+            glyph->x = 0;
+            glyph->left = bitmap.left;
+            glyph->top = bitmap.top;
+            glyph->width = bitmap.width;
+            glyph->height = bitmap.height;
+            glyph->run = region->first_run + r;
+            glyph->break_before = break_before;
+            break_before = false;
+
+            if (use_kerning && previous) {
+                FT_Vector delta;
+                FT_Get_Kerning(face, previous, index, FT_KERNING_DEFAULT,
+                               &delta);
+                /* 26.6 to 16.16 */
+                glyph->kerning = delta.x << 10;
+            }
+            previous = index;
+
+            upipe_freetype_put_bitmap(&bitmap);
+        }
+    }
+
+    if (unlikely(failed))
+        upipe_warn_va(upipe, "%u character(s) had no glyph in the font",
+                      failed);
+
+    return nb;
+}
+
+/** @internal @This breaks the glyphs of a region into lines.
+ *
+ * @param region region to lay out
+ * @param runs run array
+ * @param glyphs glyph array of the region, pen positions are filled in
+ * @param nb_glyphs number of glyphs
+ * @param lines line array to fill in
+ * @param max maximum number of lines to produce
+ * @return the number of lines produced
+ */
+static unsigned upipe_freetype_break_lines(
+        const struct upipe_freetype_region *region,
+        const struct upipe_freetype_run *runs,
+        struct upipe_freetype_glyph *glyphs, unsigned nb_glyphs,
+        struct upipe_freetype_line *lines, unsigned max)
+{
+    int avail = region->hsize - 2 * region->line_padding;
+    if (avail < 0)
+        avail = 0;
+    int64_t limit = (int64_t)avail << 16;
+
+    unsigned nb_lines = 0;
+    unsigned first = 0;
+    int64_t x = 0;
+    /* index of the glyph after the last space seen on the line, where the
+     * line is broken when it overflows */
+    unsigned wrap = 0;
+    int64_t wrap_x = 0;
+
+    for (unsigned i = 0; i < nb_glyphs && nb_lines < max; i++) {
+        int64_t advance = glyphs[i].advance;
+        if (i != first)
+            advance += glyphs[i].kerning;
+
+        bool overflow = region->wrap && limit > 0 && i != first &&
+            glyphs[i].character != ' ' && x + advance > limit;
+
+        if (glyphs[i].break_before || overflow) {
+            unsigned end = i;
+            int64_t width = x;
+            if (overflow && wrap > first) {
+                /* break after the last space, which is left at the end of the
+                 * line where it does not show */
+                end = wrap;
+                width = wrap_x;
+            }
+
+            /* a break on the very first glyph is the start of the block, not
+             * an empty line above it */
+            if (end > first || nb_lines) {
+                struct upipe_freetype_line *line = &lines[nb_lines++];
+                line->first = first;
+                line->nb = end - first;
+                line->width = width;
+            }
+
+            first = end;
+            x = 0;
+            wrap = first;
+            wrap_x = 0;
+            for (unsigned j = first; j <= i; j++) {
+                glyphs[j].x = x;
+                x += glyphs[j].advance + (j != first ? glyphs[j].kerning : 0);
+                if (glyphs[j].character == ' ') {
+                    wrap = j + 1;
+                    wrap_x = glyphs[j].x;
+                }
+            }
+            continue;
+        }
+
+        glyphs[i].x = x;
+        x += advance;
+        if (glyphs[i].character == ' ') {
+            wrap = i + 1;
+            wrap_x = glyphs[i].x;
+        }
+    }
+
+    if (first < nb_glyphs && nb_lines < max) {
+        struct upipe_freetype_line *line = &lines[nb_lines++];
+        line->first = first;
+        line->nb = nb_glyphs - first;
+        line->width = x;
+    }
+
+    for (unsigned i = 0; i < nb_lines; i++) {
+        struct upipe_freetype_line *line = &lines[i];
+        line->ascender = 0;
+        line->descender = 0;
+        line->height = 0;
+        for (unsigned j = line->first; j < line->first + line->nb; j++) {
+            const struct upipe_freetype_run *run = &runs[glyphs[j].run];
+            if (run->ascender > line->ascender)
+                line->ascender = run->ascender;
+            if (run->descender > line->descender)
+                line->descender = run->descender;
+            if (run->height > line->height)
+                line->height = run->height;
+        }
+        if (region->line_height)
+            line->height = region->line_height << 6;
+        if (line->height < line->ascender + line->descender)
+            line->height = line->ascender + line->descender;
+    }
+
+    return nb_lines;
+}
+
+/** @internal @This draws the edge of a glyph as offset copies of it, or
+ * measures the box they occupy.
+ *
+ * @param upipe description structure of the pipe
+ * @param target picture to draw into or box to extend
+ * @param run run of the glyph
+ * @param glyph glyph
+ * @param pen horizontal pen position on the canvas
+ * @param baseline baseline position on the canvas
+ */
+static void upipe_freetype_render_edge(struct upipe *upipe,
+        struct upipe_freetype_target *target,
+        const struct upipe_freetype_run *run,
+        const struct upipe_freetype_glyph *glyph, int pen, int baseline)
+{
+    struct {
+        int dx, dy;
+        const uint8_t *colour;
+    } copies[8];
+    unsigned nb = 0;
+    int d = run->pixel_size / 16;
+    if (d < 1)
+        d = 1;
+
+#define COPY(Dx, Dy, Colour)                                                \
+    do {                                                                    \
+        copies[nb].dx = (Dx);                                               \
+        copies[nb].dy = (Dy);                                               \
+        copies[nb].colour = (Colour);                                       \
+        nb++;                                                               \
+    } while (0)
+
+    switch (run->edge) {
+        case UREF_TEXT_EDGE_RAISED:
+            COPY(-d, -d, run->edge_light);
+            COPY(d, d, run->edge_color);
+            break;
+        case UREF_TEXT_EDGE_DEPRESSED:
+            COPY(-d, -d, run->edge_color);
+            COPY(d, d, run->edge_light);
+            break;
+        case UREF_TEXT_EDGE_UNIFORM:
+            for (int y = -1; y <= 1; y++)
+                for (int x = -1; x <= 1; x++)
+                    if (x || y)
+                        COPY(x * d, y * d, run->edge_color);
+            break;
+        case UREF_TEXT_EDGE_LEFT_DROP_SHADOW:
+            COPY(-d, d, run->edge_color);
+            break;
+        case UREF_TEXT_EDGE_RIGHT_DROP_SHADOW:
+            COPY(d, d, run->edge_color);
+            break;
+        default:
+            return;
+    }
+#undef COPY
+
+    if (target->canvas == NULL) {
+        for (unsigned i = 0; i < nb; i++)
+            upipe_freetype_target_glyph(target, pen + copies[i].dx,
+                    baseline + copies[i].dy, glyph->left, glyph->top,
+                    glyph->width, glyph->height, 0, NULL, copies[i].colour);
+        return;
+    }
+
+    struct upipe_freetype_bitmap bitmap;
+    if (unlikely(!ubase_check(upipe_freetype_get_bitmap(upipe, run->face,
+                        run->pixel_size, glyph->index, run->flags,
+                        &bitmap))))
+        return;
+    for (unsigned i = 0; i < nb; i++)
+        upipe_freetype_target_glyph(target, pen + copies[i].dx,
+                baseline + copies[i].dy, bitmap.left, bitmap.top,
+                bitmap.width, bitmap.height, bitmap.pitch, bitmap.buffer,
+                copies[i].colour);
+    upipe_freetype_put_bitmap(&bitmap);
+}
+
+/** @internal @This draws a region, or measures the box it occupies.
+ *
+ * @param upipe description structure of the pipe
+ * @param target picture to draw into or box to extend
+ * @param region region to render
+ * @param runs run array
+ * @param glyphs glyph array
+ * @param lines line array
+ */
+static void upipe_freetype_render_region(struct upipe *upipe,
+        struct upipe_freetype_target *target,
+        const struct upipe_freetype_region *region,
+        const struct upipe_freetype_run *runs,
+        const struct upipe_freetype_glyph *glyphs,
+        const struct upipe_freetype_line *lines)
+{
+    if (region->has_bg)
+        upipe_freetype_target_rect(target, region->x, region->y,
+                                   region->hsize, region->vsize, region->bg);
+
+    int64_t block_height = 0;
+    for (unsigned i = 0; i < region->nb_lines; i++)
+        block_height += lines[region->first_line + i].height;
+
+    int block_y = region->y;
+    switch (region->display_align) {
+        case UREF_TEXT_DISPLAY_ALIGN_CENTER:
+            block_y += (region->vsize - (int)(block_height >> 6)) / 2;
+            break;
+        case UREF_TEXT_DISPLAY_ALIGN_AFTER:
+            block_y += region->vsize - (int)(block_height >> 6);
+            break;
+        default:
+            break;
+    }
+
+    int avail = region->hsize - 2 * region->line_padding;
+    if (avail < 0)
+        avail = 0;
+
+    uint8_t align = region->text_align;
+    switch (region->multi_row_align) {
+        case UREF_TEXT_MULTI_ROW_ALIGN_START:
+            align = UREF_TEXT_ALIGN_START;
+            break;
+        case UREF_TEXT_MULTI_ROW_ALIGN_CENTER:
+            align = UREF_TEXT_ALIGN_CENTER;
+            break;
+        case UREF_TEXT_MULTI_ROW_ALIGN_END:
+            align = UREF_TEXT_ALIGN_END;
+            break;
+        default:
+            break;
+    }
+
+    int64_t line_top = (int64_t)block_y << 6;
+    for (unsigned l = 0; l < region->nb_lines; l++) {
+        const struct upipe_freetype_line *line = &lines[region->first_line + l];
+        int width = (int)((line->width + 0x8000) >> 16);
+
+        int x0 = region->x + region->line_padding;
+        if (align == UREF_TEXT_ALIGN_CENTER)
+            x0 += (avail - width) / 2;
+        else if (align == UREF_TEXT_ALIGN_END)
+            x0 += avail - width;
+
+        /* centre the ascender and descender of the line in its line box */
+        int64_t baseline = line_top +
+            (line->height - line->ascender - line->descender) / 2 +
+            line->ascender;
+
+        int box_y0, box_y1;
+        if (region->fill_line_gap) {
+            box_y0 = (int)(line_top >> 6);
+            box_y1 = (int)((line_top + line->height) >> 6);
+        } else {
+            box_y0 = (int)((baseline - line->ascender) >> 6);
+            box_y1 = (int)((baseline + line->descender) >> 6);
+        }
+
+        /* backgrounds first: they are drawn per group of adjacent glyphs
+         * sharing a colour so a span keeps a continuous box */
+        unsigned g = line->first;
+        while (g < line->first + line->nb) {
+            const struct upipe_freetype_run *run = &runs[glyphs[g].run];
+            unsigned h = g;
+            while (h < line->first + line->nb &&
+                   runs[glyphs[h].run].has_bg == run->has_bg &&
+                   !memcmp(runs[glyphs[h].run].bg, run->bg, 4))
+                h++;
+
+            if (run->has_bg) {
+                int bx0 = x0 + (int)(glyphs[g].x >> 16);
+                const struct upipe_freetype_glyph *last = &glyphs[h - 1];
+                int bx1 = x0 + (int)((last->x + last->advance + 0xffff) >> 16);
+                /* ebutts:linePadding widens the box at both ends of the line */
+                if (g == line->first)
+                    bx0 -= region->line_padding;
+                if (h == line->first + line->nb)
+                    bx1 += region->line_padding;
+                upipe_freetype_target_rect(target, bx0, box_y0,
+                                           bx1 - bx0, box_y1 - box_y0,
+                                           run->bg);
+            }
+            g = h;
+        }
+
+        /* edges between the backgrounds and the glyphs */
+        for (unsigned i = line->first; i < line->first + line->nb; i++) {
+            const struct upipe_freetype_glyph *glyph = &glyphs[i];
+            const struct upipe_freetype_run *run = &runs[glyph->run];
+            if (run->edge != UREF_TEXT_EDGE_NONE)
+                upipe_freetype_render_edge(upipe, target, run, glyph,
+                        x0 + (int)(glyph->x >> 16), (int)(baseline >> 6));
+        }
+
+        for (unsigned i = line->first; i < line->first + line->nb; i++) {
+            const struct upipe_freetype_glyph *glyph = &glyphs[i];
+            const struct upipe_freetype_run *run = &runs[glyph->run];
+            int pen = x0 + (int)(glyph->x >> 16);
+
+            if (target->canvas == NULL) {
+                upipe_freetype_target_glyph(target, pen,
+                        (int)(baseline >> 6), glyph->left, glyph->top,
+                        glyph->width, glyph->height, 0, NULL, run->fg);
+                continue;
+            }
+
+            struct upipe_freetype_bitmap bitmap;
+            if (unlikely(!ubase_check(upipe_freetype_get_bitmap(upipe,
+                                run->face, run->pixel_size, glyph->index,
+                                run->flags, &bitmap))))
+                continue;
+            upipe_freetype_target_glyph(target, pen, (int)(baseline >> 6),
+                    bitmap.left, bitmap.top, bitmap.width, bitmap.height,
+                    bitmap.pitch, bitmap.buffer, run->fg);
+            upipe_freetype_put_bitmap(&bitmap);
+        }
+
+        /* underlines last so they are not cut by a glyph background */
+        g = line->first;
+        while (g < line->first + line->nb) {
+            const struct upipe_freetype_run *run = &runs[glyphs[g].run];
+            unsigned h = g;
+            while (h < line->first + line->nb && glyphs[h].run == glyphs[g].run)
+                h++;
+
+            if (run->flags & UREF_TEXT_RUN_UNDERLINE) {
+                int thickness = run->pixel_size / 16;
+                if (thickness < 1)
+                    thickness = 1;
+                int ux0 = x0 + (int)(glyphs[g].x >> 16);
+                const struct upipe_freetype_glyph *last = &glyphs[h - 1];
+                int ux1 = x0 + (int)((last->x + last->advance + 0xffff) >> 16);
+                int uy = (int)((baseline + run->descender / 2) >> 6);
+                upipe_freetype_target_rect(target, ux0, uy, ux1 - ux0,
+                                           thickness, run->fg);
+            }
+            g = h;
+        }
+
+        line_top += line->height;
+    }
+}
+/** @internal @This reads the regions and runs of a page.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref page description
+ * @param regions region array to fill in
+ * @param nb_regions number of regions
+ * @param runs run array to fill in
+ * @param nb_runs_p filled in with the number of runs
+ * @return an error code
+ */
+static int upipe_freetype_read_page(struct upipe *upipe, struct uref *uref,
+                                    struct upipe_freetype_region *regions,
+                                    uint8_t nb_regions,
+                                    struct upipe_freetype_run *runs,
+                                    unsigned *nb_runs_p)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+    unsigned nb_runs = 0;
+
+    for (uint8_t r = 0; r < nb_regions; r++) {
+        struct upipe_freetype_region *region = &regions[r];
+        uint64_t v;
+        uint8_t u;
+
+        memset(region, 0, sizeof (*region));
+
+        UBASE_RETURN(uref_text_get_region_x(uref, &v, r))
+        region->x = v;
+        UBASE_RETURN(uref_text_get_region_y(uref, &v, r))
+        region->y = v;
+        UBASE_RETURN(uref_text_get_region_hsize(uref, &v, r))
+        region->hsize = v;
+        UBASE_RETURN(uref_text_get_region_vsize(uref, &v, r))
+        region->vsize = v;
+
+        region->display_align = UREF_TEXT_DISPLAY_ALIGN_BEFORE;
+        if (ubase_check(uref_text_get_region_display_align(uref, &u, r)))
+            region->display_align = u;
+        region->text_align = UREF_TEXT_ALIGN_START;
+        if (ubase_check(uref_text_get_region_text_align(uref, &u, r)))
+            region->text_align = u;
+        region->multi_row_align = UREF_TEXT_MULTI_ROW_ALIGN_AUTO;
+        if (ubase_check(uref_text_get_region_multi_row_align(uref, &u, r)))
+            region->multi_row_align = u;
+        if (ubase_check(uref_text_get_region_line_height(uref, &v, r)))
+            region->line_height = v;
+        if (ubase_check(uref_text_get_region_line_padding(uref, &v, r)))
+            region->line_padding = v;
+        if (ubase_check(uref_text_get_region_background(uref, &v, r))) {
+            uint8_t rgba[4] = { v >> 24, v >> 16, v >> 8, v };
+            ubuf_pic_rgba_to_yuva(rgba, upipe_freetype->fullrange ? 1 : 0,
+                                  region->bg);
+            region->has_bg = !!rgba[3];
+        }
+        region->wrap = !ubase_check(uref_text_get_region_no_wrap(uref, r));
+        region->fill_line_gap =
+            ubase_check(uref_text_get_region_fill_line_gap(uref, r));
+
+        UBASE_RETURN(uref_text_get_region_runs(uref, &u, r))
+        region->first_run = nb_runs;
+        region->nb_runs = u;
+
+        for (uint8_t k = 0; k < u; k++) {
+            struct upipe_freetype_run *run = &runs[nb_runs];
+            uint8_t index = nb_runs;
+
+            memset(run, 0, sizeof (*run));
+            UBASE_RETURN(uref_text_get_run_text(uref, &run->text, index))
+            UBASE_RETURN(uref_text_get_run_font_size(uref, &v, index))
+            run->pixel_size = v ? v : 1;
+            uref_text_get_run_flags(uref, &run->flags, index);
+
+            uint8_t rgba[4] = { 0xff, 0xff, 0xff, 0xff };
+            if (ubase_check(uref_text_get_run_color(uref, &v, index))) {
+                rgba[0] = v >> 24;
+                rgba[1] = v >> 16;
+                rgba[2] = v >> 8;
+                rgba[3] = v;
+            }
+            ubuf_pic_rgba_to_yuva(rgba, upipe_freetype->fullrange ? 1 : 0,
+                                  run->fg);
+
+            if (ubase_check(uref_text_get_run_background(uref, &v, index))) {
+                uint8_t bg[4] = { v >> 24, v >> 16, v >> 8, v };
+                ubuf_pic_rgba_to_yuva(bg, upipe_freetype->fullrange ? 1 : 0,
+                                      run->bg);
+                run->has_bg = !!bg[3];
+            }
+
+            if (ubase_check(uref_text_get_run_edge(uref, &run->edge, index))) {
+                uint8_t edge[4] = { 0, 0, 0, rgba[3] };
+                if (ubase_check(uref_text_get_run_edge_color(uref, &v,
+                                                             index))) {
+                    edge[0] = v >> 24;
+                    edge[1] = v >> 16;
+                    edge[2] = v >> 8;
+                    edge[3] = v;
+                }
+                uint8_t light[4] = { 0xff, 0xff, 0xff, edge[3] };
+                ubuf_pic_rgba_to_yuva(edge, upipe_freetype->fullrange ? 1 : 0,
+                                      run->edge_color);
+                ubuf_pic_rgba_to_yuva(light, upipe_freetype->fullrange ? 1 : 0,
+                                      run->edge_light);
+            }
+
+            uint8_t font;
+            run->face = upipe_freetype->font;
+            if (ubase_check(uref_text_get_run_font(uref, &font, index)) &&
+                font < MAX_FONTS && upipe_freetype->fonts[font] != NULL)
+                run->face = upipe_freetype->fonts[font];
+
+            FT_Size size;
+            if (ubase_check(upipe_freetype_lookup_size(upipe, run->face,
+                                run->pixel_size, &size))) {
+                run->ascender = size->metrics.ascender;
+                run->descender = -size->metrics.descender;
+                run->height = size->metrics.height;
+            }
+            if (run->ascender <= 0)
+                run->ascender = (run->pixel_size * 4 / 5) << 6;
+            if (run->descender < 0)
+                run->descender = (run->pixel_size / 5) << 6;
+            if (run->height <= 0)
+                run->height = (run->pixel_size * 5 / 4) << 6;
+
+            nb_runs++;
+        }
+    }
+
+    *nb_runs_p = nb_runs;
+    return UBASE_ERR_NONE;
+}
+
+/** @internal @This renders a styled text page.
+ *
+ * The picture is cropped to what is actually drawn and the distances to the
+ * edges of the canvas are put on the flow definition as pic paddings, the
+ * same convention as the DVB subtitle decoder: downstream rebuilds the canvas
+ * from the size and the paddings, so a subtitle that covers a couple of lines
+ * is not rescaled and alpha blended over the whole picture on every frame.
+ *
+ * @param upipe description structure of the pipe
+ * @param uref page description
+ * @param nb_regions number of regions of the page
+ * @param upump_p reference to pump that generated the buffer
+ * @return true if the buffer was output
+ */
+static bool upipe_freetype_handle_page(struct upipe *upipe, struct uref *uref,
+                                       uint8_t nb_regions,
+                                       struct upump **upump_p)
+{
+    struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
+
+    /* the size the ubuf manager was negotiated for is the canvas, unless the
+     * page carries one of its own */
+    uint64_t canvas_hsize = 0;
+    uint64_t canvas_vsize = 0;
+    uref_pic_flow_get_hsize(upipe_freetype->flow_format, &canvas_hsize);
+    uref_pic_flow_get_vsize(upipe_freetype->flow_format, &canvas_vsize);
+    uref_text_get_canvas_hsize(uref, &canvas_hsize);
+    uref_text_get_canvas_vsize(uref, &canvas_vsize);
+    if (unlikely(!canvas_hsize || !canvas_vsize)) {
+        upipe_warn(upipe, "no canvas size");
+        uref_free(uref);
+        return true;
+    }
+
+    if (unlikely(nb_regions > MAX_PAGE_REGIONS)) {
+        upipe_warn_va(upipe, "%"PRIu8" regions, keeping %u",
+                      nb_regions, MAX_PAGE_REGIONS);
+        nb_regions = MAX_PAGE_REGIONS;
+    }
+
+    unsigned nb_runs = 0;
+    for (uint8_t r = 0; r < nb_regions; r++) {
+        uint8_t runs;
+        if (ubase_check(uref_text_get_region_runs(uref, &runs, r)))
+            nb_runs += runs;
+    }
+
+    if (unlikely(nb_runs > MAX_RUNS)) {
+        upipe_warn_va(upipe, "too many runs (%u)", nb_runs);
+        uref_free(uref);
+        return true;
+    }
+
+    struct upipe_freetype_region *regions = upipe_freetype->regions;
+    struct upipe_freetype_run *runs = upipe_freetype->runs;
+    struct upipe_freetype_glyph *glyphs = upipe_freetype->glyphs;
+    struct upipe_freetype_line *lines = upipe_freetype->lines;
+
+    if (unlikely(!ubase_check(upipe_freetype_read_page(upipe, uref, regions,
+                                  nb_regions, runs, &nb_runs)))) {
+        upipe_warn(upipe, "invalid page");
+        uref_dump(uref, upipe->uprobe);
+        uref_free(uref);
+        return true;
+    }
+
+    unsigned nb_glyphs = 0;
+    unsigned nb_lines = 0;
+    for (uint8_t r = 0; r < nb_regions; r++) {
+        struct upipe_freetype_region *region = &regions[r];
+
+        region->first_glyph = nb_glyphs;
+        region->nb_glyphs = upipe_freetype_shape(upipe, region, runs,
+                glyphs + nb_glyphs, MAX_GLYPHS - nb_glyphs);
+        nb_glyphs += region->nb_glyphs;
+
+        region->first_line = nb_lines;
+        region->nb_lines = upipe_freetype_break_lines(region, runs,
+                glyphs + region->first_glyph, region->nb_glyphs,
+                lines + nb_lines, MAX_LINES);
+        nb_lines += region->nb_lines;
+
+        /* the line glyph indexes are relative to the region */
+        for (unsigned l = 0; l < region->nb_lines; l++)
+            lines[region->first_line + l].first += region->first_glyph;
+    }
+
+    struct upipe_freetype_target target;
+    memset(&target, 0, sizeof (target));
+    for (uint8_t r = 0; r < nb_regions; r++)
+        upipe_freetype_render_region(upipe, &target, &regions[r], runs,
+                                     glyphs, lines);
+
+    struct upipe_freetype_box box = target.box;
+    if (box.x0 < 0)
+        box.x0 = 0;
+    if (box.y0 < 0)
+        box.y0 = 0;
+    if (box.x1 > (int)canvas_hsize)
+        box.x1 = canvas_hsize;
+    if (box.y1 > (int)canvas_vsize)
+        box.y1 = canvas_vsize;
+
+    upipe_dbg_va(upipe, "page of %"PRIu8" region(s) and %u run(s): %u glyph(s) "
+            "on %u line(s), box %d,%d..%d,%d of a %"PRIu64"x%"PRIu64" canvas",
+            nb_regions, nb_runs, nb_glyphs, nb_lines,
+            box.x0, box.y0, box.x1, box.y1, canvas_hsize, canvas_vsize);
+
+    if (box.x0 >= box.x1 || box.y0 >= box.y1) {
+        /* Nothing to show, but the subpicture still has to replace the
+         * previous one downstream.  Only a page with no region at all is
+         * meant to be empty: anything else laid out something and lost it. */
+        if (nb_regions)
+            upipe_warn_va(upipe, "%"PRIu8" region(s) and %u run(s) drew "
+                    "nothing, %u glyph(s)", nb_regions, nb_runs, nb_glyphs);
+        box.x0 = box.y0 = box.x1 = box.y1 = 0;
+    }
+
+    /* A page that draws a single narrow glyph is as small as one that draws
+     * nothing, so put the floor on every picture rather than on the empty
+     * one. */
+    upipe_freetype_grow(&box.x0, &box.x1, MIN_PICTURE_SIZE, canvas_hsize);
+    upipe_freetype_grow(&box.y0, &box.y1, MIN_PICTURE_SIZE, canvas_vsize);
+
+    /* keep the crop on even boundaries for a possible 4:2:0 conversion */
+    box.x0 &= ~1;
+    box.y0 &= ~1;
+    box.x1 = (box.x1 + 1) & ~1;
+    box.y1 = (box.y1 + 1) & ~1;
+    if (box.x1 > (int)canvas_hsize)
+        box.x1 = (int)(canvas_hsize & ~(uint64_t)1);
+    if (box.y1 > (int)canvas_vsize)
+        box.y1 = (int)(canvas_vsize & ~(uint64_t)1);
+
+    int hsize = box.x1 - box.x0;
+    int vsize = box.y1 - box.y0;
+
+    struct ubuf *ubuf = ubuf_pic_alloc(upipe_freetype->ubuf_mgr, hsize, vsize);
+    if (unlikely(ubuf == NULL)) {
+        upipe_err(upipe, "could not allocate picture");
+        uref_free(uref);
+        return true;
+    }
+
+    struct upipe_freetype_canvas canvas;
+    if (unlikely(!ubase_check(upipe_freetype_map(upipe, ubuf, &canvas)))) {
+        upipe_err(upipe, "could not map picture");
+        ubuf_free(ubuf);
+        uref_free(uref);
+        return true;
+    }
+
+    uint8_t clear[4] = {
+        upipe_freetype->background[0], upipe_freetype->background[1],
+        upipe_freetype->background[2],
+        /* a page composites onto the video, so start transparent when there
+         * is somewhere to say so */
+        canvas.a.p != NULL ? 0 : upipe_freetype->background[3]
+    };
+    upipe_freetype_fill(&canvas, clear);
+
+    target.canvas = &canvas;
+    target.origin_x = box.x0;
+    target.origin_y = box.y0;
+    for (uint8_t r = 0; r < nb_regions; r++)
+        upipe_freetype_render_region(upipe, &target, &regions[r], runs,
+                                     glyphs, lines);
+
+    upipe_freetype_unmap(ubuf, &canvas);
+
+    /* Built from the negotiated picture format rather than from the flow
+     * definition last stored, which is the previous page's geometry. */
+    struct uref *flow_def = uref_dup(upipe_freetype->flow_format);
+    if (unlikely(flow_def == NULL)) {
+        ubuf_free(ubuf);
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return true;
+    }
+    UBASE_FATAL(upipe, uref_pic_flow_set_hsize(flow_def, hsize))
+    UBASE_FATAL(upipe, uref_pic_flow_set_vsize(flow_def, vsize))
+    UBASE_FATAL(upipe, uref_pic_flow_set_hsize_visible(flow_def, hsize))
+    UBASE_FATAL(upipe, uref_pic_flow_set_vsize_visible(flow_def, vsize))
+    UBASE_FATAL(upipe, uref_pic_set_lpadding(flow_def, box.x0))
+    UBASE_FATAL(upipe, uref_pic_set_rpadding(flow_def, canvas_hsize - box.x1))
+    UBASE_FATAL(upipe, uref_pic_set_tpadding(flow_def, box.y0))
+    UBASE_FATAL(upipe, uref_pic_set_bpadding(flow_def, canvas_vsize - box.y1))
+
+    upipe_dbg_va(upipe, "picture %dx%d padded %d/%"PRIu64"/%d/%"PRIu64
+            " out of a %"PRIu64"x%"PRIu64" canvas",
+            hsize, vsize, box.x0, canvas_hsize - box.x1,
+            box.y0, canvas_vsize - box.y1, canvas_hsize, canvas_vsize);
+
+    upipe_freetype_store_flow_def(upipe, flow_def);
+
+    uref_attach_ubuf(uref, ubuf);
+    upipe_freetype_output(upipe, uref, upump_p);
+    return true;
+}
+
 /** @internal @This tries to output input buffers.
  *
  * @param upipe description structure of the pipe
@@ -478,10 +2164,19 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                                   struct upump **upump_p)
 {
     struct upipe_freetype *upipe_freetype = upipe_freetype_from_upipe(upipe);
-    int ret;
 
     if (!upipe_freetype->ubuf_mgr)
         return false;
+
+    uint8_t nb_regions;
+    if (ubase_check(uref_text_get_regions(uref, &nb_regions))) {
+        if (unlikely(upipe_freetype->font == NULL)) {
+            upipe_warn(upipe, "no font set");
+            uref_free(uref);
+            return true;
+        }
+        return upipe_freetype_handle_page(upipe, uref, nb_regions, upump_p);
+    }
 
     if (unlikely(!upipe_freetype->face)) {
         upipe_warn(upipe, "no font set");
@@ -515,115 +2210,18 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
         return true;
     }
 
-    size_t width, height;
-    uint8_t macropixel;
-    ret = ubuf_pic_size(ubuf, &width, &height, &macropixel);
-    if (unlikely(!ubase_check(ret))) {
-        upipe_err(upipe, "fail to get pic buffer size");
+    struct upipe_freetype_canvas canvas;
+    if (unlikely(!ubase_check(upipe_freetype_map(upipe, ubuf, &canvas)))) {
+        upipe_err(upipe, "fail to map pic buffer");
         ubuf_free(ubuf);
         uref_free(uref);
         return true;
     }
+    upipe_freetype_fill(&canvas, upipe_freetype->background);
 
-    struct plane {
-        size_t stride;
-        uint8_t hsub;
-        uint8_t vsub;
-        uint8_t macropixel_size;
-        size_t memset_width;
-        uint8_t *p;
-    };
-    struct plane y;
-    struct plane u;
-    struct plane v;
-    struct plane a;
-    struct plane uv;
-
-    memset(&y, 0, sizeof (y));
-    memset(&u, 0, sizeof (u));
-    memset(&v, 0, sizeof (v));
-    memset(&a, 0, sizeof (a));
-    memset(&uv, 0, sizeof (uv));
-
-    const char *chroma;
-    ubuf_pic_foreach_plane(ubuf, chroma) {
-        struct plane *plane = NULL;
-
-        if (!strcmp(chroma, "y8")) {
-            plane = &y;
-        } else if (!strcmp(chroma, "u8")) {
-            plane = &u;
-        } else if (!strcmp(chroma, "v8")) {
-            plane = &v;
-        } else if (!strcmp(chroma, "a8")) {
-            plane = &a;
-        } else if (!strcmp(chroma, "u8v8")) {
-            plane = &uv;
-        } else {
-            upipe_warn_va(upipe, "unsupported plane %s", chroma);
-            continue;
-        }
-
-        ret = ubuf_pic_plane_size(ubuf, chroma, &plane->stride,
-                                  &plane->hsub, &plane->vsub,
-                                  &plane->macropixel_size);
-        if (unlikely(!ubase_check(ret))) {
-            upipe_warn_va(upipe, "fail to get plane %s size", chroma);
-            continue;
-        }
-        plane->memset_width = width * plane->macropixel_size /
-            plane->hsub / macropixel;
-
-        ret = ubuf_pic_plane_write(ubuf, chroma, 0, 0, -1, -1, &plane->p);
-        if (unlikely(!ubase_check(ret))) {
-            upipe_warn_va(upipe, "fail to map %s plane", chroma);
-            plane->p = NULL;
-            continue;
-        }
-    }
-
-    if (y.p) {
-        uint8_t *buf = y.p;
-        for (size_t i = 0; i < height / y.vsub; i++) {
-            memset(buf, upipe_freetype->background[0], y.memset_width);
-            buf += y.stride;
-        }
-    }
-
-    if (u.p) {
-        uint8_t *buf = u.p;
-        for (size_t i = 0; i < height / u.vsub; i++) {
-            memset(buf, upipe_freetype->background[1], u.memset_width);
-            buf += u.stride;
-        }
-    }
-
-    if (v.p) {
-        uint8_t *buf = v.p;
-        for (size_t i = 0; i < height / v.vsub; i++) {
-            memset(buf, upipe_freetype->background[2], v.memset_width);
-            buf += v.stride;
-        }
-    }
-
-    if (a.p) {
-        uint8_t *buf = a.p;
-        for (size_t i = 0; i < height / a.vsub; i++) {
-            memset(buf, upipe_freetype->background[3], a.memset_width);
-            buf += a.stride;
-        }
-    }
-
-    if (uv.p) {
-        uint8_t *buf = uv.p;
-        for (size_t i = 0; i < height / uv.vsub; i++) {
-            for (int j = 0; j < uv.memset_width; j += 2) {
-                buf[j] = upipe_freetype->background[1];
-                buf[j + 1] = upipe_freetype->background[2];
-            }
-            buf += uv.stride;
-        }
-    }
+    struct upipe_freetype_target target;
+    memset(&target, 0, sizeof (target));
+    target.canvas = &canvas;
 
     FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
     FT_UInt previous = 0;
@@ -649,103 +2247,37 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             /* delta is 26.6, scale to 16.16 */
             xoff += delta.x << 10;
         }
-        FT_Glyph glyph = NULL;
-        FTC_ImageTypeRec type;
-        type.face_id = upipe_freetype->font;
-        type.width = upipe_freetype->pixel_size;
-        type.height = upipe_freetype->pixel_size;
-        type.flags = FT_LOAD_DEFAULT;
-        FTC_SBit sbit;
-        if (FTC_SBitCache_Lookup(upipe_freetype->sbit_cache,
-                                 &type, index, &sbit, NULL))
+
+        struct upipe_freetype_bitmap bitmap;
+        if (unlikely(!ubase_check(upipe_freetype_get_bitmap(upipe,
+                            upipe_freetype->font, upipe_freetype->pixel_size,
+                            index, 0, &bitmap))))
             continue;
 
-        int left, top, width, height, xadvance, yadvance;
-        unsigned char *buffer;
-        if (!sbit->buffer) {
-            if (FTC_ImageCache_Lookup(upipe_freetype->img_cache,
-                                      &type, index, &glyph, NULL))
-                continue;
-
-            if (FT_Glyph_To_Bitmap(&glyph, FT_RENDER_MODE_NORMAL, 0, 0))
-                continue;
-
-            FT_BitmapGlyph slot = (FT_BitmapGlyph)glyph;
-            left = slot->left;
-            top = slot->top;
-            width = slot->bitmap.width;
-            height = slot->bitmap.rows;
-            xadvance = glyph->advance.x;
-            yadvance = glyph->advance.y;
-            buffer = slot->bitmap.buffer;
-        }
-        else {
-            left = sbit->left;
-            top = sbit->top;
-            width = sbit->width;
-            height = sbit->height;
-            /* scale to 16.16 */
-            xadvance = sbit->xadvance << 16;
-            yadvance = sbit->yadvance << 16;
-            buffer = sbit->buffer;
-        }
-        FT_Int xpos = (xoff >> 16) + left;
-        FT_Int ypos = (yoff >> 16) - top;
-
-        for (FT_Int i = 0; i < width; i++) {
-            if (xpos + i < 0 || xpos + i >= hsize)
-                continue;
-
-            for (FT_Int j = 0; j < height; j++) {
-                if (ypos + j < 0 || ypos + j >= vsize)
-                    continue;
-
-                uint8_t px = buffer[j * width + i] * upipe_freetype->foreground[3] / 0xff;
-
-#define DO_PLANE(Plane, Val)                                                \
-                if (Plane.p) {                                              \
-                    FT_Int p_y = (ypos + j) / Plane.vsub * Plane.stride;    \
-                    FT_Int p_x = (xpos + i) / Plane.hsub;                   \
-                    FT_Int p = p_y + p_x;                                   \
-                    Plane.p[p] = (Plane.p[p] * (0xff - px) + Val * px) / 0xff; \
-                }
-
-                DO_PLANE(y, upipe_freetype->foreground[0]);
-                DO_PLANE(u, upipe_freetype->foreground[1]);
-                DO_PLANE(v, upipe_freetype->foreground[2]);
-                DO_PLANE(a, 0xff);
-
-                if (uv.p) {
-                    FT_Int p_y = (ypos + j) / uv.vsub * uv.stride;
-                    FT_Int p_x = (xpos + i) / uv.hsub * uv.macropixel_size;
-                    FT_Int p = p_y + p_x;
-                    int fg_1 = upipe_freetype->foreground[1];
-                    int fg_2 = upipe_freetype->foreground[2];
-                    uv.p[p] = (uv.p[p] * (0xff - px) + fg_1 * px) / 0xff;
-                    uv.p[p + 1] = (uv.p[p + 1] * (0xff - px) + fg_2 * px) / 0xff;
-                }
-            }
-        }
+        upipe_freetype_target_glyph(&target, xoff >> 16, yoff >> 16,
+                bitmap.left, bitmap.top, bitmap.width, bitmap.height,
+                bitmap.pitch, bitmap.buffer, upipe_freetype->foreground);
 
         /* increment pen position */
-        xoff += xadvance;
-        yoff += yadvance;
-
+        xoff += bitmap.advance;
         previous = index;
 
-        FT_Done_Glyph(glyph);
+        upipe_freetype_put_bitmap(&bitmap);
     }
 
-    if (y.p)
-        ubuf_pic_plane_unmap(ubuf, "y8", 0, 0, -1, -1);
-    if (u.p)
-        ubuf_pic_plane_unmap(ubuf, "u8", 0, 0, -1, -1);
-    if (v.p)
-        ubuf_pic_plane_unmap(ubuf, "v8", 0, 0, -1, -1);
-    if (a.p)
-        ubuf_pic_plane_unmap(ubuf, "a8", 0, 0, -1, -1);
-    if (uv.p)
-        ubuf_pic_plane_unmap(ubuf, "u8v8", 0, 0, -1, -1);
+    upipe_freetype_unmap(ubuf, &canvas);
+
+    /* This path fills the negotiated format, so that is what it advertises. */
+    if (upipe_freetype->flow_def == NULL) {
+        struct uref *flow_def = uref_dup(upipe_freetype->flow_format);
+        if (unlikely(flow_def == NULL)) {
+            ubuf_free(ubuf);
+            uref_free(uref);
+            upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+            return true;
+        }
+        upipe_freetype_store_flow_def(upipe, flow_def);
+    }
 
     upipe_freetype_flush_cache(upipe);
     upipe_freetype->ubuf = ubuf;
@@ -837,12 +2369,39 @@ static int upipe_freetype_set_option(struct upipe *upipe,
             return UBASE_ERR_NONE;
 
         upipe_freetype->face = NULL;
-        FTC_Manager_RemoveFaceID(upipe_freetype->cache_manager,
-                                 upipe_freetype->font);
+        /* the face id is the path pointer, which may be reused */
+        if (upipe_freetype->font != NULL)
+            FTC_Manager_RemoveFaceID(upipe_freetype->cache_manager,
+                                     upipe_freetype->font);
         free(upipe_freetype->font);
         upipe_freetype->font = value ? strdup(value) : NULL;
         upipe_freetype_flush_cache(upipe);
         return upipe_freetype_load_face(upipe);
+    }
+    else if (!strncmp(option, "font", 4) && option[4] >= '0' &&
+             option[4] < '0' + MAX_FONTS && option[5] == '\0') {
+        char **font = &upipe_freetype->fonts[option[4] - '0'];
+        if (*font != NULL) {
+            FTC_Manager_RemoveFaceID(upipe_freetype->cache_manager, *font);
+            free(*font);
+            *font = NULL;
+        }
+        if (value == NULL)
+            return UBASE_ERR_NONE;
+
+        *font = strdup(value);
+        if (unlikely(*font == NULL))
+            return UBASE_ERR_ALLOC;
+        FT_Face face;
+        if (FTC_Manager_LookupFace(upipe_freetype->cache_manager, *font,
+                                   &face)) {
+            upipe_err_va(upipe, "Couldn't open font %s", value);
+            FTC_Manager_RemoveFaceID(upipe_freetype->cache_manager, *font);
+            free(*font);
+            *font = NULL;
+            return UBASE_ERR_EXTERNAL;
+        }
+        return UBASE_ERR_NONE;
     }
     else if (!strcmp(option, "foreground-color")) {
         uint8_t rgba[4] = { 0xff, 0xff, 0xff, 0xff };
@@ -943,6 +2502,7 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
     FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
     FT_UInt previous = 0;
     FT_Pos yMax = 0;
+    bool first = true;
     int64_t width = 0;
 
     for (size_t i = 0; str[i] != '\0';) {
@@ -976,8 +2536,10 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
         FT_BBox ft_bbox;
         FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_PIXELS, &ft_bbox);
 
-        if (!i)
+        if (first) {
             bbox.x = ft_bbox.xMin;
+            first = false;
+        }
         if (ft_bbox.yMin < bbox.y)
             bbox.y = ft_bbox.yMin;
         if (ft_bbox.yMax > yMax)
@@ -989,7 +2551,6 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
 
     if (yMax > bbox.y)
         bbox.height = yMax - bbox.y;
-    bbox.height = yMax - bbox.y;
 
     if (width > 0)
         /* get width ceil and downscale 16.16 integer */
@@ -1042,10 +2603,9 @@ static int _upipe_freetype_get_advance(struct upipe *upipe,
         }
 
         FT_Fixed advance;
-        FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
-                       &advance);
-
-        total_advance += advance;
+        if (!FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
+                            &advance))
+            total_advance += advance;
 
         previous = index;
     }
