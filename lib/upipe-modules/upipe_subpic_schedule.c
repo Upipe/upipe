@@ -22,8 +22,9 @@
 #include "upipe/upipe_helper_urefcount.h"
 #include "upipe/upipe_helper_void.h"
 #include "upipe/upipe_helper_subpipe.h"
-#include "upipe-ts/uref_ts_flow.h"
 #include "upipe-modules/upipe_subpic_schedule.h"
+
+#include <stdlib.h>
 
 /** upipe_subpic_schedule structure */
 struct upipe_subpic_schedule {
@@ -56,6 +57,20 @@ struct upipe_subpic_schedule {
     struct upipe upipe;
 };
 
+/** @internal @This is a buffered subpicture, paired with the flow definition
+ * it was received under: it is still output after newer flow definitions have
+ * gone through. */
+struct upipe_subpic_schedule_subpic {
+    /** structure for double-linked lists */
+    struct uchain uchain;
+    /** subpicture */
+    struct uref *uref;
+    /** flow definition of the subpicture */
+    struct uref *flow_def;
+};
+
+UBASE_FROM_TO(upipe_subpic_schedule_subpic, uchain, uchain, uchain)
+
 /** upipe_subpic_schedule_sub structure */
 struct upipe_subpic_schedule_sub {
     /** refcount management structure */
@@ -72,14 +87,15 @@ struct upipe_subpic_schedule_sub {
     /** list of output requests */
     struct uchain request_list;
 
-    /** if this stream is teletext */
-    bool teletext;
-
     /** structure for double-linked lists */
     struct uchain uchain;
 
-    /** buffered urefs */
-    struct uchain urefs;
+    /** buffered subpictures */
+    struct uchain subpics;
+    /** flow definition received on the input, for the next subpictures */
+    struct uref *flow_def_pending;
+    /** buffered subpicture the stored flow definition belongs to */
+    struct upipe_subpic_schedule_subpic *subpic_current;
 
     /** public upipe structure */
     struct upipe upipe;
@@ -100,6 +116,34 @@ UPIPE_HELPER_SUBPIPE(upipe_subpic_schedule, upipe_subpic_schedule_sub, sub,
 
 UBASE_FROM_TO(upipe_subpic_schedule, urefcount, urefcount_real, urefcount_real)
 
+/** @internal @This frees a buffered subpicture.
+ *
+ * @param subpic buffered subpicture
+ */
+static void upipe_subpic_schedule_subpic_free(
+        struct upipe_subpic_schedule_subpic *subpic)
+{
+    uref_free(subpic->uref);
+    uref_free(subpic->flow_def);
+    free(subpic);
+}
+
+/** @internal @This removes a subpicture from the schedule.
+ *
+ * @param upipe description structure of the subpipe
+ * @param subpic buffered subpicture
+ */
+static void upipe_subpic_schedule_sub_drop(struct upipe *upipe,
+        struct upipe_subpic_schedule_subpic *subpic)
+{
+    struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub =
+        upipe_subpic_schedule_sub_from_upipe(upipe);
+    if (upipe_subpic_schedule_sub->subpic_current == subpic)
+        upipe_subpic_schedule_sub->subpic_current = NULL;
+    ulist_delete(&subpic->uchain);
+    upipe_subpic_schedule_subpic_free(subpic);
+}
+
 /** @internal @This frees all resources allocated.
  *
  * @param upipe description structure of the pipe
@@ -109,11 +153,13 @@ static void upipe_subpic_schedule_sub_free(struct upipe *upipe)
     upipe_throw_dead(upipe);
     struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub = upipe_subpic_schedule_sub_from_upipe(upipe);
     for (;;) {
-        struct uchain *uchain = ulist_pop(&upipe_subpic_schedule_sub->urefs);
+        struct uchain *uchain = ulist_pop(&upipe_subpic_schedule_sub->subpics);
         if (!uchain)
             break;
-        uref_free(uref_from_uchain(uchain));
+        upipe_subpic_schedule_subpic_free(
+                upipe_subpic_schedule_subpic_from_uchain(uchain));
     }
+    uref_free(upipe_subpic_schedule_sub->flow_def_pending);
     upipe_subpic_schedule_sub_clean_urefcount(upipe);
     upipe_subpic_schedule_sub_clean_output(upipe);
     upipe_subpic_schedule_sub_clean_sub(upipe);
@@ -138,9 +184,13 @@ static int upipe_subpic_schedule_sub_control(struct upipe *upipe, int command, v
     switch (command) {
         case UPIPE_SET_FLOW_DEF: {
             struct uref *uref = va_arg(args, struct uref *);
-            upipe_subpic_schedule_sub->teletext =
-                ubase_check(uref_ts_flow_get_telx_type(uref, NULL, 0));
-            upipe_subpic_schedule_sub_store_flow_def(upipe, uref_dup(uref));
+            struct uref *flow_def = uref_dup(uref);
+            if (unlikely(flow_def == NULL))
+                return UBASE_ERR_ALLOC;
+            /* Not stored on the output yet: it is paired with the subpictures
+             * received under it, and stored when one of them is output. */
+            uref_free(upipe_subpic_schedule_sub->flow_def_pending);
+            upipe_subpic_schedule_sub->flow_def_pending = flow_def;
             return UBASE_ERR_NONE;
         }
 
@@ -166,7 +216,25 @@ static void upipe_subpic_schedule_sub_input(struct upipe *upipe, struct uref *ur
         return;
     }
 
-    ulist_add(&upipe_subpic_schedule_sub->urefs, &uref->uchain);
+    if (unlikely(upipe_subpic_schedule_sub->flow_def_pending == NULL)) {
+        upipe_err(upipe, "Sub picture with no flow definition");
+        uref_free(uref);
+        return;
+    }
+
+    struct upipe_subpic_schedule_subpic *subpic = malloc(sizeof (*subpic));
+    struct uref *flow_def =
+        uref_dup(upipe_subpic_schedule_sub->flow_def_pending);
+    if (unlikely(subpic == NULL || flow_def == NULL)) {
+        free(subpic);
+        uref_free(flow_def);
+        uref_free(uref);
+        upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+        return;
+    }
+    subpic->uref = uref;
+    subpic->flow_def = flow_def;
+    ulist_add(&upipe_subpic_schedule_sub->subpics, &subpic->uchain);
 }
 
 /** @internal @This allocates a subpic schedule_sub pipe.
@@ -186,7 +254,9 @@ static struct upipe *upipe_subpic_schedule_sub_alloc(struct upipe_mgr *mgr,
         return NULL;
 
     struct upipe_subpic_schedule_sub *upipe_subpic_schedule_sub = upipe_subpic_schedule_sub_from_upipe(upipe);
-    ulist_init(&upipe_subpic_schedule_sub->urefs);
+    ulist_init(&upipe_subpic_schedule_sub->subpics);
+    upipe_subpic_schedule_sub->flow_def_pending = NULL;
+    upipe_subpic_schedule_sub->subpic_current = NULL;
 
     upipe_subpic_schedule_sub_init_urefcount(upipe);
     upipe_subpic_schedule_sub_init_output(upipe);
@@ -266,11 +336,11 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
 
     struct upipe_subpic_schedule *upipe_subpic_schedule = upipe_subpic_schedule_from_sub_mgr(upipe->mgr);
 
-    const bool teletext = upipe_subpic_schedule_sub->teletext;
-
     struct uchain *uchain, *uchain_tmp;
-    ulist_delete_foreach(&upipe_subpic_schedule_sub->urefs, uchain, uchain_tmp) {
-        struct uref *uref = uref_from_uchain(uchain);
+    ulist_delete_foreach(&upipe_subpic_schedule_sub->subpics, uchain, uchain_tmp) {
+        struct upipe_subpic_schedule_subpic *subpic =
+            upipe_subpic_schedule_subpic_from_uchain(uchain);
+        struct uref *uref = subpic->uref;
 
         uint64_t date_uref = 0;
         uref_clock_get_pts_prog(uref, &date_uref);
@@ -278,17 +348,18 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         if (date_uref > date) /* The next subpicture is in advance */
             break;
 
-        if (teletext && uchain->next != &upipe_subpic_schedule_sub->urefs) {
-            /* For teletext, the next subpicture replaces the previous one.
-             * There can not be multiple active subpictures. */
-            struct uref *uref_next = uref_from_uchain(uchain->next);
+        if (uchain->next != &upipe_subpic_schedule_sub->subpics) {
+            /* A subpicture carries the whole page, for teletext and dvb
+             * subtitles alike, so the next one replaces it.  There can not be
+             * multiple active subpictures. */
+            struct upipe_subpic_schedule_subpic *subpic_next =
+                upipe_subpic_schedule_subpic_from_uchain(uchain->next);
 
             uint64_t date_uref_next = 0;
-            uref_clock_get_pts_prog(uref_next, &date_uref_next);
+            uref_clock_get_pts_prog(subpic_next->uref, &date_uref_next);
 
             if (date_uref_next <= date) {
-                ulist_delete(uchain);
-                uref_free(uref);
+                upipe_subpic_schedule_sub_drop(upipe, subpic);
                 upipe_verbose_va(upipe, "subpicture replaced");
                 continue;
             }
@@ -303,14 +374,28 @@ static void upipe_subpic_schedule_sub_handle_subpic(struct upipe *upipe,
         uint64_t pts_end = date_uref + duration;
 
         if (pts_end < date) {
-            ulist_delete(uchain);
-            uref_free(uref);
+            upipe_subpic_schedule_sub_drop(upipe, subpic);
             upipe_verbose_va(upipe, "subpicture elapsed");
             continue;
         }
 
-        if (uref->ubuf)
+        if (uref->ubuf) {
+            if (upipe_subpic_schedule_sub->subpic_current != subpic) {
+                /* The subpicture goes downstream under the flow definition it
+                 * was received under, which may be older than the last one
+                 * received: with pic attributes changing per subpicture, a
+                 * newer flow definition would make downstream rescale these
+                 * pixels to the geometry of the next subpicture. */
+                struct uref *flow_def = uref_dup(subpic->flow_def);
+                if (unlikely(flow_def == NULL)) {
+                    upipe_throw_fatal(upipe, UBASE_ERR_ALLOC);
+                    break;
+                }
+                upipe_subpic_schedule_sub_store_flow_def(upipe, flow_def);
+                upipe_subpic_schedule_sub->subpic_current = subpic;
+            }
             upipe_subpic_schedule_sub_output(upipe, uref_dup(uref), NULL);
+        }
     }
 }
 
