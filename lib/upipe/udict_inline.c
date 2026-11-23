@@ -125,6 +125,9 @@ struct udict_inline {
     struct umem umem;
     /** used size */
     size_t size;
+    /** attribute returned by the last iteration step, from which the next
+     * step resumes, or NULL */
+    uint8_t *last;
 
     /** common structure */
     struct udict udict;
@@ -155,6 +158,7 @@ static struct udict *udict_inline_alloc(struct udict_mgr *mgr, size_t size)
     uint8_t *buffer = umem_buffer(&inl->umem);
     buffer[0] = UDICT_TYPE_END;
     inl->size = 1;
+    inl->last = NULL;
 
     return udict;
 }
@@ -251,7 +255,11 @@ static uint8_t *udict_inline_find(struct udict *udict, const char *name,
 }
 
 /** @internal @This finds an attribute (shorthand or not) of the given name
- * and type and returns the name and type of the next attribute.
+ * and type and returns the name and type of the next attribute. When given
+ * back the name and type it returned last, unchanged, it resumes from that
+ * attribute instead of looking it up, which makes a whole iteration linear
+ * rather than quadratic; any change to the udict in between makes it look the
+ * attribute up again.
  *
  * @param udict pointer to the udict
  * @param name_p reference to the name of the attribute to find, changed during
@@ -268,15 +276,25 @@ static void udict_inline_iterate(struct udict *udict, const char **name_p,
     uint8_t *attr;
 
     if (likely(*type_p != UDICT_TYPE_END)) {
-        attr = udict_inline_find(udict, *name_p, *type_p);
+        /* the attribute returned last is given back if it has the same type
+         * and, unless it is a shorthand (unique by type), the same name
+         * pointer, which points into the buffer */
+        if (inl->last != NULL && *inl->last == *type_p &&
+            (*type_p > UDICT_TYPE_SHORTHAND ? *name_p == NULL :
+             *name_p == (const char *)(inl->last + 3)))
+            attr = inl->last;
+        else
+            attr = udict_inline_find(udict, *name_p, *type_p);
         if (likely(attr != NULL))
             attr = udict_inline_next(attr);
     } else
         attr = umem_buffer(&inl->umem);
     if (unlikely(attr == NULL || *attr == UDICT_TYPE_END)) {
+        inl->last = NULL;
         *type_p = UDICT_TYPE_END;
         return;
     }
+    inl->last = attr;
 
     *type_p = *attr;
     *name_p = *attr > UDICT_TYPE_SHORTHAND ? NULL : (const char *)(attr + 3);
@@ -361,6 +379,8 @@ static int udict_inline_delete(struct udict *udict, const char *name,
 {
     assert(type != UDICT_TYPE_END);
     struct udict_inline *inl = udict_inline_from_udict(udict);
+    /* the attributes after it move */
+    inl->last = NULL;
     uint8_t *attr = udict_inline_find(udict, name, type);
     if (unlikely(attr == NULL))
         return UBASE_ERR_INVALID;
@@ -385,6 +405,8 @@ static int udict_inline_set(struct udict *udict, const char *name,
                             uint8_t **attr_p)
 {
     struct udict_inline *inl = udict_inline_from_udict(udict);
+    /* the attributes may move */
+    inl->last = NULL;
     const struct inline_shorthand *shorthand = NULL;
     enum udict_type base_type = type;
     if (likely(type > UDICT_TYPE_SHORTHAND)) {
