@@ -30,6 +30,10 @@ tests += ubuf_block_mem_test
 ubuf_block_mem_test-src = ubuf_block_mem_test.c
 ubuf_block_mem_test-libs = libupipe
 
+tests += ubuf_pic_blit_test
+ubuf_pic_blit_test-src = ubuf_pic_blit_test.c
+ubuf_pic_blit_test-libs = libupipe
+
 tests += ubuf_pic_clear_test
 ubuf_pic_clear_test-src = ubuf_pic_clear_test.c
 ubuf_pic_clear_test-libs = libupipe
