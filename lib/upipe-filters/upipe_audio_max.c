@@ -203,7 +203,8 @@ static int upipe_amax_provide_flow_format(struct upipe *upipe,
     struct uref *flow = uref_dup(request->uref);
     UBASE_ALLOC_RETURN(flow);
 
-    uint8_t planes, channels, sample_size;
+    uint8_t planes, channels;
+    uint16_t sample_size;
     const char *channels_names;
     if (ubase_check(uref_sound_flow_get_planes(request->uref, &planes)) &&
         ubase_check(uref_sound_flow_get_channels(request->uref, &channels)) &&

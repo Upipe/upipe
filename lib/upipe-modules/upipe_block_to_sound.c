@@ -59,7 +59,7 @@ struct upipe_block_to_sound {
     struct upipe upipe;
 
     /**  data to set flow_def and ubuf */
-    uint8_t sample_size;
+    uint16_t sample_size;
     uint8_t planes;
 };
 
@@ -219,7 +219,8 @@ static int upipe_block_to_sound_set_flow_def(struct upipe *upipe,
         uref_free(flow_def);
         return UBASE_ERR_INVALID;
     }
-    uint8_t channels, planes, sample_size;
+    uint8_t channels, planes;
+    uint16_t sample_size;
     if(unlikely(!ubase_check(uref_sound_flow_get_channels(flow_def, &channels))) ||
         unlikely(!ubase_check(uref_sound_flow_get_planes(flow_def, &planes))) ||
         unlikely(!ubase_check(uref_sound_flow_get_sample_size(flow_def, &sample_size)))) {

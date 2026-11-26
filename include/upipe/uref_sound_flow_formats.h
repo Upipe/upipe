@@ -25,7 +25,7 @@ struct uref_sound_flow_format {
     /** name */
     const char *name;
     /** sample size */
-    uint8_t sample_size;
+    uint16_t sample_size;
     /** format is planar? */
     bool planar;
 };

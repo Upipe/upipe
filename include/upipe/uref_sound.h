@@ -54,7 +54,7 @@ static inline struct uref *uref_sound_alloc(struct uref_mgr *uref_mgr,
 
 /** @see ubuf_sound_size */
 static inline int uref_sound_size(struct uref *uref, size_t *size_p,
-                                  uint8_t *sample_size_p)
+                                  uint16_t *sample_size_p)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;
@@ -159,7 +159,7 @@ static inline int uref_sound_resize(struct uref *uref, int skip, int new_size)
 /** @see ubuf_sound_interleave */
 static inline int uref_sound_interleave(struct uref *uref, uint8_t *buf,
                                         int offset, int samples,
-                                        uint8_t sample_size, uint8_t planes)
+                                        uint16_t sample_size, uint8_t planes)
 {
     if (uref->ubuf == NULL)
         return UBASE_ERR_INVALID;

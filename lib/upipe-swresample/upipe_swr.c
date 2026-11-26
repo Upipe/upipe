@@ -430,7 +430,7 @@ static struct upipe *upipe_swr_alloc(struct upipe_mgr *mgr,
     if (!upipe_swr->out_chan) {
         uref_sound_flow_delete_channels(flow_def);
     }
-    uint8_t sample_size = 0;
+    uint16_t sample_size = 0;
     uref_sound_flow_get_sample_size(flow_def, &sample_size);
     if (!sample_size) {
         uref_sound_flow_delete_sample_size(flow_def);

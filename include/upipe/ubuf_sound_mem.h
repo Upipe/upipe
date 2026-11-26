@@ -73,7 +73,7 @@ static inline int ubuf_sound_mem_get_shared(struct ubuf *ubuf,
 struct ubuf_mgr *ubuf_sound_mem_mgr_alloc(uint16_t ubuf_pool_depth,
                                           uint16_t shared_pool_depth,
                                           struct umem_mgr *umem_mgr,
-                                          uint8_t sample_size,
+                                          uint16_t sample_size,
                                           uint64_t align);
 
 /** @This adds a new plane to a ubuf manager for sound formats using umem.
