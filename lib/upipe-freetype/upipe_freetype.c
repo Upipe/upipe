@@ -186,6 +186,7 @@ static int upipe_freetype_load_face(struct upipe *upipe)
         return UBASE_ERR_INVALID;
 
     FTC_ScalerRec scaler;
+    memset(&scaler, 0, sizeof (scaler));
     scaler.face_id = upipe_freetype->font;
     scaler.width = upipe_freetype->pixel_size;
     scaler.height = upipe_freetype->pixel_size;
@@ -660,7 +661,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                                  &type, index, &sbit, NULL))
             continue;
 
-        int left, top, width, height, xadvance, yadvance;
+        int left, top, width, height, pitch, xadvance, yadvance;
         unsigned char *buffer;
         if (!sbit->buffer) {
             if (FTC_ImageCache_Lookup(upipe_freetype->img_cache,
@@ -675,6 +676,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             top = slot->top;
             width = slot->bitmap.width;
             height = slot->bitmap.rows;
+            pitch = slot->bitmap.pitch;
             xadvance = glyph->advance.x;
             yadvance = glyph->advance.y;
             buffer = slot->bitmap.buffer;
@@ -684,6 +686,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
             top = sbit->top;
             width = sbit->width;
             height = sbit->height;
+            pitch = sbit->pitch;
             /* scale to 16.16 */
             xadvance = sbit->xadvance << 16;
             yadvance = sbit->yadvance << 16;
@@ -700,7 +703,7 @@ static bool upipe_freetype_handle(struct upipe *upipe, struct uref *uref,
                 if (ypos + j < 0 || ypos + j >= vsize)
                     continue;
 
-                uint8_t px = buffer[j * width + i] * upipe_freetype->foreground[3] / 0xff;
+                uint8_t px = buffer[j * pitch + i] * upipe_freetype->foreground[3] / 0xff;
 
 #define DO_PLANE(Plane, Val)                                                \
                 if (Plane.p) {                                              \
@@ -943,6 +946,7 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
     FT_Bool use_kerning = FT_HAS_KERNING(upipe_freetype->face);
     FT_UInt previous = 0;
     FT_Pos yMax = 0;
+    bool first = true;
     int64_t width = 0;
 
     for (size_t i = 0; str[i] != '\0';) {
@@ -976,8 +980,10 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
         FT_BBox ft_bbox;
         FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_PIXELS, &ft_bbox);
 
-        if (!i)
+        if (first) {
             bbox.x = ft_bbox.xMin;
+            first = false;
+        }
         if (ft_bbox.yMin < bbox.y)
             bbox.y = ft_bbox.yMin;
         if (ft_bbox.yMax > yMax)
@@ -989,7 +995,6 @@ static int _upipe_freetype_get_bbox(struct upipe *upipe,
 
     if (yMax > bbox.y)
         bbox.height = yMax - bbox.y;
-    bbox.height = yMax - bbox.y;
 
     if (width > 0)
         /* get width ceil and downscale 16.16 integer */
@@ -1042,10 +1047,9 @@ static int _upipe_freetype_get_advance(struct upipe *upipe,
         }
 
         FT_Fixed advance;
-        FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
-                       &advance);
-
-        total_advance += advance;
+        if (!FT_Get_Advance(upipe_freetype->face, index, FT_LOAD_NO_SCALE,
+                            &advance))
+            total_advance += advance;
 
         previous = index;
     }
