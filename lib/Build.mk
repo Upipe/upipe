@@ -25,6 +25,7 @@ subdirs = \
     upipe-swresample \
     upipe-swscale \
     upipe-ts \
+    upipe-ttml \
     upipe-v210 \
     upipe-x264 \
     upipe-x265 \

@@ -60,6 +60,20 @@ UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_composition, "t.subcomp[%" PRIu8"]",
 UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, sub_ancillary, "t.subanc[%" PRIu8"]",
         subtitling ancillary page according to EN 300 468, uint8_t nb, nb)
 
+/* TTML subtitling, EN 303 560 */
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, ttml_purpose, "t.ttmlpurpose",
+        subtitle purpose according to EN 303 560)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, ttml_tts_suitability, "t.ttmltts",
+        text-to-speech suitability according to EN 303 560)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, ttml_profiles, "t.ttmlprofiles",
+        number of TTML processor profiles)
+UREF_ATTR_SMALL_UNSIGNED_VA(ts_flow, ttml_profile, "t.ttmlprofile[%" PRIu8"]",
+        TTML processor profile according to EN 303 560, uint8_t nb, nb)
+UREF_ATTR_UNSIGNED(ts_flow, ttml_qualifier, "t.ttmlqualifier",
+        presentation qualifier according to EN 303 560)
+UREF_ATTR_SMALL_UNSIGNED(ts_flow, ttml_essential_fonts, "t.ttmlfonts",
+        number of downloadable fonts required to present the subtitles)
+
 /* SDT */
 UREF_ATTR_UNSIGNED(ts_flow, tsid, "t.tsid", transport stream ID)
 UREF_ATTR_UNSIGNED(ts_flow, onid, "t.onid", original network ID)

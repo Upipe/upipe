@@ -55,6 +55,9 @@
 #define MAX_DELAY_TELX MAX_DELAY
 /** max retention time for DVB subtitles - unbound */
 #define MAX_DELAY_DVBSUB MAX_DELAY_STILL
+/** max retention time for DVB TTML subtitles - a segment stays active for at
+ * most TMPA (EN 303 560 5.2.3.3) */
+#define MAX_DELAY_TTML (UCLOCK_FREQ * 5)
 /** max retention time for SCTE-35 tables */
 #define MAX_DELAY_SCTE35 UINT64_MAX
 
@@ -550,6 +553,63 @@ static void upipe_ts_pmtd_parse_es_descs(struct upipe *upipe,
                                 "block.mpegts.mpegtspes.aac.sound."))
                     UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
                                     MAX_DELAY))
+                }
+                break;
+
+            case 0x7f: /* Extension descriptor */
+                if (!desc7f_validate(desc)) {
+                    valid = false;
+                    break;
+                }
+                if (desc7f_get_tag_extension(desc) !=
+                    DESC7F_TAG_TTML_SUBTITLING) {
+                    copy = true;
+                    break;
+                }
+                /* TTML subtitling descriptor, EN 303 560 5.2.1.1 */
+                if ((valid = desc7f20_validate(desc))) {
+                    UBASE_FATAL(upipe, uref_flow_set_def(flow_def,
+                                "block.dvb_ttml_subtitle.pic.sub."))
+                    UBASE_FATAL(upipe, uref_flow_set_raw_def(flow_def,
+                                "block.mpegts.mpegtspes.dvb_ttml_subtitle.pic.sub."))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_max_delay(flow_def,
+                                    MAX_DELAY_TTML))
+                    UBASE_FATAL(upipe, uref_flow_set_complete(flow_def))
+
+                    char code[4];
+                    memcpy(code, desc7f20_get_code(desc), 3);
+                    code[3] = '\0';
+                    UBASE_FATAL(upipe, uref_flow_set_language(flow_def, code, 0))
+                    UBASE_FATAL(upipe, uref_flow_set_languages(flow_def, 1))
+                    UBASE_FATAL(upipe, uref_ts_flow_set_ttml_purpose(flow_def,
+                                desc7f20_get_subtitle_purpose(desc)))
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_ttml_tts_suitability(flow_def,
+                                desc7f20_get_tts_suitability(desc)))
+
+                    uint8_t profiles = desc7f20_get_profile_count(desc);
+                    for (uint8_t j = 0; j < profiles; j++)
+                        UBASE_FATAL(upipe,
+                                uref_ts_flow_set_ttml_profile(flow_def,
+                                    *desc7f20_get_profile(desc, j), j))
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_ttml_profiles(flow_def, profiles))
+
+                    const uint8_t *qualifier = desc7f20_get_qualifier(desc);
+                    if (qualifier != NULL)
+                        UBASE_FATAL(upipe,
+                                uref_ts_flow_set_ttml_qualifier(flow_def,
+                                    ((uint64_t)qualifier[0] << 24) |
+                                    (qualifier[1] << 16) |
+                                    (qualifier[2] << 8) | qualifier[3]))
+
+                    /* Downloadable fonts are not supported, so the number of
+                     * essential ones is only exported for the application to
+                     * warn on. */
+                    const uint8_t *font_count = desc7f20_get_font_count(desc);
+                    UBASE_FATAL(upipe,
+                            uref_ts_flow_set_ttml_essential_fonts(flow_def,
+                                font_count != NULL ? *font_count : 0))
                 }
                 break;
 

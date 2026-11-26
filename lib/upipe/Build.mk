@@ -113,6 +113,7 @@ libupipe-includes = \
     uref_sound_flow.h \
     uref_sound_flow_formats.h \
     uref_std.h \
+    uref_text.h \
     uref_uri.h \
     uref_void.h \
     uref_void_flow.h \

@@ -40,12 +40,14 @@ libupipe_ts-includes = \
     upipe_ts_tdt_decoder.h \
     upipe_ts_tot_decoder.h \
     upipe_ts_tstd.h \
+    upipe_ts_ttml_decaps.h \
     uref_ts_attr.h \
     uref_ts_event.h \
     uref_ts_flow.h \
     uref_ts_scte104_flow.h \
     uref_ts_scte35.h \
-    uref_ts_scte35_desc.h
+    uref_ts_scte35_desc.h \
+    uref_ts_ttml.h
 
 libupipe_ts-src = \
     upipe_rtp_fec.c \
@@ -84,10 +86,14 @@ libupipe_ts-src = \
     upipe_ts_tdt_decoder.c \
     upipe_ts_tot_decoder.c \
     upipe_ts_tstd.c \
+    upipe_ts_ttml_decaps.c \
     uref_ts_scte35.c
 
 configs += libiconv
 libiconv-ldlibs = -liconv
+
+configs += zlib
+zlib-libs = zlib
 
 configs += ts-crypt
 ts-crypt-libs = libgcrypt libtasn1
@@ -102,4 +108,4 @@ libupipe_ts-src-private += \
     $(if $(have_ts-crypt),rsa_asn1.c rsa_asn1.h)
 
 libupipe_ts-libs = libupipe libupipe_modules bitstream
-libupipe_ts-opt-libs = libiconv $(if $(have_ts-crypt),libgcrypt libtasn1)
+libupipe_ts-opt-libs = libiconv zlib $(if $(have_ts-crypt),libgcrypt libtasn1)
