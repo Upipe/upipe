@@ -167,6 +167,9 @@ struct upipe_h265f {
     uint32_t chroma_idc;
     /** duration of a field */
     uint64_t duration;
+    /** duration of one access unit - the framer's own latency: it
+     * cannot output a picture before the next access unit begins */
+    uint64_t au_duration;
     /** true if frame_field is present */
     bool frame_field_present;
     /** number of extra slice header bits from PPS */
@@ -314,6 +317,7 @@ static struct upipe *upipe_h265f_alloc(struct upipe_mgr *mgr,
     upipe_h265f->cpb_size = 0;
     upipe_h265f->pic_struct = -1;
     upipe_h265f->duration = 0;
+    upipe_h265f->au_duration = 0;
     upipe_h265f->got_discontinuity = false;
     upipe_h265f->scan_context = UINT32_MAX;
     upipe_h265f->au_size = 0;
@@ -1218,9 +1222,24 @@ static bool upipe_h265f_activate_sps(struct upipe *upipe, uint32_t sps_id)
     }
 
     if (frame_rate.num) {
-        upipe_h265f->duration = UCLOCK_FREQ * frame_rate.den / frame_rate.num / 2;
+        /* duration stays in FIELD units for the pic_struct arithmetic in
+         * upipe_h265f_prepare_au. The VUI clock tick is one coded
+         * picture - a FIELD when field_seq_flag, a FRAME otherwise
+         * (unlike H.264 where the tick is always a field) - so only the
+         * progressive case halves; the unconditional halving this
+         * replaces made field-sequential durations half a field. */
+        upipe_h265f->duration = UCLOCK_FREQ * frame_rate.den / frame_rate.num;
+        if (!field_seq_flag)
+            upipe_h265f->duration /= 2;
+        /* the framer holds exactly one ACCESS UNIT - it cannot output a
+         * picture until the next AU begins - so its latency is one coded
+         * picture: a frame when progressive, a field when field_seq.
+         * Declared identically here and in the store_flow_def path,
+         * which used to declare only half of this. */
+        upipe_h265f->au_duration = field_seq_flag ?
+            upipe_h265f->duration : upipe_h265f->duration * 2;
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
-                    upipe_h265f->input_latency + upipe_h265f->duration * 2))
+                    upipe_h265f->input_latency + upipe_h265f->au_duration))
 
         uref_pic_set_progressive(flow_def, !field_seq_flag);
         if (field_seq_flag)
@@ -2056,9 +2075,9 @@ static void upipe_h265f_build_flow_def(struct upipe *upipe)
              upipe_h265f->encaps_input != upipe_h265f->encaps_output)
         upipe_h265f_build_global(upipe, flow_def);
 
-    if (upipe_h265f->duration) {
+    if (upipe_h265f->au_duration) {
         UBASE_FATAL(upipe, uref_clock_set_latency(flow_def,
-                         upipe_h265f->input_latency + upipe_h265f->duration))
+                         upipe_h265f->input_latency + upipe_h265f->au_duration))
     }
 
     upipe_h265f_store_flow_def(upipe, flow_def);
