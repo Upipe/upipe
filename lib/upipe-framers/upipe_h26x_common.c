@@ -124,6 +124,98 @@ int32_t upipe_h26xf_stream_se(struct ubuf_block_stream *s)
     return (v & 1) ? (v + 1) / 2 : -(v / 2);
 }
 
+/** @internal @This reads a payloadType or payloadSize from a SEI message.
+ *
+ * @param s ubuf block stream
+ * @param end offset of the end of the NAL unit in the ubuf
+ * @param value_p filled in with the value
+ * @return an error code
+ */
+static int upipe_h26xf_stream_sei_value(struct ubuf_block_stream *s,
+                                        size_t end, uint32_t *value_p)
+{
+    uint8_t octet;
+    *value_p = 0;
+    do {
+        size_t pos = ubuf_block_stream_position(s) / 8;
+        if (pos >= end)
+            return UBASE_ERR_INVALID;
+        UBASE_RETURN(upipe_h26xf_stream_get(s, &octet))
+        *value_p += octet;
+    } while (octet == UINT8_MAX);
+    return UBASE_ERR_NONE;
+}
+
+/** @This calls a handler for every SEI message of a SEI NAL unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param ubuf ubuf containing the NAL unit
+ * @param offset offset of the SEI RBSP (after the NAL header) in the ubuf
+ * @param end offset of the end of the NAL unit in the ubuf
+ * @param handler called with the payloadType and a stream at the payload
+ * @return an error code
+ */
+int upipe_h26xf_parse_sei(struct upipe *upipe, struct ubuf *ubuf,
+                          size_t offset, size_t end,
+                          int (*handler)(struct upipe *, uint32_t,
+                                         struct ubuf_block_stream *))
+{
+    struct upipe_h26xf_stream f;
+    upipe_h26xf_stream_init(&f);
+    struct ubuf_block_stream *s = &f.s;
+    UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset))
+
+    int err = UBASE_ERR_NONE;
+    for ( ; ; ) {
+        size_t pos = ubuf_block_stream_position(s) / 8;
+        if (pos >= end)
+            break;
+
+        uint32_t type, size;
+        err = upipe_h26xf_stream_sei_value(s, end, &type);
+        if (unlikely(!ubase_check(err)))
+            break;
+
+        /* rbsp_trailing_bits */
+        uint8_t octet;
+        pos = ubuf_block_stream_position(s) / 8;
+        if (type == 0x80 &&
+            (pos >= end ||
+             !ubase_check(ubuf_block_extract(ubuf, pos, 1, &octet)) ||
+             !octet))
+            break;
+
+        err = upipe_h26xf_stream_sei_value(s, end, &size);
+        if (unlikely(!ubase_check(err)))
+            break;
+
+        size_t payload = ubuf_block_stream_position(s) / 8;
+        uint8_t zeros = f.zeros;
+        for (uint32_t i = 0; i < size && ubase_check(err); i++)
+            err = upipe_h26xf_stream_get(s, &octet);
+        pos = ubuf_block_stream_position(s) / 8;
+        if (unlikely(!ubase_check(err) || pos > end)) {
+            err = UBASE_ERR_INVALID;
+            break;
+        }
+
+        /* an escape word may open the payload */
+        struct upipe_h26xf_stream p;
+        upipe_h26xf_stream_init(&p);
+        p.zeros = zeros;
+        err = ubuf_block_stream_init(&p.s, ubuf, payload);
+        if (unlikely(!ubase_check(err)))
+            break;
+        err = handler(upipe, type, &p.s);
+        ubuf_block_stream_clean(&p.s);
+        if (unlikely(!ubase_check(err)))
+            break;
+    }
+
+    ubuf_block_stream_clean(s);
+    return err;
+}
+
 /** @This allocates a ubuf containing an annex B header.
  *
  * @param ubuf_mgr pointer to ubuf manager
