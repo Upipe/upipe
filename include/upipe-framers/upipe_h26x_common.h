@@ -26,6 +26,8 @@ extern "C" {
 
 /** @hidden */
 enum uref_h26x_encaps;
+/** @hidden */
+struct upipe;
 
 /** @This translates the h26x aspect_ratio_idc to urational */
 extern const struct urational upipe_h26xf_sar_from_idc[17];
@@ -74,6 +76,20 @@ uint32_t upipe_h26xf_stream_ue(struct ubuf_block_stream *s);
  * @return code read
  */
 int32_t upipe_h26xf_stream_se(struct ubuf_block_stream *s);
+
+/** @This calls a handler for every SEI message of a SEI NAL unit.
+ *
+ * @param upipe description structure of the pipe
+ * @param ubuf ubuf containing the NAL unit
+ * @param offset offset of the SEI RBSP (after the NAL header) in the ubuf
+ * @param end offset of the end of the NAL unit in the ubuf
+ * @param handler called with the payloadType and a stream at the payload
+ * @return an error code
+ */
+int upipe_h26xf_parse_sei(struct upipe *upipe, struct ubuf *ubuf,
+                          size_t offset, size_t end,
+                          int (*handler)(struct upipe *, uint32_t,
+                                         struct ubuf_block_stream *));
 
 /** @This allocates a ubuf containing an annex B header.
  *

@@ -1555,6 +1555,28 @@ static int upipe_h265f_handle_sei_pic_timing(struct upipe *upipe,
     return UBASE_ERR_NONE;
 }
 
+/** @internal @This handles a supplemental enhancement information message.
+ *
+ * @param upipe description structure of the pipe
+ * @param type payload type
+ * @param s block stream parsing structure, at the payload
+ * @return an error code
+ */
+static int upipe_h265f_handle_sei_message(struct upipe *upipe, uint32_t type,
+                                          struct ubuf_block_stream *s)
+{
+    switch (type) {
+        case H265SEI_BUFFERING_PERIOD:
+            return upipe_h265f_handle_sei_buffering_period(upipe, s);
+        case H265SEI_PIC_TIMING:
+            return upipe_h265f_handle_sei_pic_timing(upipe, s);
+        case H265SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
+            return upipe_h265f_handle_sei_alternative_transfer_characteristics(upipe, s);
+        default:
+            return UBASE_ERR_NONE;
+    }
+}
+
 /** @internal @This handles a supplemental enhancement information.
  *
  * @param upipe description structure of the pipe
@@ -1568,53 +1590,8 @@ static int upipe_h265f_handle_sei(struct upipe *upipe, struct ubuf *ubuf,
 {
     struct upipe_h265f *upipe_h265f = upipe_h265f_from_upipe(upipe);
 
-    uint8_t type;
-    if (unlikely(!ubase_check(ubuf_block_extract(ubuf, offset + 2, 1, &type))))
-        return UBASE_ERR_INVALID;
-
-    int err = UBASE_ERR_NONE;
-
-    switch (type) {
-        case H265SEI_BUFFERING_PERIOD:
-        case H265SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
-        case H265SEI_PIC_TIMING: {
-            struct upipe_h26xf_stream f;
-            upipe_h26xf_stream_init(&f);
-            struct ubuf_block_stream *s = &f.s;
-            UBASE_RETURN(ubuf_block_stream_init(s, ubuf, offset + 3))
-
-                /* size field */
-                uint8_t octet;
-            do {
-                upipe_h26xf_stream_fill_bits(s, 8);
-                octet = ubuf_block_stream_show_bits(s, 8);
-                ubuf_block_stream_skip_bits(s, 8);
-            } while (octet == UINT8_MAX);
-
-            switch (type) {
-                case H265SEI_BUFFERING_PERIOD:
-                    err = upipe_h265f_handle_sei_buffering_period(upipe, s);
-                    break;
-                case H265SEI_PIC_TIMING:
-                    err = upipe_h265f_handle_sei_pic_timing(upipe, s);
-                    break;
-                case H265SEI_ALTERNATIVE_TRANSFER_CHARACTERISTICS:
-                    err = upipe_h265f_handle_sei_alternative_transfer_characteristics(upipe, s);
-                    break;
-                default:
-                    break;
-            }
-
-            ubuf_block_stream_clean(s);
-            break;
-        }
-
-        default:
-            break;
-    }
-
-    if (unlikely(!ubase_check(err)))
-        return err;
+    UBASE_RETURN(upipe_h26xf_parse_sei(upipe, ubuf, offset + 2, offset + size,
+                                       upipe_h265f_handle_sei_message))
 
     if (upipe_h265f->au_vcl_offset == -1)
         upipe_h265f->au_vcl_offset = upipe_h265f->au_last_nal_offset;
